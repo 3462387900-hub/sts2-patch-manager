@@ -15,6 +15,7 @@ public sealed class ManagerUpdates : IDisposable
  public const string Repository="3462387900-hub/sts2-patch-manager";
  public const string RepositoryUrl="https://github.com/"+Repository;
  public const string Api="https://api.github.com/repos/"+Repository;
+ public const string FeedUrl="https://raw.githubusercontent.com/"+Repository+"/main/manager-update.json";
  public static string CurrentVersion=>Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
  readonly HttpClient client;
  public ManagerUpdates(HttpMessageHandler? handler=null)
@@ -43,7 +44,7 @@ public sealed class ManagerUpdates : IDisposable
  }
  public static ManagerRelease ParseRelease(string json)
  {
-  using var document=JsonDocument.Parse(json);var r=document.RootElement;
+  using var document=JsonDocument.Parse(json.TrimStart('\uFEFF'));var r=document.RootElement;
   Require(!r.GetProperty("draft").GetBoolean()&&!r.GetProperty("prerelease").GetBoolean(),"仅支持正式发布，测试版不参与更新。");
   string tag=r.GetProperty("tag_name").GetString()??"";Require(tag.StartsWith('v'),"发布标签格式无效。");string version=tag[1..];StableVersion(version);
   string name=$"SpirePatch-v{version}-win-x64.zip";
@@ -63,8 +64,15 @@ public sealed class ManagerUpdates : IDisposable
  }
  public async Task<ManagerRelease> CheckAsync(CancellationToken ct=default)
  {
-  using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromSeconds(30));ct=timeout.Token;
-  using var request=new HttpRequestMessage(HttpMethod.Get,Api+"/releases/latest");request.Headers.Accept.ParseAdd("application/vnd.github+json");
+  try{return await ReadReleaseAsync(FeedUrl,ct);}
+  catch(HttpRequestException){return await ReadReleaseAsync(Api+"/releases/latest",ct);}
+  catch(OperationCanceledException)when(!ct.IsCancellationRequested){return await ReadReleaseAsync(Api+"/releases/latest",ct);}
+ }
+ async Task<ManagerRelease> ReadReleaseAsync(string url,CancellationToken ct)
+ {
+  using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromSeconds(15));ct=timeout.Token;
+  using var request=new HttpRequestMessage(HttpMethod.Get,url);request.Headers.Accept.ParseAdd("application/json");
+  request.Headers.CacheControl=new(){NoCache=true};
   using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);CheckResponse(response);
   const int limit=1024*1024;if(response.Content.Headers.ContentLength>limit)throw new InvalidDataException("更新源响应过大。");
   await using var input=await response.Content.ReadAsStreamAsync(ct);using var output=new MemoryStream();var buffer=new byte[16384];int n;
@@ -78,9 +86,7 @@ public sealed class ManagerUpdates : IDisposable
   using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromMinutes(10));ct=timeout.Token;
   string temporary=destination+"."+Guid.NewGuid().ToString("N")+".part";
   try{
-   // Release asset API follows GitHub's short-lived download redirect; no token is sent.
-   using var request=new HttpRequestMessage(HttpMethod.Get,release.AssetApiUrl);request.Headers.Accept.ParseAdd("application/octet-stream");
-   using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);CheckResponse(response);
+   using var response=await OpenDownloadAsync(release,ct);
    if(response.RequestMessage?.RequestUri is { Scheme: not "https" })throw new InvalidDataException("更新下载必须使用 HTTPS。");
    if(response.Content.Headers.ContentLength is long size&&size!=release.Size)throw new InvalidDataException("更新包长度与发布记录不一致。");
    await using(var input=await response.Content.ReadAsStreamAsync(ct))
@@ -91,5 +97,17 @@ public sealed class ManagerUpdates : IDisposable
    }
    ct.ThrowIfCancellationRequested();File.Move(temporary,destination,true);
   }finally{if(File.Exists(temporary))File.Delete(temporary);}
+ }
+ async Task<HttpResponseMessage> OpenDownloadAsync(ManagerRelease release,CancellationToken ct)
+ {
+  async Task<HttpResponseMessage> Open(string url){
+   using var connection=CancellationTokenSource.CreateLinkedTokenSource(ct);connection.CancelAfter(TimeSpan.FromSeconds(30));
+   using var request=new HttpRequestMessage(HttpMethod.Get,url);request.Headers.Accept.ParseAdd("application/octet-stream");
+   var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,connection.Token);
+   try{CheckResponse(response);return response;}catch{response.Dispose();throw;}
+  }
+  try{return await Open(release.DownloadUrl);}
+  catch(HttpRequestException){return await Open(release.AssetApiUrl);}
+  catch(OperationCanceledException)when(!ct.IsCancellationRequested){return await Open(release.AssetApiUrl);}
  }
 }

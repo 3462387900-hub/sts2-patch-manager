@@ -15,9 +15,11 @@ Windows 原生 C# / WPF / .NET 9 工具，面向当前小队的杀戮尖塔 2 �
 - 下载核对 GitHub 提供的 SHA256 和长度；损坏、超时或取消不会替换已有下载文件。
 - 连接失败明确显示检查未完成，不会当作“已是最新版”。匿名访问可能受到 GitHub 限流，可重试或打开发布页。
 
+0.7.1 优先读取本仓库 `manager-update.json` 的正式发布快照，减少匿名 GitHub API 限流影响；索引暂不可用时再尝试正式发布 API。下载优先走公开附件地址，并保留附件 API 备用。
+
 本版采用**下载后手动更新**：完整解压到新文件夹 → 关闭旧版 → 运行新版 `SpirePatch.exe`。如果需要沿用路径偏好、补丁下载缓存与操作日志，在两个版本都关闭时，将旧版的 `数据` 文件夹复制到新版。保留旧版，游戏内备份仍在原位置。管理器不会自动覆盖自身或改动游戏文件。
 
-0.6 及更早版本没有检查更新入口，首次需要手动下载 0.7.0；之后可以在管理器内查看后续发布。
+0.6 及更早版本没有检查更新入口，首次需要手动下载当前新版；之后可以在管理器内查看后续发布。
 
 ## 0.6 新增：模组、启动、定位与返回
 
@@ -148,7 +150,7 @@ dotnet publish SpirePatch.csproj -c Release -r win-x64 --self-contained true -p:
 
 新增核心文件：GameEnvironment.cs（定位、偏好与启动）、ModManager.cs（清单和启停事务）、NavigationWindow.cs（返回历史）、EnvironmentWindow.cs / ModWindow.cs（对应界面）。
 
-管理器更新由 ManagerUpdates.cs 和 UpdateWindow.cs 负责，读取本仓库最新正式 Release 的说明和附件校验值。UpdateChecks.cs 使用隔离网络响应验证更新选择和下载保护，不执行下载内容。
+管理器更新由 ManagerUpdates.cs 和 UpdateWindow.cs 负责，读取本仓库公开版本索引中的正式 Release 说明与附件校验值，必要时回退到 API。UpdateChecks.cs 使用隔离网络响应验证更新选择和下载保护，不执行下载内容。
 
 PlanPresentation.cs 负责改动分类和文案，InstallerBridge.ps1 额外返回已核对的完整文件清单。分类只影响展示，不改变真实事务、备份、回滚或确认令牌。
 

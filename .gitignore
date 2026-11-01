@@ -7,6 +7,7 @@
 !/*.ps1
 !/catalog-plan.json
 !/patch-catalog.json
+!/manager-update.json
 !/README.md
 !/更新日志.md
 !/发布指南.md
