@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.8.0",
+  "tag_name": "v0.8.1",
   "draft": false,
   "prerelease": false,
-  "body": "尖塔修补站 0.8.0 · 自动更新与柔和浅色界面\n\n自动更新\n- 查看更新内容后选择“下载并更新”，确认后自动下载、校验、备份、替换程序并重新打开。\n- 原路径、快捷方式、设置、缓存和操作记录继续使用；不修改游戏或 MOD。\n- 替换失败或新版无法正常打开且已退出时，尝试恢复上一版。文件被后续修改或备份损坏时会停止覆盖。\n- 保留“仅下载 ZIP”和程序备份，检查更新页可打开更新记录。\n\n界面更新\n- 暖白背景、白色卡片与鼠尾草绿强调色。\n- 简化标题和顶部操作区，统一圆角、边框与文字层级。\n- 模组列表更紧凑，名称、状态与操作放在同一行，减少重复路径。\n\n首次使用\n- 下载 SpirePatch-v0.8.0-win-x64.zip，完整解压到单独的可写文件夹，运行 SpirePatch.exe。\n- 0.7.1 及更早版本需要手动完整解压本版一次；之后可使用自动更新。\n- 两个版本都关闭后，可将旧版“数据”文件夹复制到新版。不要单独复制 exe 或删除 manager-files.json。\n\n验证边界\n- 已在隔离目录验证替换失败恢复、文件锁定、篡改保护与个人数据保留。\n- 已用真实程序构建验证旧进程退出、新版本重新启动，以及模拟启动失败后恢复旧版本。\n- 本轮未启动真实游戏、写入实际游戏模组或进行真人联机回归。\n",
-  "published_at": "2026-11-01T21:08:39Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.8.0",
+  "body": "# 尖塔修补站 0.8.1\n\n修复联机检查误用旧扫描结果：此前先导出清单、删除一个补丁、再导入旧清单，可能仍提示一致。现在导出前和导入比对前都会重新扫描本机文件。\n\n- 比对结果直接留在联机检查页面，显示双方扫描时间和具体差异。\n- 扫描失败不会导出旧缓存；扫描不完整或存在“需核对”项目时不会给出确定的一致结论。\n- 补齐队友独有记录和文件匹配标志不同的差异检查。\n- 队友清单是导出时快照，队友改动文件后仍需重新导出。保留旧版 JSON 格式兼容，但建议双方更新后重新导出。\n\n## 更新方式\n\n0.8.0 用户在“检查更新”中选择“下载并更新”，确认后自动校验、备份、替换和重启，也可仅下载 ZIP。0.7.1 及更早版本请完整解压 Windows ZIP 一次，保留文件夹内全部文件。\n\n## 验证范围\n\n使用隔离目录和合成模组复现导出后移除补丁目录、删除 DLL、恢复文件、读取失败、未知状态、缺失及重复报告记录等 21 项回归，并检查真实 WPF 页面。运行既有基础、推荐、在线来源、更新检查和自动更新事务测试。未改动真实游戏或 MOD；本次不声称完成真人联机测试。比对范围仍为已收录修复的扫描状态。\n",
+  "published_at": "2026-11-01T21:21:35Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.8.1",
   "assets": [
     {
-      "name": "SpirePatch-v0.8.0-win-x64.zip",
+      "name": "SpirePatch-v0.8.1-win-x64.zip",
       "state": "uploaded",
-      "size": 63504269,
-      "digest": "sha256:4638133c4a49aecb91a8ae2916d156c78571c2754cbf72d235b5a2c6404b668d",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.8.0/SpirePatch-v0.8.0-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/699523608"
+      "size": 63511533,
+      "digest": "sha256:b2aa9c2b98545dff9f024cda26f2cda5b67961a0531e54c7ce5ba4b430f762f1",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.8.1/SpirePatch-v0.8.1-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/699558954"
     }
   ]
 }
