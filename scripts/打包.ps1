@@ -13,7 +13,7 @@ dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64
 if ($LASTEXITCODE -ne 0) { throw '发布构建失败。' }
 $testRoot = Join-Path $runRoot '验证记录'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
-foreach ($mode in @('self-test','recommendation-self-test','online-self-test','update-self-test','auto-update-self-test','coop-self-test')) {
+foreach ($mode in @('self-test','recommendation-self-test','online-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test')) {
     $result = Join-Path $testRoot ($mode + '.txt')
     $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--' + $mode, ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $result)) { throw ('验证失败：' + $mode) }

@@ -6,14 +6,22 @@ namespace SpirePatch;
 // Reports remain schema 2 so existing teammates can exchange them.
 internal static class CoopReports
 {
- public static JsonElement Create(ScanReport? report,IReadOnlyList<PatchState> states,bool demo)
+ public static JsonElement Create(ScanReport? report,IReadOnlyList<PatchState> states,bool demo,ModInventory? inventory=null)
  {
   if(!demo&&report==null)throw new InvalidOperationException("请先选择游戏目录并完成扫描。");
-  return JsonSerializer.SerializeToElement(new{schema=2,catalogVersion=demo?"demo-0.4":report!.CatalogRevision,inventoryComplete=demo||report!.InventoryComplete,mode=demo?"demo":"read-only",time=demo?DateTimeOffset.Now:new DateTimeOffset(report!.Time),modCount=demo?51:report!.ModCount,patches=states.Select(s=>new{id=s.Patch.Id,name=s.Patch.Name,status=s.Status,reason=s.Reason,filesMatch=s.FilesMatch,relatedPatchIds=s.RelatedPatchIds,evidence=s.Evidence}),issues=demo?[]:report!.Issues});
+  string Presence(PatchState s){
+   if(demo||inventory==null||inventory.Issues.Count>0)return "unknown";
+   var mods=inventory.Mods.Where(m=>m.Id.Equals(s.Patch.Id,StringComparison.OrdinalIgnoreCase)).ToArray();
+   if(mods.Length==1)return mods[0].Enabled?"active":"disabled";
+   string folder=Path.Combine(report!.Directory,"mods",s.Patch.Id);
+   if(mods.Length>1||(Directory.Exists(folder)&&Directory.EnumerateFiles(folder,"*",new EnumerationOptions{RecurseSubdirectories=true,AttributesToSkip=FileAttributes.ReparsePoint}).Any()))return "unknown";
+   return "absent";
+  }
+  return JsonSerializer.SerializeToElement(new{schema=2,presenceEvidenceVersion=inventory!=null&&!demo?1:0,catalogVersion=demo?"demo-0.4":report!.CatalogRevision,inventoryComplete=demo||report!.InventoryComplete,mode=demo?"demo":"read-only",time=demo?DateTimeOffset.Now:new DateTimeOffset(report!.Time),modCount=demo?51:report!.ModCount,patches=states.Select(s=>new{id=s.Patch.Id,name=s.Patch.Name,status=s.Status,reason=s.Reason,filesMatch=s.FilesMatch,presence=Presence(s),patchVersion=s.Patch.Version,relatedPatchIds=s.RelatedPatchIds,evidence=s.Evidence}),issues=demo?[]:report!.Issues});
  }
  public static void Write(string path,JsonElement snapshot)=>File.WriteAllText(path,JsonSerializer.Serialize(snapshot,new JsonSerializerOptions{WriteIndented=true}));
  public static JsonElement Read(string path){using var doc=JsonDocument.Parse(File.ReadAllText(path));return doc.RootElement.Clone();}
- static Dictionary<string,JsonElement> Patches(JsonElement report)
+ internal static Dictionary<string,JsonElement> Patches(JsonElement report)
  {
   var result=new Dictionary<string,JsonElement>(StringComparer.OrdinalIgnoreCase);
   foreach(var p in report.GetProperty("patches").EnumerateArray()){
@@ -33,7 +41,7 @@ internal static class CoopReports
    bool a=mine.TryGetValue(id,out var me),b=theirs.TryGetValue(id,out var them);
    string name=(a?me:them).GetProperty("name").GetString()??id;
    string ms=a?me.GetProperty("status").GetString()!:"未记录",ts=b?them.GetProperty("status").GetString()!:"未记录";
-   if(!a||!b||ms!=ts||me.GetProperty("filesMatch").GetBoolean()!=them.GetProperty("filesMatch").GetBoolean()){
+   if(!a||!b||ms!=ts||me.GetProperty("filesMatch").GetBoolean()!=them.GetProperty("filesMatch").GetBoolean()||(me.TryGetProperty("presence",out var mp)&&them.TryGetProperty("presence",out var tp)&&mp.GetString()!=tp.GetString())){
     string detail=ms==ts?"（文件校验结果不同）":"";
     differences.Add($"{name}：本机 {ms} / 队友清单 {ts}{detail}");
    }

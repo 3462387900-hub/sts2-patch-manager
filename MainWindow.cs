@@ -181,7 +181,7 @@ public partial class MainWindow : Window
  {if(busy)return;var dialog=new OpenFolderDialog{Title="选择包含 SlayTheSpire2.exe 的游戏根目录"};if(dialog.ShowDialog(this)==true)await ScanFolder(dialog.FolderName);}
  async Task ScanFolder(string folder)
  {
-  if(busy)return;busy=true;toast.Text="正在读取模组清单与文件校验值…";
+  if(busy)return;busy=true;ClearCoop();toast.Text="正在读取模组清单与文件校验值…";
   try {UseGameRoot(folder);coopComparison=null;var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;ShowOverview();}
   catch(Exception ex){MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);toast.Text="扫描未完成，未修改任何文件。";if(report==null)ShowOverview();}
   finally{busy=false;}
@@ -212,11 +212,10 @@ public partial class MainWindow : Window
  }
  void ShowCoop()
  {
-  var root=V(Header("PARTY CHECK","一起出发，状态对齐。","导出前、导入比对前都会重新扫描本机文件。"));Space(root,26);
-  var left=V(Badge(demo?"演示配置":"本地扫描",gold));Space(left,17);left.Children.Add(T("我的补丁清单",22,ink,true));Space(left,9);left.Children.Add(T(states.Count(s=>s.Status=="已安装")+" 项文件一致 · "+states.Count(s=>s.Status=="待修复")+" 项待处理",14,muted));Space(left,24);left.Children.Add(Btn("导出我的清单",ExportReport,"Primary"));
-  Space(left,10);left.Children.Add(T(demo?"演示数据 · 不读取游戏文件":report==null?"尚未扫描；导出时会扫描当前目录":"上次扫描："+report.Time.ToString("yyyy-MM-dd HH:mm:ss")+"\n此处为上次结果；导出或比对时自动刷新。",12,muted));
-  var right=V(Badge("队友的配置"));Space(right,17);right.Children.Add(T("导入后查看差异",22,ink,true));Space(right,9);right.Children.Add(T("选择队友导出的 JSON 清单，再与本机最新扫描比对。队友改动文件后需要重新导出。",14,muted));Space(right,24);right.Children.Add(Btn("导入队友清单  ↗",ImportPeer));root.Children.Add(Columns(Card(left),Card(right),360));Space(root,22);
-  if(coopComparison!=null){root.Children.Add(Card(V(T("本次比对结果",18,ink,true),T(coopComparison,13,muted))));Space(root,22);}
+  var root=V(Header("PARTY CHECK","联机检查","导入队友清单，查看差异，按需对齐本机补丁。"));Space(root,20);
+  var summary=V(T(demo?"演示配置 · 不读取游戏文件":report==null?"尚未扫描；导出或导入时会扫描当前目录":$"本机 {states.Count(s=>s.Status=="已安装")} 项修复已匹配 · 上次扫描 {report.Time:yyyy-MM-dd HH:mm:ss}",13,muted));Space(summary,10);
+  summary.Children.Add(H(Btn("导出我的清单",ExportReport,"Ghost"),Btn("导入队友清单  ↗",ImportPeer,"Primary")));Space(summary,8);summary.Children.Add(T("每次导出、比对都会重新扫描本机。队友文件有变化时，需要重新导出清单。",12,muted));root.Children.Add(Card(summary,"#FFFFFF",18));Space(root,18);
+  AddCoopResults(root);root.IsEnabled=!busy;
   root.Children.Add(T("比较范围",15,ink,true));Space(root,8);root.Children.Add(T("此版本只比较已收录修复的状态，不包含全部原模组文件及玩法配置。状态一致不能单独证明所有联机条件完全相同。演示报告与真实报告会区分显示。",13,muted));SetPage("联机检查",root);
  }
  async void ImportPeer()

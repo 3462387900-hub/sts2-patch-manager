@@ -67,7 +67,7 @@ public partial class MainWindow
  {
   if(busy||modTogglePreview==null)return;var plan=modTogglePreview;busy=true;transactionWriting=true;modTogglePreview=null;
   try{
-   await Task.Run(()=>ModManager.Apply(plan));installPreview=null;lastInstallResult=null;ClearSelection();report=null;states=[];demo=false;
+   await Task.Run(()=>ModManager.Apply(plan));installPreview=null;lastInstallResult=null;ClearSelection();ClearCoop();report=null;states=[];demo=false;
    modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));modStatus=plan.Name+(plan.Enable?" 已启用。":" 已停用，文件已完整保留。");
   }catch(Exception e){modStatus="操作未完成："+e.Message;}
   finally{busy=false;transactionWriting=false;ShowMods();}

@@ -36,6 +36,14 @@ public static class ModManager
   }
  }
  static Dictionary<string,string> Snapshot(string directory)=>Files(directory).Order(StringComparer.OrdinalIgnoreCase).ToDictionary(f=>Path.GetRelativePath(directory,f).Replace('\\','/'),Catalog.Hash,StringComparer.OrdinalIgnoreCase);
+ internal static Dictionary<string,string> FileSnapshot(string directory)=>Snapshot(directory);
+ internal static void ApplyReviewed(ModTogglePlan plan,IReadOnlyDictionary<string,string> reviewedFiles)=>GameEnvironment.WithLock(plan.Root,()=>{
+  var current=Snapshot(plan.Folder);
+  if(current.Count!=reviewedFiles.Count||current.Any(f=>!reviewedFiles.TryGetValue(f.Key,out var hash)||hash!=f.Value))throw new InvalidOperationException("待移动文件已变化，请重新查看方案。");
+  // Other approved steps may have changed manifests; recheck dependencies and bind
+  // a new toggle token while holding the same game lock as the actual move.
+  Apply(Preview(plan.Root,plan.Folder,plan.Enable));return true;
+ });
  static IEnumerable<(string Slot,DisabledModRecord Record)> Stored(string root)
  {
   string parent=GameEnvironment.Child(root,StorageName);if(!Directory.Exists(parent))yield break;

@@ -82,7 +82,7 @@ public partial class MainWindow
   if(busy)return;var open=new OpenFileDialog{Title="选择修复整合包 v2",Filter="ZIP 修复包|*.zip"};if(open.ShowDialog(this)!=true)return;
   localPackage=open.FileName;preparedPackage=null;installPreview=null;lastInstallResult=null;installStatus="已选择本地 ZIP；准备时会重新校验完整文件。";ShowInstaller();
  }
- async Task<PreparedPackage> GetPreparedPackageAsync(CancellationToken ct)
+ async Task<PreparedPackage> GetPreparedPackageAsync(CancellationToken ct,Action<string>? showStatus=null)
  {
   if(preparedPackage!=null){await Task.Run(()=>BundleInstaller.VerifyStage(preparedPackage),ct);return preparedPackage;}
   string archive;
@@ -90,11 +90,11 @@ public partial class MainWindow
   else{
    Directory.CreateDirectory(installer.DataRoot);archive=BundleInstaller.Child(installer.DataRoot,"下载/"+BundleInstaller.SupportedBundle.FileName);Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
    if(!File.Exists(archive)||new FileInfo(archive).Length!=BundleInstaller.SupportedSize||Catalog.Hash(archive)!=BundleInstaller.SupportedHash){
-    installStatus="正在下载本版已验证的修复包…";ShowInstaller();
+    installStatus="正在下载本版已验证的修复包…";if(showStatus!=null)showStatus(installStatus);else ShowInstaller();
     await onlineSource.DownloadAsync(BundleInstaller.SupportedBundle,archive,new Progress<long>(n=>toast.Text=$"已下载 {n/1024} / {BundleInstaller.SupportedSize/1024} KB"),ct);
    }
   }
-  installStatus="正在校验修复包和准备安装器…";ShowInstaller();
+  installStatus="正在校验修复包和准备安装器…";if(showStatus!=null)showStatus(installStatus);else ShowInstaller();
   return preparedPackage=await installer.PrepareAsync(archive,ct);
  }
  async void BeginPreparation(bool rollback)
@@ -121,6 +121,7 @@ public partial class MainWindow
   busy=true;transactionWriting=true;installPreview=null;lastInstallResult=null;installStatus=undo?"正在核对备份、恢复文件并校验…":new PlanPresentation(preview).DocumentsOnly?"正在记录说明文件改动并校验…":"正在再次核对原文件、保存备份并应用改动…";ShowInstaller();
   try{
    lastInstallResult=await installer.RunAsync(preparedPackage,preview.Root,undo?"Rollback":"Install",preview.Token,!undo&&preview.SelectedIds?.Length>0?preview.SelectedIds:null);
+   ClearCoop();
    modInventory=null;modTogglePreview=null;modStatus="补丁文件已更新，请刷新模组列表。";installStatus="操作完成，详细结果如下。";
    try{var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(preview.Root,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;}
    catch(Exception e){installStatus="文件操作已完成，但刷新概览失败："+e.Message;}
