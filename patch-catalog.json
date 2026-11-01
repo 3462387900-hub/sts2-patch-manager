@@ -1,0 +1,2433 @@
+{
+  "commit": "0dca6e3dd775fe1e5c37399fa488dd41b98a12c1",
+  "patches": [
+    {
+      "component_id": "CanonicalRelicHoverFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.canonicalrelichoverfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "遗物预览兼容修复 · 本地修复说明",
+        "summary": "Phrolova 提示补丁读取无玩家归属的标准模型 Owner；增加标准预览保护，保留实物遗物提示。",
+        "issue": {
+          "type": "mod_conflict",
+          "symptoms": [
+            "海克斯组合遗物预览触发 Owner 异常。"
+          ],
+          "trigger_conditions": [
+            "Phrolova 与海克斯遗物预览共同使用标准 ArchaicTooth 模型。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "Phrolova 提示补丁读取无玩家归属的标准模型 Owner；增加标准预览保护，保留实物遗物提示。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "Phrolova",
+            "display_name": "弗洛洛",
+            "role": "affected",
+            "explanation": "Phrolova 与海克斯遗物预览共同使用标准 ArchaicTooth 模型。"
+          },
+          {
+            "mod_id": "HextechRunes",
+            "display_name": "ARAM: Mayhem / 海克斯大乱斗",
+            "role": "trigger",
+            "explanation": "Phrolova 与海克斯遗物预览共同使用标准 ArchaicTooth 模型。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "HextechRunes",
+                  "version_display": "0.9.8",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/HextechRunes.dll",
+                      "sha256": "8C203D53C13A7D9CA89F5B9CA4498039D2CFB152E4685727497351FB60F11A2B"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "Phrolova",
+                  "version_display": "v1.1.0",
+                  "files": [
+                    {
+                      "relative_path": "Phrolova.dll",
+                      "sha256": "E2BABDADB9C424ABF47AAD68E03667FDEDAAF1CD032760337C1808ADB27C3F4D"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "CanonicalRelicHoverFix",
+              "relative_path": "CanonicalRelicHoverFix.dll",
+              "sha256": "6E8D37F0D93070AEEAEE4684AE3EF6BF2C695F2D3C92CA49EDDF5F6314A7A763"
+            },
+            {
+              "mod_id": "CanonicalRelicHoverFix",
+              "relative_path": "CanonicalRelicHoverFix.json",
+              "sha256": "5462AE9932B5C7620F17EA6CD2EEA5B093E9793122A659B20F72BBD7152AA36A"
+            },
+            {
+              "mod_id": "CanonicalRelicHoverFix",
+              "relative_path": "runtime-baseline.json",
+              "sha256": "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "Phrolova 提示补丁读取无玩家归属的标准模型 Owner；增加标准预览保护，保留实物遗物提示。"
+          ],
+          "gameplay_impact": "仅修正提示显示，保留有归属遗物的原有升级提示。",
+          "files": [
+            {
+              "mod_id": "CanonicalRelicHoverFix",
+              "relative_path": "CanonicalRelicHoverFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "CanonicalRelicHoverFix",
+              "relative_path": "CanonicalRelicHoverFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "CanonicalRelicHoverFix",
+              "relative_path": "runtime-baseline.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "not_required",
+          "explanation": "显示层修复无需同步战斗规则；需要修复本地显示问题的玩家各自安装。当前整合包仍建议队友统一版本。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史 10 项行为检查通过，使用真实 Phrolova 补丁与 ArchaicTooth getter，界面和初始化使用测试替身。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "DoctorPigRewardFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.doctorpigrewardfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "博士猪猪奖励兼容修复 · 本地修复说明",
+        "summary": "奖励生成需尊重 Tiphera 已解锁牌池；保持随机数推进、升级和取消行为。",
+        "issue": {
+          "type": "mod_conflict",
+          "symptoms": [
+            "博士猪猪事件或类猪体奖励选牌异常。"
+          ],
+          "trigger_conditions": [
+            "YuWanCard 奖励逻辑遇到 Tiphera 受限可用牌池。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "奖励生成需尊重 Tiphera 已解锁牌池；保持随机数推进、升级和取消行为。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "YuWanCard",
+            "display_name": "猪猪",
+            "role": "affected",
+            "explanation": "YuWanCard 奖励逻辑遇到 Tiphera 受限可用牌池。"
+          },
+          {
+            "mod_id": "CznTipheraCharacter",
+            "display_name": "CznTipheraCharacter",
+            "role": "trigger",
+            "explanation": "YuWanCard 奖励逻辑遇到 Tiphera 受限可用牌池。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "CznTipheraCharacter",
+                  "version_display": "2.0.1-beta",
+                  "files": [
+                    {
+                      "relative_path": "CznTipheraCharacter.dll",
+                      "sha256": "0F072823C66DC790564607A98A2F6C639322F8957E6A8F9F108F743CDC691943"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "YuWanCard",
+                  "version_display": "v0.5.12",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/YuWanCard.Content.dll",
+                      "sha256": "3D03979E0B951E113D50C3E154D220276608B020158E0D60EBB1E55A7491BE2F"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "DoctorPigRewardFix",
+              "relative_path": "DoctorPigRewardFix.dll",
+              "sha256": "1D429BCD263AB679D4561C0ED84CCD7ACA77CD501E529C27E8AE3172F69F7942"
+            },
+            {
+              "mod_id": "DoctorPigRewardFix",
+              "relative_path": "DoctorPigRewardFix.json",
+              "sha256": "28DF6FF350807EDC2CA1586A77D09B08969B8EE5739844A60757A14DD29A725C"
+            },
+            {
+              "mod_id": "DoctorPigRewardFix",
+              "relative_path": "runtime-baseline.json",
+              "sha256": "B6FCB18337E25F1792DA309635A588E9B88217AD5823EDF9FA8413765282D69D"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "奖励生成需尊重 Tiphera 已解锁牌池；保持随机数推进、升级和取消行为。"
+          ],
+          "gameplay_impact": "改变异常奖励的生成和过滤，使其符合角色牌池；并非纯显示修复。",
+          "files": [
+            {
+              "mod_id": "DoctorPigRewardFix",
+              "relative_path": "DoctorPigRewardFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "DoctorPigRewardFix",
+              "relative_path": "DoctorPigRewardFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "DoctorPigRewardFix",
+              "relative_path": "runtime-baseline.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史 27 项行为检查通过；真实事件、随机数与牌池过滤，界面/存档/网络使用测试替身。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "IgnisTurnSyncFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.ignisturnsyncfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "焰魔回合同步修复 · 本地修复说明",
+        "summary": "回合结算必须等待已开始的玩家动作完成；取消、战斗结束等退出情形需正常终止等待。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "焰魔回合结束时，双方选牌完成顺序可能不同。"
+          ],
+          "trigger_conditions": [
+            "联机选牌操作已开始但尚未结束时进入焰魔回合结算。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "回合结算必须等待已开始的玩家动作完成；取消、战斗结束等退出情形需正常终止等待。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "YuWanCard",
+            "display_name": "猪猪",
+            "role": "affected",
+            "explanation": "联机选牌操作已开始但尚未结束时进入焰魔回合结算。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "YuWanCard",
+                  "version_display": "v0.5.12",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/YuWanCard.Content.dll",
+                      "sha256": "3D03979E0B951E113D50C3E154D220276608B020158E0D60EBB1E55A7491BE2F"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "IgnisTurnSyncFix",
+              "relative_path": "IgnisTurnSyncFix.dll",
+              "sha256": "68FA5CFBF3495B795CFFB562055762AE796ADCDC2F241E0FD0E2CC0C1202037C"
+            },
+            {
+              "mod_id": "IgnisTurnSyncFix",
+              "relative_path": "IgnisTurnSyncFix.json",
+              "sha256": "A17FD3588CEBC529A8445E237E99547401496C1757FAB1FC75F3E4C836E50BCD"
+            },
+            {
+              "mod_id": "IgnisTurnSyncFix",
+              "relative_path": "runtime-baseline.json",
+              "sha256": "34D42C2961059B6BEB6B3244495C0ECBD14571862C9E160B710A4CFF96856135"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "回合结算必须等待已开始的玩家动作完成；取消、战斗结束等退出情形需正常终止等待。"
+          ],
+          "gameplay_impact": "调整回合等待时序，不声称完全不影响战斗执行。",
+          "files": [
+            {
+              "mod_id": "IgnisTurnSyncFix",
+              "relative_path": "IgnisTurnSyncFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "IgnisTurnSyncFix",
+              "relative_path": "IgnisTurnSyncFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "IgnisTurnSyncFix",
+              "relative_path": "runtime-baseline.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史 12 项行为检查通过；真实动作队列配合模拟完成时机，无真人联机。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "KakarotTenfoldSyncFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.kakarottenfoldsyncfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "十倍龟派气功联机同步修复 · 本地修复说明",
+        "summary": "使用出牌前手牌快照计算邻接条件，避免读取不同步的 UI 缓存。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "十倍龟派气功追加攻击次数在主客机间不同。"
+          ],
+          "trigger_conditions": [
+            "出牌时双方 UI 邻接手牌缓存刷新时机不同。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "使用出牌前手牌快照计算邻接条件，避免读取不同步的 UI 缓存。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "Kakarot",
+            "display_name": "Kakarot",
+            "role": "affected",
+            "explanation": "出牌时双方 UI 邻接手牌缓存刷新时机不同。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "Kakarot",
+                  "version_display": "6.1.1",
+                  "files": [
+                    {
+                      "relative_path": "Kakarot.dll",
+                      "sha256": "839C486E78516A5D5A32995880848778F2CB0935E557CAE0CF3071CAA7DA4E40"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "KakarotTenfoldSyncFix",
+              "relative_path": "KakarotTenfoldSyncFix.dll",
+              "sha256": "4D276DDF94AAEDA1F9B62FB758A3C42AF863723F3B356CC0C3BCADB354E75DD2"
+            },
+            {
+              "mod_id": "KakarotTenfoldSyncFix",
+              "relative_path": "KakarotTenfoldSyncFix.json",
+              "sha256": "E03D9F1E1D3AAEB7640BBC91B66203EDEE3CFB0B415CBC1E10CA01DF2CCD4404"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "使用出牌前手牌快照计算邻接条件，避免读取不同步的 UI 缓存。"
+          ],
+          "gameplay_impact": "统一追加攻击次数的计算来源，保留原有邻接规则。",
+          "files": [
+            {
+              "mod_id": "KakarotTenfoldSyncFix",
+              "relative_path": "KakarotTenfoldSyncFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "KakarotTenfoldSyncFix",
+              "relative_path": "KakarotTenfoldSyncFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史 37 项断言通过，含不同 UI 缓存下主客机差异复现和修复验证。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "LargeHealDisplayFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.largehealdisplayfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "超大回血数字溢出修复 · 本地修复说明",
+        "summary": "异常发生在游戏回血飘字格式化；实际回血仍受 MaxHp 限制，不能据此称为两个 MOD 冲突。",
+        "issue": {
+          "type": "display_error",
+          "symptoms": [
+            "超大回血时飘字发生 Int32 溢出。"
+          ],
+          "trigger_conditions": [
+            "当前海克斯组合产生超过 Int32 范围的回血显示数值。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "异常发生在游戏回血飘字格式化；实际回血仍受 MaxHp 限制，不能据此称为两个 MOD 冲突。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "HextechRunes",
+            "display_name": "ARAM: Mayhem / 海克斯大乱斗",
+            "role": "trigger",
+            "explanation": "当前海克斯组合产生超过 Int32 范围的回血显示数值。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "HextechRunes",
+                  "version_display": "0.9.8",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/HextechRunes.dll",
+                      "sha256": "8C203D53C13A7D9CA89F5B9CA4498039D2CFB152E4685727497351FB60F11A2B"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "LargeHealDisplayFix",
+              "relative_path": "LargeHealDisplayFix.dll",
+              "sha256": "CCC4244926EC882468B106630FDF5DDE4B63693188D57BA49522EFE984628DFA"
+            },
+            {
+              "mod_id": "LargeHealDisplayFix",
+              "relative_path": "LargeHealDisplayFix.json",
+              "sha256": "1BCC88A32102E9DF2149D15346292C58239A18756782FB37BE1A5E075082A24E"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "异常发生在游戏回血飘字格式化；实际回血仍受 MaxHp 限制，不能据此称为两个 MOD 冲突。"
+          ],
+          "gameplay_impact": "只改回血数字显示，不改实际回血量或上限。",
+          "files": [
+            {
+              "mod_id": "LargeHealDisplayFix",
+              "relative_path": "LargeHealDisplayFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "LargeHealDisplayFix",
+              "relative_path": "LargeHealDisplayFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "not_required",
+          "explanation": "显示层修复无需同步战斗规则；需要修复本地显示问题的玩家各自安装。当前整合包仍建议队友统一版本。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史 59 项断言通过，含原溢出复现及实际游戏方法补丁测试。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "NymphStampSyncFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.nymphstampsyncfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "妮芙印花同步修复 · 本地修复说明",
+        "summary": "查询避免不一致副作用，战斗副本按照关联牌恢复印花，保留正常染色玩法。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "妮芙印花查询、恢复结果在联机双方不一致。"
+          ],
+          "trigger_conditions": [
+            "印花查询产生写入，或战斗牌堆副本恢复印花。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "查询避免不一致副作用，战斗副本按照关联牌恢复印花，保留正常染色玩法。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "CyanrainNymphBeta",
+            "display_name": "CyanrainNymph Beta",
+            "role": "affected",
+            "explanation": "印花查询产生写入，或战斗牌堆副本恢复印花。"
+          },
+          {
+            "mod_id": "BaseLib",
+            "display_name": "BaseLib",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "CyanrainNymphBeta",
+                  "version_display": "v0.0.0-beta+exhaustfix.20261029",
+                  "files": [
+                    {
+                      "relative_path": "CyanrainNymphBeta.dll",
+                      "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "NymphStampSyncFix",
+              "relative_path": "NymphStampSyncFix.dll",
+              "sha256": "77380AF43B47B533D826DBB4E0843E5FBD4E1E613FCDEEF75C73B65A1A08D62C"
+            },
+            {
+              "mod_id": "NymphStampSyncFix",
+              "relative_path": "NymphStampSyncFix.json",
+              "sha256": "33145C6F265DB1BF43E58A2593413211A9E0EB81D67DF6E576093232F96D075A"
+            },
+            {
+              "mod_id": "NymphStampSyncFix",
+              "relative_path": "runtime-baseline.json",
+              "sha256": "39FA8A5BB23A0E6BD3B2D9BF9ED5DC92C71E53AE3479976072E8C389316A3BBC"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "查询避免不一致副作用，战斗副本按照关联牌恢复印花，保留正常染色玩法。"
+          ],
+          "gameplay_impact": "调整印花状态同步和恢复行为，保留染色规则。",
+          "files": [
+            {
+              "mod_id": "NymphStampSyncFix",
+              "relative_path": "NymphStampSyncFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "NymphStampSyncFix",
+              "relative_path": "NymphStampSyncFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "NymphStampSyncFix",
+              "relative_path": "runtime-baseline.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [
+            {
+              "patch_id": "local.cyanrainnymphbeta",
+              "minimum_version": "1.0.0"
+            }
+          ],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史 41 项真实游戏/妮芙类型行为检查通过，未启动游戏。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "PhrolovaNoteSyncFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.phrolovanotesyncfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "弗洛洛音符同步修复 · 本地修复说明",
+        "summary": "隔离顺序状态并修正满音符替换扣除，保留正常替换顺序和彩乐优先保护。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "定音顺序共享或残留，满音符替换时可能漏扣。"
+          ],
+          "trigger_conditions": [
+            "多个实例或重复处理满音符替换。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "隔离顺序状态并修正满音符替换扣除，保留正常替换顺序和彩乐优先保护。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "Phrolova",
+            "display_name": "弗洛洛",
+            "role": "affected",
+            "explanation": "多个实例或重复处理满音符替换。"
+          },
+          {
+            "mod_id": "BaseLib",
+            "display_name": "BaseLib",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "Phrolova",
+                  "version_display": "v1.1.0",
+                  "files": [
+                    {
+                      "relative_path": "Phrolova.dll",
+                      "sha256": "E2BABDADB9C424ABF47AAD68E03667FDEDAAF1CD032760337C1808ADB27C3F4D"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "PhrolovaNoteSyncFix",
+              "relative_path": "PhrolovaNoteSyncFix.dll",
+              "sha256": "FD22C9811781282D63493B66CE6D279DF35A8E446858AC32F07EC3AD2A102E42"
+            },
+            {
+              "mod_id": "PhrolovaNoteSyncFix",
+              "relative_path": "PhrolovaNoteSyncFix.json",
+              "sha256": "CB820FAA7A3D5CFDE2361322424AED8CE07C94D2DA03658792915F626DB7CE24"
+            },
+            {
+              "mod_id": "PhrolovaNoteSyncFix",
+              "relative_path": "runtime-baseline.json",
+              "sha256": "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "隔离顺序状态并修正满音符替换扣除，保留正常替换顺序和彩乐优先保护。"
+          ],
+          "gameplay_impact": "修正音符结算状态，属于玩法逻辑修复。",
+          "files": [
+            {
+              "mod_id": "PhrolovaNoteSyncFix",
+              "relative_path": "PhrolovaNoteSyncFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "PhrolovaNoteSyncFix",
+              "relative_path": "PhrolovaNoteSyncFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "PhrolovaNoteSyncFix",
+              "relative_path": "runtime-baseline.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "SpireTogetherFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.spiretogetherfix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "联机兼容修复包 · 本地修复说明",
+        "summary": "本次仅更新第四幕文件校验值；保留既有帮助药水、事件、终曲合声、秘密节点、换幕和能天使营火修复。既有多个子问题不能概括为同一 MOD 冲突。",
+        "issue": {
+          "type": "patch_compat",
+          "symptoms": [
+            "第四幕修复后主菜单出现版本不符红字，联机兼容修复未加载。"
+          ],
+          "trigger_conditions": [
+            "Act4FinalAscent DLL 已修复，但旧 runtime-baseline 仍记载原哈希。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "本次仅更新第四幕文件校验值；保留既有帮助药水、事件、终曲合声、秘密节点、换幕和能天使营火修复。既有多个子问题不能概括为同一 MOD 冲突。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "SpireTogetherFix",
+            "display_name": "联机兼容修复包",
+            "role": "affected",
+            "explanation": "Act4FinalAscent DLL 已修复，但旧 runtime-baseline 仍记载原哈希。"
+          },
+          {
+            "mod_id": "Act4FinalAscent",
+            "display_name": "第四幕：终焉攀升",
+            "role": "companion",
+            "explanation": "需联动核对的组件，不表示导致原始问题。"
+          },
+          {
+            "mod_id": "BaseLib",
+            "display_name": "BaseLib",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "STS2-RitsuLib",
+            "display_name": "RitsuLib",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "IntegratedStrategyEvents",
+            "display_name": "集成战略事件",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "HextechRunes",
+            "display_name": "ARAM: Mayhem / 海克斯大乱斗",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "HextechRunesSponsorPack",
+            "display_name": "海克斯大乱斗：额外拓展包",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "GoldEnchantEvent",
+            "display_name": "GoldEnchantEvent 免费附魔事件",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "EndlessMod",
+            "display_name": "无尽模式",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "Neuvillette",
+            "display_name": "Neuvillette",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          },
+          {
+            "mod_id": "AK_Exusiai",
+            "display_name": "能天使",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "AK_Exusiai",
+                  "version_display": "1.1.0",
+                  "files": [
+                    {
+                      "relative_path": "AK_Exusiai.dll",
+                      "sha256": "AFFEB5A53BBF3E85F3CD6D8804CA644F14F6C431FB761A545D4933F27842F75E"
+                    },
+                    {
+                      "relative_path": "AK_Exusiai.pck",
+                      "sha256": "1817D66C9EC3CDDE1F1E949F27AC663B686E37BEA42CA4A704682024C39FE82C"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "Act4FinalAscent",
+                  "version_display": "0.1.3",
+                  "files": [
+                    {
+                      "relative_path": "Act4FinalAscent.dll",
+                      "sha256": "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "EndlessMod",
+                  "version_display": "v1.24.1",
+                  "files": [
+                    {
+                      "relative_path": "EndlessMod.dll",
+                      "sha256": "6295B258D8E981B73774C7247395ECE525C03AA86E995CF146FE69E35F792F3D"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "GoldEnchantEvent",
+                  "version_display": "v1.5.0",
+                  "files": [
+                    {
+                      "relative_path": "GoldEnchantEvent.dll",
+                      "sha256": "D875EC7F99ACD01E39C20B1D4EB2891189D3F3062BF4341BB81AC0DC74FB71F7"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "HextechRunes",
+                  "version_display": "0.9.8",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/HextechRunes.dll",
+                      "sha256": "8C203D53C13A7D9CA89F5B9CA4498039D2CFB152E4685727497351FB60F11A2B"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "HextechRunesSponsorPack",
+                  "version_display": "0.9.2",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/HextechRunesSponsorPack.dll",
+                      "sha256": "68AE906B8B804B17855C3BB1476E115A70C4DAEAFBCF509E45556C9B8905B7A0"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "IntegratedStrategyEvents",
+                  "version_display": "0.5.6",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/IntegratedStrategyEvents.dll",
+                      "sha256": "0CADE386CB595311216DD7D69784B6901EDDF61AF2A127FE34127F49052ACAFF"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "Neuvillette",
+                  "version_display": "0.25.0-beta",
+                  "files": [
+                    {
+                      "relative_path": "Neuvillette.dll",
+                      "sha256": "0E0957685AB4035B4A473B4F922EB79C2F98CB8DDC67B7B30C72033657873C02"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "STS2-RitsuLib",
+                  "version_display": "0.6.7",
+                  "files": [
+                    {
+                      "relative_path": "compat/0.111.0/STS2-RitsuLib.Runtime.dll",
+                      "sha256": "7A77583AF80792213C8DCD7572040A342E7EA0DBED7BBBC8ED8E20776445DCCF"
+                    },
+                    {
+                      "relative_path": "shared/STS2-RitsuLib.Shared.dll",
+                      "sha256": "6FEF35E9BD8F39852CC81E6A800128AF572DF312356B565815910B7A0BEF13D7"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "SpireTogetherFix",
+              "relative_path": "runtime-baseline.json",
+              "sha256": "4DB2DB714F5ED43C73F2D98DABF0483AAB0CD0461AA03854B5634CC1B2634CA6"
+            },
+            {
+              "mod_id": "SpireTogetherFix",
+              "relative_path": "SpireTogetherFix.dll",
+              "sha256": "27FCB7E8E35A7D86FAEC28280AFBFDFF93F1AA182EE2B760B9CA4D9ED1824698"
+            },
+            {
+              "mod_id": "SpireTogetherFix",
+              "relative_path": "SpireTogetherFix.json",
+              "sha256": "299979951081F08464415753BBA72E8CA1D4C970688F8BC44299025767EC1F3D"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "本次仅更新第四幕文件校验值；保留既有帮助药水、事件、终曲合声、秘密节点、换幕和能天使营火修复。既有多个子问题不能概括为同一 MOD 冲突。"
+          ],
+          "gameplay_impact": "本次校验值更新不改玩法；既有 DLL 包含事件、血量、奖励、站位和联机逻辑修复。",
+          "files": [
+            {
+              "mod_id": "SpireTogetherFix",
+              "relative_path": "runtime-baseline.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "SpireTogetherFix",
+              "relative_path": "SpireTogetherFix.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "SpireTogetherFix",
+              "relative_path": "SpireTogetherFix.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "CyanrainNymphBeta",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.cyanrainnymphbeta",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "CyanrainNymph Beta · 本地修复说明",
+        "summary": "将 3 处旧 CardCmd.Exhaust 接口引用适配当前游戏签名。",
+        "issue": {
+          "type": "game_api_compat",
+          "symptoms": [
+            "妮芙消耗卡牌相关功能引用旧接口。"
+          ],
+          "trigger_conditions": [
+            "当前妮芙构建运行于游戏 0.111.0。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "将 3 处旧 CardCmd.Exhaust 接口引用适配当前游戏签名。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。",
+              "随补丁保存的 patch-info/historical-validation.txt。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "CyanrainNymphBeta",
+            "display_name": "CyanrainNymph Beta",
+            "role": "affected",
+            "explanation": "当前妮芙构建运行于游戏 0.111.0。"
+          },
+          {
+            "mod_id": "BaseLib",
+            "display_name": "BaseLib",
+            "role": "dependency",
+            "explanation": "清单声明的运行前置；不据此认定存在冲突。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "CyanrainNymphBeta",
+                  "version_display": "v0.0.0-beta+exhaustfix.20261029",
+                  "files": [
+                    {
+                      "relative_path": "CyanrainNymphBeta.dll",
+                      "sha256": "6A7217BEF24E8C9FF45B42BCE2D7CABB9D7A84674A147FD78190AB0E07E25ED7"
+                    },
+                    {
+                      "relative_path": "CyanrainNymphBeta.json",
+                      "sha256": "2D07257E560D1845C81950B9C4EE4173A9243A2BC536916396293CAED6BA0D10"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            },
+            {
+              "profile_id": "known-build-2",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "CyanrainNymphBeta",
+                  "version_display": "v0.0.0-beta+exhaustfix.20261029",
+                  "files": [
+                    {
+                      "relative_path": "CyanrainNymphBeta.dll",
+                      "sha256": "6A7217BEF24E8C9FF45B42BCE2D7CABB9D7A84674A147FD78190AB0E07E25ED7"
+                    },
+                    {
+                      "relative_path": "CyanrainNymphBeta.json",
+                      "sha256": "6564DE0ED7A9F9447663435FEAB5CE52C64310C64DF9908E7CD458CF82C1F0A0"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            },
+            {
+              "profile_id": "known-build-3",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "CyanrainNymphBeta",
+                  "version_display": "v0.0.0-beta+exhaustfix.20261029",
+                  "files": [
+                    {
+                      "relative_path": "CyanrainNymphBeta.dll",
+                      "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+                    },
+                    {
+                      "relative_path": "CyanrainNymphBeta.json",
+                      "sha256": "2D07257E560D1845C81950B9C4EE4173A9243A2BC536916396293CAED6BA0D10"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            },
+            {
+              "profile_id": "known-build-4",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "CyanrainNymphBeta",
+                  "version_display": "v0.0.0-beta+exhaustfix.20261029",
+                  "files": [
+                    {
+                      "relative_path": "CyanrainNymphBeta.dll",
+                      "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+                    },
+                    {
+                      "relative_path": "CyanrainNymphBeta.json",
+                      "sha256": "6564DE0ED7A9F9447663435FEAB5CE52C64310C64DF9908E7CD458CF82C1F0A0"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "CyanrainNymphBeta",
+              "relative_path": "CyanrainNymphBeta.dll",
+              "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+            },
+            {
+              "mod_id": "CyanrainNymphBeta",
+              "relative_path": "CyanrainNymphBeta.json",
+              "sha256": "2D07257E560D1845C81950B9C4EE4173A9243A2BC536916396293CAED6BA0D10"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "将 3 处旧 CardCmd.Exhaust 接口引用适配当前游戏签名。"
+          ],
+          "gameplay_impact": "适配游戏接口；不是数值平衡调整。",
+          "files": [
+            {
+              "mod_id": "CyanrainNymphBeta",
+              "relative_path": "CyanrainNymphBeta.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            },
+            {
+              "mod_id": "CyanrainNymphBeta",
+              "relative_path": "CyanrainNymphBeta.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "历史接口差异检查报告随包保存；本轮不重新执行游戏逻辑测试。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "StartingDeckTweaks",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.startingdecktweaks",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "初始牌组调整 · 本地修复说明",
+        "summary": "将该构建的清单 has_pck 设为 false；DLL 不变。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "启动时尝试加载不存在的 PCK。"
+          ],
+          "trigger_conditions": [
+            "已核对的纯 DLL 初始牌组调整构建仍声明 has_pck=true。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "将该构建的清单 has_pck 设为 false；DLL 不变。",
+            "evidence": [
+              "既有补丁清单和整合包说明已核对。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "StartingDeckTweaks",
+            "display_name": "初始牌组调整",
+            "role": "affected",
+            "explanation": "已核对的纯 DLL 初始牌组调整构建仍声明 has_pck=true。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "StartingDeckTweaks",
+                  "version_display": "1.0.0",
+                  "files": [
+                    {
+                      "relative_path": "StartingDeckTweaks.dll",
+                      "sha256": "497B4719E7D6F0E8BC173069FAE72BF81C139F80D7521DE4B2BB7D78F30CE275"
+                    },
+                    {
+                      "relative_path": "StartingDeckTweaks.json",
+                      "sha256": "0B5F46C8A14AE68846F357269B83813437423F83267B60C7ADFBB3445E809B65"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            },
+            {
+              "profile_id": "known-build-2",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "StartingDeckTweaks",
+                  "version_display": "1.0.0",
+                  "files": [
+                    {
+                      "relative_path": "StartingDeckTweaks.dll",
+                      "sha256": "497B4719E7D6F0E8BC173069FAE72BF81C139F80D7521DE4B2BB7D78F30CE275"
+                    },
+                    {
+                      "relative_path": "StartingDeckTweaks.json",
+                      "sha256": "575BAC6AE6CD178F1D1EEF7C58ABAD0038E7A2A1B45ABEE577CD0D60E0DF1E7F"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "StartingDeckTweaks",
+              "relative_path": "StartingDeckTweaks.json",
+              "sha256": "0B5F46C8A14AE68846F357269B83813437423F83267B60C7ADFBB3445E809B65"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "将该构建的清单 has_pck 设为 false；DLL 不变。"
+          ],
+          "gameplay_impact": "只修改资源清单，不修改牌组调整 DLL。",
+          "files": [
+            {
+              "mod_id": "StartingDeckTweaks",
+              "relative_path": "StartingDeckTweaks.json",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "核对现有清单、整合说明及可用的历史证据，未重新审查所有源码。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "本轮未重新执行该类测试。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮补齐随包信息，未进行完整真人联机回归。",
+          "适用范围按当前已核对构建保守限定，不表示所有前置都是冲突方。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "Act4FinalAscent",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.act4.ambient-timer-fix",
+        "version": "1.0.0",
+        "publication_status": "draft",
+        "review_status": "pending",
+        "title": "第四幕建筑家 BOSS 入场卡死修复",
+        "summary": "修正建筑家环境特效循环的等待，避免入场时持续创建特效而未响应。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "进入建筑家 BOSS 战后窗口无响应，尚未进入第一个玩家回合。",
+            "卡住期间内存持续增长；普通日志可能没有 ERROR。"
+          ],
+          "trigger_conditions": [
+            "已复现于当前模组组合、双人联机、第四幕 Brutal 的建筑家入场阶段。",
+            "是否在其他难度或单人模式同样触发，尚未验证。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "两次线程采样定位到建筑家环境特效循环持续创建对象；循环等待在部分游戏状态下可立即返回。具体是哪项状态触发跳过等待，尚未直接读取确认。",
+            "evidence": [
+              "两次未响应线程采样均包含 Act4ArchitectBoss.RunAmbientVfxLoopAsync，并处于特效实例化路径。",
+              "同次进程工作集由约 7.8 GB 增至 15.4 GB。",
+              "反编译核对了循环调用 Cmd.Wait 的行为及其跳过等待的条件。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "Act4FinalAscent",
+            "display_name": "第四幕：终焉攀升",
+            "role": "affected",
+            "explanation": "已定位到建筑家自身的环境特效循环。"
+          },
+          {
+            "mod_id": "SpireTogetherFix",
+            "display_name": "联机兼容修复包",
+            "role": "companion",
+            "explanation": "若已安装，它的校验文件需要同步更新；这不是对它造成原始卡死的认定。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-build-1",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "Act4FinalAscent",
+                  "version_display": "0.1.3",
+                  "files": [
+                    {
+                      "relative_path": "Act4FinalAscent.dll",
+                      "sha256": "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            },
+            {
+              "profile_id": "known-build-2",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "Act4FinalAscent",
+                  "version_display": "0.1.3",
+                  "files": [
+                    {
+                      "relative_path": "Act4FinalAscent.dll",
+                      "sha256": "38F2FE4F89009113D7991F1FD47044B7FB2EBBD0F60836A6310C6103BE1D7276"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [
+            {
+              "source": "stack",
+              "match_all": [
+                "Act4Placeholder.Act4ArchitectBoss",
+                "RunAmbientVfxLoopAsync"
+              ],
+              "confidence": "supporting",
+              "meaning": "只能说明采样落在该循环；需要重复采样、未响应表现及资源增长才能支持失控判断。"
+            }
+          ],
+          "installed_fingerprints": [
+            {
+              "mod_id": "Act4FinalAscent",
+              "relative_path": "Act4FinalAscent.dll",
+              "sha256": "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "将特效循环的等待调用换成独立 Godot 定时器。",
+            "保留原有 1.1 / 0.8 / 0.55 秒阶段间隔及循环退出条件。"
+          ],
+          "gameplay_impact": "未修改 BOSS 数值、招式、奖励或存档；保留原有特效。",
+          "files": [
+            {
+              "mod_id": "Act4FinalAscent",
+              "relative_path": "Act4FinalAscent.dll",
+              "purpose": "既有已核对修复文件；本次保持字节不变。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [
+            {
+              "mod_id": "SpireTogetherFix",
+              "patch_id": "local.spiretogetherfix",
+              "minimum_version": "1.0.0"
+            }
+          ],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "本地特效在各自客户端运行，所有玩家应安装匹配修复；旧联机兼容补丁的校验文件也需同步。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "主机继续现有存档后已进入玩家回合，但尚未完成整场双人联机验证，不能据此承诺所有存档均兼容。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "pass",
+            "summary": "2060 个现有方法体比较，仅环境循环一处调用改变，增加一个定时器辅助方法。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "编译与 JIT 检查、安装/回滚、中文空格路径及错误版本拒绝测试通过。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "partial",
+            "summary": "主机修复后的日志确认进入建筑家玩家回合；尚未验证全部阶段。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "没有完整的双方修复后联机回归记录。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "本轮仅重新包装和补齐说明，未重跑整场 BOSS 联机。",
+          "只支持已核对的文件构建。",
+          "本条元数据暂为 draft：已随内部包交付，但管理器独立下载安装协议尚未接入。安装使用整合包 Install.cmd。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "使用整合包 Rollback.cmd 自选游戏目录，恢复安装前状态并移除新增说明；文件或备份被后续修改时停止。当前不提供单项独立回滚。"
+        },
+        "distribution": {
+          "package_url": null,
+          "package_sha256": null,
+          "recipe_url": null,
+          "recipe_sha256": null
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

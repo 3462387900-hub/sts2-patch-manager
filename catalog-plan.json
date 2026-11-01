@@ -1,0 +1,440 @@
+{
+  "version": "20261102.1",
+  "gameVersion": "0.111.0",
+  "components": [
+    {
+      "id": "CanonicalRelicHoverFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/CanonicalRelicHoverFix/CanonicalRelicHoverFix.dll",
+          "name": "CanonicalRelicHoverFix.dll",
+          "sha256": "6E8D37F0D93070AEEAEE4684AE3EF6BF2C695F2D3C92CA49EDDF5F6314A7A763",
+          "allowedExisting": [
+            "6E8D37F0D93070AEEAEE4684AE3EF6BF2C695F2D3C92CA49EDDF5F6314A7A763"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/CanonicalRelicHoverFix/CanonicalRelicHoverFix.json",
+          "name": "CanonicalRelicHoverFix.json",
+          "sha256": "5462AE9932B5C7620F17EA6CD2EEA5B093E9793122A659B20F72BBD7152AA36A",
+          "allowedExisting": [
+            "5462AE9932B5C7620F17EA6CD2EEA5B093E9793122A659B20F72BBD7152AA36A"
+          ],
+          "isManifest": true
+        },
+        {
+          "source": "payload/CanonicalRelicHoverFix/runtime-baseline.json",
+          "name": "runtime-baseline.json",
+          "sha256": "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37",
+          "allowedExisting": [
+            "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37"
+          ],
+          "isManifest": false
+        }
+      ]
+    },
+    {
+      "id": "DoctorPigRewardFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/DoctorPigRewardFix/DoctorPigRewardFix.dll",
+          "name": "DoctorPigRewardFix.dll",
+          "sha256": "1D429BCD263AB679D4561C0ED84CCD7ACA77CD501E529C27E8AE3172F69F7942",
+          "allowedExisting": [
+            "1D429BCD263AB679D4561C0ED84CCD7ACA77CD501E529C27E8AE3172F69F7942",
+            "C9F50A30010189B186C3BA04E36B6715D306889DD36A6C1566778BA8E916758A"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/DoctorPigRewardFix/DoctorPigRewardFix.json",
+          "name": "DoctorPigRewardFix.json",
+          "sha256": "28DF6FF350807EDC2CA1586A77D09B08969B8EE5739844A60757A14DD29A725C",
+          "allowedExisting": [
+            "28DF6FF350807EDC2CA1586A77D09B08969B8EE5739844A60757A14DD29A725C",
+            "BC4EF3A0A45F59C6B7B0C2E59A9B529A9D193A731D3EB1B6CF5568A1FF73A3BA"
+          ],
+          "isManifest": true
+        },
+        {
+          "source": "payload/DoctorPigRewardFix/runtime-baseline.json",
+          "name": "runtime-baseline.json",
+          "sha256": "B6FCB18337E25F1792DA309635A588E9B88217AD5823EDF9FA8413765282D69D",
+          "allowedExisting": [
+            "B6FCB18337E25F1792DA309635A588E9B88217AD5823EDF9FA8413765282D69D"
+          ],
+          "isManifest": false
+        }
+      ]
+    },
+    {
+      "id": "IgnisTurnSyncFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/IgnisTurnSyncFix/IgnisTurnSyncFix.dll",
+          "name": "IgnisTurnSyncFix.dll",
+          "sha256": "68FA5CFBF3495B795CFFB562055762AE796ADCDC2F241E0FD0E2CC0C1202037C",
+          "allowedExisting": [
+            "68FA5CFBF3495B795CFFB562055762AE796ADCDC2F241E0FD0E2CC0C1202037C"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/IgnisTurnSyncFix/IgnisTurnSyncFix.json",
+          "name": "IgnisTurnSyncFix.json",
+          "sha256": "A17FD3588CEBC529A8445E237E99547401496C1757FAB1FC75F3E4C836E50BCD",
+          "allowedExisting": [
+            "A17FD3588CEBC529A8445E237E99547401496C1757FAB1FC75F3E4C836E50BCD"
+          ],
+          "isManifest": true
+        },
+        {
+          "source": "payload/IgnisTurnSyncFix/runtime-baseline.json",
+          "name": "runtime-baseline.json",
+          "sha256": "34D42C2961059B6BEB6B3244495C0ECBD14571862C9E160B710A4CFF96856135",
+          "allowedExisting": [
+            "34D42C2961059B6BEB6B3244495C0ECBD14571862C9E160B710A4CFF96856135"
+          ],
+          "isManifest": false
+        }
+      ]
+    },
+    {
+      "id": "KakarotTenfoldSyncFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/KakarotTenfoldSyncFix/KakarotTenfoldSyncFix.dll",
+          "name": "KakarotTenfoldSyncFix.dll",
+          "sha256": "4D276DDF94AAEDA1F9B62FB758A3C42AF863723F3B356CC0C3BCADB354E75DD2",
+          "allowedExisting": [
+            "4D276DDF94AAEDA1F9B62FB758A3C42AF863723F3B356CC0C3BCADB354E75DD2"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/KakarotTenfoldSyncFix/KakarotTenfoldSyncFix.json",
+          "name": "KakarotTenfoldSyncFix.json",
+          "sha256": "E03D9F1E1D3AAEB7640BBC91B66203EDEE3CFB0B415CBC1E10CA01DF2CCD4404",
+          "allowedExisting": [
+            "E03D9F1E1D3AAEB7640BBC91B66203EDEE3CFB0B415CBC1E10CA01DF2CCD4404"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "LargeHealDisplayFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/LargeHealDisplayFix/LargeHealDisplayFix.dll",
+          "name": "LargeHealDisplayFix.dll",
+          "sha256": "CCC4244926EC882468B106630FDF5DDE4B63693188D57BA49522EFE984628DFA",
+          "allowedExisting": [
+            "CCC4244926EC882468B106630FDF5DDE4B63693188D57BA49522EFE984628DFA"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/LargeHealDisplayFix/LargeHealDisplayFix.json",
+          "name": "LargeHealDisplayFix.json",
+          "sha256": "1BCC88A32102E9DF2149D15346292C58239A18756782FB37BE1A5E075082A24E",
+          "allowedExisting": [
+            "1BCC88A32102E9DF2149D15346292C58239A18756782FB37BE1A5E075082A24E"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "NymphStampSyncFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/NymphStampSyncFix/NymphStampSyncFix.dll",
+          "name": "NymphStampSyncFix.dll",
+          "sha256": "77380AF43B47B533D826DBB4E0843E5FBD4E1E613FCDEEF75C73B65A1A08D62C",
+          "allowedExisting": [
+            "63666E2AD8285EADD4AE23753544110FE05213812CE297D260C4FA5D21F9DB85",
+            "77380AF43B47B533D826DBB4E0843E5FBD4E1E613FCDEEF75C73B65A1A08D62C"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/NymphStampSyncFix/NymphStampSyncFix.json",
+          "name": "NymphStampSyncFix.json",
+          "sha256": "33145C6F265DB1BF43E58A2593413211A9E0EB81D67DF6E576093232F96D075A",
+          "allowedExisting": [
+            "33145C6F265DB1BF43E58A2593413211A9E0EB81D67DF6E576093232F96D075A",
+            "F308FB05D7F232E55F85A4ECD0B85135632DB7C688F9C1A115CED9D57172066A"
+          ],
+          "isManifest": true
+        },
+        {
+          "source": "payload/NymphStampSyncFix/runtime-baseline.json",
+          "name": "runtime-baseline.json",
+          "sha256": "39FA8A5BB23A0E6BD3B2D9BF9ED5DC92C71E53AE3479976072E8C389316A3BBC",
+          "allowedExisting": [
+            "39FA8A5BB23A0E6BD3B2D9BF9ED5DC92C71E53AE3479976072E8C389316A3BBC",
+            "BB9A93A50E0E3322B18CDABFDDABD05DA917A3717485536B0982120367B75392"
+          ],
+          "isManifest": false
+        }
+      ]
+    },
+    {
+      "id": "PhrolovaNoteSyncFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/PhrolovaNoteSyncFix/PhrolovaNoteSyncFix.dll",
+          "name": "PhrolovaNoteSyncFix.dll",
+          "sha256": "FD22C9811781282D63493B66CE6D279DF35A8E446858AC32F07EC3AD2A102E42",
+          "allowedExisting": [
+            "FD22C9811781282D63493B66CE6D279DF35A8E446858AC32F07EC3AD2A102E42"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/PhrolovaNoteSyncFix/PhrolovaNoteSyncFix.json",
+          "name": "PhrolovaNoteSyncFix.json",
+          "sha256": "CB820FAA7A3D5CFDE2361322424AED8CE07C94D2DA03658792915F626DB7CE24",
+          "allowedExisting": [
+            "CB820FAA7A3D5CFDE2361322424AED8CE07C94D2DA03658792915F626DB7CE24"
+          ],
+          "isManifest": true
+        },
+        {
+          "source": "payload/PhrolovaNoteSyncFix/runtime-baseline.json",
+          "name": "runtime-baseline.json",
+          "sha256": "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37",
+          "allowedExisting": [
+            "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37"
+          ],
+          "isManifest": false
+        }
+      ]
+    },
+    {
+      "id": "SpireTogetherFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/SpireTogetherFix/runtime-baseline.json",
+          "name": "runtime-baseline.json",
+          "sha256": "4DB2DB714F5ED43C73F2D98DABF0483AAB0CD0461AA03854B5634CC1B2634CA6",
+          "allowedExisting": [
+            "4DB2DB714F5ED43C73F2D98DABF0483AAB0CD0461AA03854B5634CC1B2634CA6",
+            "7645C229CD00849E27FACF431A6F2BCF7F84E402BAA85972377C2AC6190366D3"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/SpireTogetherFix/SpireTogetherFix.dll",
+          "name": "SpireTogetherFix.dll",
+          "sha256": "27FCB7E8E35A7D86FAEC28280AFBFDFF93F1AA182EE2B760B9CA4D9ED1824698",
+          "allowedExisting": [
+            "27FCB7E8E35A7D86FAEC28280AFBFDFF93F1AA182EE2B760B9CA4D9ED1824698"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/SpireTogetherFix/SpireTogetherFix.json",
+          "name": "SpireTogetherFix.json",
+          "sha256": "299979951081F08464415753BBA72E8CA1D4C970688F8BC44299025767EC1F3D",
+          "allowedExisting": [
+            "299979951081F08464415753BBA72E8CA1D4C970688F8BC44299025767EC1F3D"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "CyanrainNymphBeta",
+      "required": true,
+      "files": [
+        {
+          "source": "payload/CyanrainNymphBeta/CyanrainNymphBeta.dll",
+          "name": "CyanrainNymphBeta.dll",
+          "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5",
+          "allowedExisting": [
+            "6A7217BEF24E8C9FF45B42BCE2D7CABB9D7A84674A147FD78190AB0E07E25ED7",
+            "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/CyanrainNymphBeta/CyanrainNymphBeta.json",
+          "name": "CyanrainNymphBeta.json",
+          "sha256": "2D07257E560D1845C81950B9C4EE4173A9243A2BC536916396293CAED6BA0D10",
+          "allowedExisting": [
+            "2D07257E560D1845C81950B9C4EE4173A9243A2BC536916396293CAED6BA0D10",
+            "6564DE0ED7A9F9447663435FEAB5CE52C64310C64DF9908E7CD458CF82C1F0A0"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "StartingDeckTweaks",
+      "required": true,
+      "files": [
+        {
+          "source": "payload/StartingDeckTweaks/StartingDeckTweaks.json",
+          "name": "StartingDeckTweaks.json",
+          "sha256": "0B5F46C8A14AE68846F357269B83813437423F83267B60C7ADFBB3445E809B65",
+          "allowedExisting": [
+            "0B5F46C8A14AE68846F357269B83813437423F83267B60C7ADFBB3445E809B65",
+            "575BAC6AE6CD178F1D1EEF7C58ABAD0038E7A2A1B45ABEE577CD0D60E0DF1E7F"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "Act4FinalAscent",
+      "required": true,
+      "files": [
+        {
+          "source": "payload/Act4FinalAscent/Act4FinalAscent.dll",
+          "name": "Act4FinalAscent.dll",
+          "sha256": "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA",
+          "allowedExisting": [
+            "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA",
+            "38F2FE4F89009113D7991F1FD47044B7FB2EBBD0F60836A6310C6103BE1D7276"
+          ],
+          "isManifest": false
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "modId": "",
+      "path": "data_sts2_windows_x86_64/sts2.dll",
+      "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+    },
+    {
+      "modId": "",
+      "path": "data_sts2_windows_x86_64/0Harmony.dll",
+      "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+    },
+    {
+      "modId": "",
+      "path": "data_sts2_windows_x86_64/GodotSharp.dll",
+      "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+    },
+    {
+      "modId": "BaseLib",
+      "path": "BaseLib.dll",
+      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+    },
+    {
+      "modId": "Phrolova",
+      "path": "Phrolova.dll",
+      "sha256": "E2BABDADB9C424ABF47AAD68E03667FDEDAAF1CD032760337C1808ADB27C3F4D"
+    },
+    {
+      "modId": "YuWanCard",
+      "path": "lib/0.111.0/YuWanCard.Content.dll",
+      "sha256": "3D03979E0B951E113D50C3E154D220276608B020158E0D60EBB1E55A7491BE2F"
+    },
+    {
+      "modId": "CznTipheraCharacter",
+      "path": "CznTipheraCharacter.dll",
+      "sha256": "0F072823C66DC790564607A98A2F6C639322F8957E6A8F9F108F743CDC691943"
+    },
+    {
+      "modId": "CyanrainNymphBeta",
+      "path": "CyanrainNymphBeta.dll",
+      "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+    },
+    {
+      "modId": "STS2-RitsuLib",
+      "path": "compat/0.111.0/STS2-RitsuLib.Runtime.dll",
+      "sha256": "7A77583AF80792213C8DCD7572040A342E7EA0DBED7BBBC8ED8E20776445DCCF"
+    },
+    {
+      "modId": "STS2-RitsuLib",
+      "path": "shared/STS2-RitsuLib.Shared.dll",
+      "sha256": "6FEF35E9BD8F39852CC81E6A800128AF572DF312356B565815910B7A0BEF13D7"
+    },
+    {
+      "modId": "IntegratedStrategyEvents",
+      "path": "lib/0.111.0/IntegratedStrategyEvents.dll",
+      "sha256": "0CADE386CB595311216DD7D69784B6901EDDF61AF2A127FE34127F49052ACAFF"
+    },
+    {
+      "modId": "HextechRunes",
+      "path": "lib/0.111.0/HextechRunes.dll",
+      "sha256": "8C203D53C13A7D9CA89F5B9CA4498039D2CFB152E4685727497351FB60F11A2B"
+    },
+    {
+      "modId": "HextechRunesSponsorPack",
+      "path": "lib/0.111.0/HextechRunesSponsorPack.dll",
+      "sha256": "68AE906B8B804B17855C3BB1476E115A70C4DAEAFBCF509E45556C9B8905B7A0"
+    },
+    {
+      "modId": "Act4FinalAscent",
+      "path": "Act4FinalAscent.dll",
+      "sha256": "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA"
+    },
+    {
+      "modId": "GoldEnchantEvent",
+      "path": "GoldEnchantEvent.dll",
+      "sha256": "D875EC7F99ACD01E39C20B1D4EB2891189D3F3062BF4341BB81AC0DC74FB71F7"
+    },
+    {
+      "modId": "EndlessMod",
+      "path": "EndlessMod.dll",
+      "sha256": "6295B258D8E981B73774C7247395ECE525C03AA86E995CF146FE69E35F792F3D"
+    },
+    {
+      "modId": "Neuvillette",
+      "path": "Neuvillette.dll",
+      "sha256": "0E0957685AB4035B4A473B4F922EB79C2F98CB8DDC67B7B30C72033657873C02"
+    },
+    {
+      "modId": "AK_Exusiai",
+      "path": "AK_Exusiai.dll",
+      "sha256": "AFFEB5A53BBF3E85F3CD6D8804CA644F14F6C431FB761A545D4933F27842F75E"
+    },
+    {
+      "modId": "AK_Exusiai",
+      "path": "AK_Exusiai.pck",
+      "sha256": "1817D66C9EC3CDDE1F1E949F27AC663B686E37BEA42CA4A704682024C39FE82C"
+    },
+    {
+      "modId": "StartingDeckTweaks",
+      "path": "StartingDeckTweaks.dll",
+      "sha256": "497B4719E7D6F0E8BC173069FAE72BF81C139F80D7521DE4B2BB7D78F30CE275"
+    },
+    {
+      "modId": "Kakarot",
+      "path": "Kakarot.dll",
+      "sha256": "839C486E78516A5D5A32995880848778F2CB0935E557CAE0CF3071CAA7DA4E40"
+    }
+  ],
+  "retired": [
+    {
+      "id": "ChoraleCompatibilityFix",
+      "files": [
+        {
+          "name": "ChoraleCompatibilityFix.dll",
+          "sha256": "89D30883663B1548BE66BABBF767FCE6887114509BACF30EF4186E5D39DEDB8D",
+          "isManifest": false
+        },
+        {
+          "name": "ChoraleCompatibilityFix.json",
+          "sha256": "5F2C8C65805D8806A5857E3206BD3BAC1C59D48CC7312E09A0B4721A3391F817",
+          "isManifest": true
+        }
+      ]
+    }
+  ]
+}
