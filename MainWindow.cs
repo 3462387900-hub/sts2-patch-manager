@@ -182,16 +182,16 @@ public partial class MainWindow : Window
  async Task ScanFolder(string folder)
  {
   if(busy)return;busy=true;toast.Text="正在读取模组清单与文件校验值…";
-  try {UseGameRoot(folder);var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;ShowOverview();}
+  try {UseGameRoot(folder);coopComparison=null;var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;ShowOverview();}
   catch(Exception ex){MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);toast.Text="扫描未完成，未修改任何文件。";if(report==null)ShowOverview();}
   finally{busy=false;}
  }
  async void Rescan(){if(busy)return;if(!demo&&selectedInstallRoot!=null){await ScanFolder(selectedInstallRoot);return;}toast.Text="正在检查内置演示目录…";busy=true;await Task.Delay(600);busy=false;ShowOverview();toast.Text="演示目录已刷新。真实仓库信息请查看在线补丁页。";}
- void ExportReport()
+ async void ExportReport()
  {
+  if(busy||transactionWriting)return;
   var save=new SaveFileDialog{Title="导出补丁状态报告",FileName="SpirePatch-report.json",Filter="JSON 报告|*.json"};if(save.ShowDialog(this)!=true)return;
-  var data=new{schema=2,catalogVersion=demo?"demo-0.4":report?.CatalogRevision,inventoryComplete=demo||report?.InventoryComplete==true,mode=demo?"demo":"read-only",time=DateTimeOffset.Now,modCount=demo?51:report?.ModCount,patches=states.Select(s=>new{id=s.Patch.Id,name=s.Patch.Name,status=s.Status,reason=s.Reason,filesMatch=s.FilesMatch,relatedPatchIds=s.RelatedPatchIds,evidence=s.Evidence}),issues=demo?[]:report?.Issues??[]};
-  File.WriteAllText(save.FileName,JsonSerializer.Serialize(data,new JsonSerializerOptions{WriteIndented=true}));toast.Text="补丁状态报告已导出，不包含存档和日志内容。";
+  await RunReportActionAsync(async()=>{await ExportFreshReportAsync(save.FileName);toast.Text=demo?"已导出演示清单，不代表真实游戏文件。":"已重新扫描并导出当前补丁状态，不包含存档和日志内容。";});
  }
  void ShowDiagnosis()
  {
@@ -212,22 +212,18 @@ public partial class MainWindow : Window
  }
  void ShowCoop()
  {
-  var root=V(Header("PARTY CHECK","一起出发，状态对齐。","比较同一补丁目录下的扫描状态，减少反复询问和截图。"));Space(root,26);
+  var root=V(Header("PARTY CHECK","一起出发，状态对齐。","导出前、导入比对前都会重新扫描本机文件。"));Space(root,26);
   var left=V(Badge(demo?"演示配置":"本地扫描",gold));Space(left,17);left.Children.Add(T("我的补丁清单",22,ink,true));Space(left,9);left.Children.Add(T(states.Count(s=>s.Status=="已安装")+" 项文件一致 · "+states.Count(s=>s.Status=="待修复")+" 项待处理",14,muted));Space(left,24);left.Children.Add(Btn("导出我的清单",ExportReport,"Primary"));
-  var right=V(Badge("队友的配置"));Space(right,17);right.Children.Add(T("导入后查看差异",22,ink,true));Space(right,9);right.Children.Add(T("选择队友从修补站导出的 JSON 报告。",14,muted));Space(right,24);right.Children.Add(Btn("导入队友清单  ↗",ImportPeer));root.Children.Add(Columns(Card(left),Card(right),420));Space(root,22);
+  Space(left,10);left.Children.Add(T(demo?"演示数据 · 不读取游戏文件":report==null?"尚未扫描；导出时会扫描当前目录":"上次扫描："+report.Time.ToString("yyyy-MM-dd HH:mm:ss")+"\n此处为上次结果；导出或比对时自动刷新。",12,muted));
+  var right=V(Badge("队友的配置"));Space(right,17);right.Children.Add(T("导入后查看差异",22,ink,true));Space(right,9);right.Children.Add(T("选择队友导出的 JSON 清单，再与本机最新扫描比对。队友改动文件后需要重新导出。",14,muted));Space(right,24);right.Children.Add(Btn("导入队友清单  ↗",ImportPeer));root.Children.Add(Columns(Card(left),Card(right),360));Space(root,22);
+  if(coopComparison!=null){root.Children.Add(Card(V(T("本次比对结果",18,ink,true),T(coopComparison,13,muted))));Space(root,22);}
   root.Children.Add(T("比较范围",15,ink,true));Space(root,8);root.Children.Add(T("此版本只比较已收录修复的状态，不包含全部原模组文件及玩法配置。状态一致不能单独证明所有联机条件完全相同。演示报告与真实报告会区分显示。",13,muted));SetPage("联机检查",root);
  }
- void ImportPeer()
+ async void ImportPeer()
  {
+  if(busy||transactionWriting)return;
   var open=new OpenFileDialog{Title="选择队友的补丁报告",Filter="补丁报告|*.json"};if(open.ShowDialog(this)!=true)return;
-  try {using var doc=JsonDocument.Parse(File.ReadAllText(open.FileName));var r=doc.RootElement;
-   if(r.GetProperty("schema").GetInt32()!=2)throw new InvalidOperationException("报告格式已更新，请使用 0.4 或更新版本重新扫描并导出。");
-   if(r.GetProperty("catalogVersion").GetString()!=(demo?"demo-0.4":report?.CatalogRevision))throw new InvalidOperationException("补丁目录版本不同，需要先使用同一目录版本。");
-   if(r.GetProperty("mode").GetString()!=(demo?"demo":"read-only"))throw new InvalidOperationException("不能将演示报告与真实扫描报告混合比较。");
-   var their=r.GetProperty("patches").EnumerateArray().ToDictionary(p=>p.GetProperty("id").GetString()!,p=>p.GetProperty("status").GetString());
-   var diffs=states.Where(s=>!their.TryGetValue(s.Patch.Id,out var status)||status!=s.Status).Select(s=>s.Patch.Name+"：我方 "+s.Status+" / 队友 "+their.GetValueOrDefault(s.Patch.Id,"未记录")).ToList();
-   MessageBox.Show(this,diffs.Count==0?"当前补丁目录中的修复状态一致。\n\n仍需核对原模组和玩法配置；这不是完整联机兼容结论。":string.Join("\n\n",diffs),"补丁状态对比");
-  }catch(Exception ex){MessageBox.Show(this,ex.Message,"无法比较报告");}
+  await RunReportActionAsync(async()=>{await CompareFreshReportAsync(open.FileName);toast.Text="已与本机最新扫描比对。";});
  }
  public async Task CaptureAsync(string directory)
  {
