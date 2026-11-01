@@ -27,7 +27,7 @@ public partial class MainWindow
   if(selectionMode){root.Children.Add(T(activeSelection==null?"请选择补丁后再检查方案。":$"本次范围：{activeSelection.Included.Length} 项补丁，其中 {activeSelection.Automatic.Length} 项自动关联。",13,gold));Space(root,12);}
   root.Children.Add(T(installStatus,14,busy?gold:muted));Space(root,16);
   if(busy){
-   root.Children.Add(new ProgressBar{IsIndeterminate=true,Height=5,Foreground=gold,Background=B("#323B31")});Space(root,12);
+   root.Children.Add(new ProgressBar{IsIndeterminate=true,Height=5,Foreground=gold,Background=B("#EAF0E5")});Space(root,12);
    if(transactionWriting)root.Children.Add(T("正在执行文件事务，请等待完成。若写入失败，安装器会尝试恢复已改动文件。",13,gold));
    else root.Children.Add(Btn("取消准备",()=>preparationCancellation?.Cancel(),"Ghost"));
   }else{
@@ -54,7 +54,7 @@ public partial class MainWindow
    var done=V(T(view.Completion,23,green,true),T(view.Summary,13,muted));Space(done,12);
    done.Children.Add(T(view.DocumentsOnly?"本次只处理说明与验证记录，不需要为此重新启动游戏。":result.Changed==0?"本次没有改动游戏文件。":"文件校验通过不代表所有游戏场景已验证。重新启动游戏后，再验证原来的问题。",13,muted));
    if(result.Backup.Length>0){Space(done,12);done.Children.Add(T("备份保留在："+result.Backup,12,gold));done.Children.Add(Btn("打开备份目录",()=>OpenUrl(result.Backup),"Ghost"));}
-   root.Children.Add(Card(done,"#202A22",24));
+   root.Children.Add(Card(done,"#EFF5EC",24));
   }
   SetPage("安装与回滚",root);toast.Text="准备和预览只读游戏目录。只有点击确认按钮后才会安装或回滚。";
  }
@@ -65,7 +65,7 @@ public partial class MainWindow
   foreach(var group in groups){
    var rows=V(T(PlanPresentation.GroupName(group.Key),14,ink,true),T(group.Key,11,muted));Space(rows,8);
    foreach(var file in group){var row=T((skipped?"已匹配，跳过":PlanPresentation.Action(file))+" · "+Path.GetFileName(file.Relative.Replace('/',Path.DirectorySeparatorChar)),12,muted);row.ToolTip=file.Relative;rows.Children.Add(row);Space(rows,4);}
-   body.Children.Add(Card(rows,"#1B211D",14));Space(body,8);
+   body.Children.Add(Card(rows,"#FFFFFF",14));Space(body,8);
   }
   root.Children.Add(new Expander{Header=$"{title} · {groups.Length} 个模组目录 / {files.Length} 个文件",Content=body,IsExpanded=expanded});Space(root,12);
  }

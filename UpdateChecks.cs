@@ -16,7 +16,7 @@ public static class UpdateChecks
  internal sealed class Handler(Func<HttpRequestMessage,HttpResponseMessage> respond):HttpMessageHandler
  {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){ct.ThrowIfCancellationRequested();return Task.FromResult(respond(request));}}
  internal static readonly byte[] Payload=Encoding.UTF8.GetBytes("isolated updater download test; never executed");
- internal static ManagerRelease Sample(string version="0.8.0")=>new(version,"新增：模组批量查看。\n改进：更新说明展示。\n修复：示例问题。\n\n此页面为隔离测试，不是已发布版本。",DateTimeOffset.Parse("2026-11-02T00:00:00Z"),$"SpirePatch-v{version}-win-x64.zip",Payload.Length,Convert.ToHexString(SHA256.HashData(Payload)),ManagerUpdates.RepositoryUrl+$"/releases/download/v{version}/SpirePatch-v{version}-win-x64.zip",ManagerUpdates.Api+"/releases/assets/1",ManagerUpdates.RepositoryUrl+"/releases/tag/v"+version);
+ internal static ManagerRelease Sample(string version="0.9.0")=>new(version,"新增：模组批量查看。\n改进：更新说明展示。\n修复：示例问题。\n\n此页面为隔离测试，不是已发布版本。",DateTimeOffset.Parse("2026-11-02T00:00:00Z"),$"SpirePatch-v{version}-win-x64.zip",Payload.Length,Convert.ToHexString(SHA256.HashData(Payload)),ManagerUpdates.RepositoryUrl+$"/releases/download/v{version}/SpirePatch-v{version}-win-x64.zip",ManagerUpdates.Api+"/releases/assets/1",ManagerUpdates.RepositoryUrl+"/releases/tag/v"+version);
  internal static string Json(ManagerRelease release,bool draft=false,bool prerelease=false,string? digest=null)=>JsonSerializer.Serialize(new{draft,prerelease,tag_name="v"+release.Version,body=release.Notes,published_at=release.PublishedAt,html_url=release.ReleaseUrl,assets=new[]{new{name=release.FileName,state="uploaded",size=release.Size,digest=digest??"sha256:"+release.Sha256,browser_download_url=release.DownloadUrl,url=release.AssetApiUrl}}});
  internal static HttpResponseMessage Reply(string json)=>new(HttpStatusCode.OK){Content=new StringContent(json)};
  public static async Task RunAsync(string output)
@@ -25,7 +25,7 @@ public static class UpdateChecks
   var sample=Sample();var parsed=ManagerUpdates.ParseRelease(Json(sample));Check(parsed==sample,"release metadata retains version, Chinese notes, date and checksum");
   Check(ManagerUpdates.ParseRelease("\uFEFF"+Json(sample))==sample,"public index accepts UTF-8 BOM from Windows PowerShell");
   Check(ManagerUpdates.IsNewer(Sample("0.10.0"),"0.9.0"),"version comparison is numeric rather than lexical");
-  Check(!ManagerUpdates.IsNewer(sample,"0.8.0")&&!ManagerUpdates.IsNewer(sample,"0.9.0"),"equal and older releases never request downgrade");
+  Check(!ManagerUpdates.IsNewer(sample,sample.Version)&&!ManagerUpdates.IsNewer(sample,"1.0.0"),"equal and older releases never request downgrade");
   foreach(var version in new[]{"0.8.0-beta","0.8","../0.8.0","v0.8.0","00.8.0"}){try{ManagerUpdates.StableVersion(version);throw new Exception("bad version accepted");}catch(InvalidDataException){}}
   Check(true,"invalid, prerelease and path-like versions rejected");
   foreach(var json in new[]{Json(sample,true),Json(sample,false,true),Json(sample,digest:""),Json(sample with{Notes=""})}){try{ManagerUpdates.ParseRelease(json);throw new Exception("bad release accepted");}catch(InvalidDataException){}}
@@ -58,7 +58,7 @@ public partial class MainWindow
   IEnumerable<TControl> Controls<TControl>(DependencyObject parent) where TControl:DependencyObject {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var child=VisualTreeHelper.GetChild(parent,i);if(child is TControl control)yield return control;foreach(var nested in Controls<TControl>(child))yield return nested;}}
   async Task Idle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);UpdateLayout();}
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var file=File.Create(Path.Combine(output,name+".png"));encoder.Save(file);}
-  int downloads=0;bool failure=false;string version="0.8.0";
+  int downloads=0;bool failure=false;string version="0.9.0";
   // Test source is injected only into the offscreen window, never the normal app.
   using var source=new ManagerUpdates(new UpdateChecks.Handler(r=>{if(failure)return new(System.Net.HttpStatusCode.Forbidden);if((r.RequestUri!.AbsolutePath.EndsWith("/latest")||r.RequestUri.AbsolutePath.EndsWith("/manager-update.json")))return UpdateChecks.Reply(UpdateChecks.Json(UpdateChecks.Sample(version)));downloads++;return new(System.Net.HttpStatusCode.OK){Content=new System.Net.Http.ByteArrayContent(UpdateChecks.Payload)};}));
   // Use a test window so production source remains readonly and fixed.
@@ -73,11 +73,11 @@ public partial class MainWindow
   IEnumerable<TControl> Controls<TControl>(DependencyObject parent) where TControl:DependencyObject{for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var c=VisualTreeHelper.GetChild(parent,i);if(c is TControl control)yield return control;foreach(var nested in Controls<TControl>(c))yield return nested;}}
   async Task Idle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);UpdateLayout();}
   ShowOverview();await CheckManagerUpdatesAsync(false);Check(currentVisit?.Key=="总览"&&downloads()==0,"startup check stays on current page and does not download");
-  ShowManagerUpdates();await Idle();Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载更新包")&&Controls<TextBlock>(shell).Any(t=>t.Text.Contains("新增：模组批量查看")),"new release displays notes and an explicit download choice");
+  ShowManagerUpdates();await Idle();Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新")&&Controls<TextBlock>(shell).Any(t=>t.Text.Contains("新增：模组批量查看")),"new release displays notes and an explicit download choice");
   Controls<Button>(shell).Single(b=>b.Content?.ToString()=="暂不更新").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(currentVisit?.Key=="总览"&&downloads()==0,"declining update returns without downloads or writes");
   ShowManagerUpdates();await DownloadManagerUpdateToAsync(managerRelease!,Path.Combine(output,"界面隔离下载.zip"));Check(managerDownload!=null&&downloads()==1&&File.ReadAllBytes(managerDownload).SequenceEqual(UpdateChecks.Payload),"download workflow saves verified package and never executes it");
-  setVersion(ManagerUpdates.CurrentVersion);await CheckManagerUpdatesAsync(true);await Idle();Check(managerUpdateStatus.Contains("最新正式版本")&&!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载更新包"),"current release hides update download action");
+  setVersion(ManagerUpdates.CurrentVersion);await CheckManagerUpdatesAsync(true);await Idle();Check(managerUpdateStatus.Contains("最新正式版本")&&!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新"),"current release hides update download action");
   setVersion("0.6.0");await CheckManagerUpdatesAsync(true);Check(managerUpdateStatus.Contains("无需降级"),"older release cannot offer downgrade");
-  fail();await CheckManagerUpdatesAsync(true);await Idle();Check(managerRelease==null&&managerUpdateStatus.Contains("未完成")&&!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载更新包"),"failed refresh clears stale release and disables downloads");
+  fail();await CheckManagerUpdatesAsync(true);await Idle();Check(managerRelease==null&&managerUpdateStatus.Contains("未完成")&&!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新"),"failed refresh clears stale release and disables downloads");
  }
 }

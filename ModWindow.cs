@@ -20,18 +20,20 @@ public partial class MainWindow
  {
   var root=V(Header("LOCAL MODS","模组管理","查看当前安装，按需启用或停用；停用的模组会保留，可随时恢复。"));Space(root,18);
   if(selectedInstallRoot==null){root.Children.Add(Card(V(T("先定位你的游戏目录",20,ink,true),H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));SetPage("模组管理",root,restore:ShowMods);return;}
-  root.Children.Add(T(selectedInstallRoot,12,muted));Space(root,10);root.Children.Add(T(modStatus,13,muted));Space(root,12);
-  var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;root.Children.Add(H(refresh,Btn("打开模组目录",()=>{string path=Path.Combine(selectedInstallRoot,"mods");if(Directory.Exists(path))OpenUrl(path);else toast.Text="此目录尚未创建 mods 文件夹。";},"Ghost")));Space(root,16);
-  root.Children.Add(T("启用表示文件位于 mods 目录，游戏内另有设置时以游戏实际加载为准。启用/停用前请退出游戏。",12,muted));Space(root,16);
+  var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;
+  var toolbar=new Grid();toolbar.ColumnDefinitions.Add(new(){Width=GridLength.Auto});toolbar.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
+  toolbar.Children.Add(H(refresh,Btn("打开模组目录",()=>{string path=Path.Combine(selectedInstallRoot,"mods");if(Directory.Exists(path))OpenUrl(path);else toast.Text="此目录尚未创建 mods 文件夹。";},"Ghost")));
+  var count=T(modStatus,12,muted);count.VerticalAlignment=VerticalAlignment.Center;count.HorizontalAlignment=HorizontalAlignment.Right;Grid.SetColumn(count,1);toolbar.Children.Add(count);root.Children.Add(toolbar);Space(root,12);
+  root.Children.Add(T("启用表示文件位于 mods 目录，游戏内另有设置时以游戏实际加载为准。启用/停用前请退出游戏。",12,muted));Space(root,12);
   if(modInventory?.Issues.Count>0){root.Children.Add(Card(V(T("有清单问题需要核对，启停操作暂不可用",15,gold,true),T(string.Join("\n",modInventory.Issues.Take(5)),12,muted))));Space(root,16);}
   root.Children.Add(T("搜索名称、ID 或作者",12,muted));Space(root,6);
   var search=new TextBox{Text=modQuery,ToolTip="搜索模组名称、ID 或作者",Margin=new(0,0,0,12)};var tabs=new WrapPanel();
   foreach(var label in new[]{"全部","启用","停用"}){var tab=Btn(label,()=>{modFilter=label;ShowMods();},modFilter==label?"Primary":"Ghost");tab.Margin=new(0,0,8,12);tabs.Children.Add(tab);}
   var list=V();void Render(){list.Children.Clear();foreach(var mod in modInventory?.Mods.Where(m=>(modFilter=="全部"||(modFilter=="启用")==m.Enabled)&&(m.Name+" "+m.Id+" "+m.Author).Contains(modQuery,StringComparison.OrdinalIgnoreCase))??[]){
-   var item=V(T(mod.Name,16,ink,true),T(mod.Id+" · "+mod.Version+" · "+(mod.Enabled?"启用":"停用"),12,mod.Enabled?green:muted));Space(item,7);
+   var item=V();var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.Children.Add(V(T(mod.Name,15,ink,true),T(mod.Id+" · "+mod.Version+" · "+(mod.Enabled?"启用":"停用"),12,mod.Enabled?green:muted)));
    string? blocked=ModManager.BlockReason(selectedInstallRoot,mod,modInventory!);var toggle=Btn(mod.Enabled?"停用":"启用",()=>PrepareModToggle(mod),"Ghost");toggle.IsEnabled=!busy&&blocked==null;toggle.ToolTip=blocked;
-   item.Children.Add(H(Btn("详情",()=>ShowModDetail(mod.Folder),"Ghost"),toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost")));
-   if(blocked!=null)item.Children.Add(T(blocked.Length>110?blocked[..110]+"…":blocked,11,muted));list.Children.Add(Card(item,"#1B211D",16));Space(list,9);
+   var actions=H(Btn("详情",()=>ShowModDetail(mod.Folder),"Ghost"),toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost"));actions.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(actions,1);row.Children.Add(actions);item.Children.Add(row);
+   if(blocked!=null){Space(item,5);item.Children.Add(T(blocked.Length>110?blocked[..110]+"…":blocked,11,muted));}list.Children.Add(Card(item,"#FFFFFF",14));Space(list,8);
   }if(list.Children.Count==0&&!busy)list.Children.Add(T("没有匹配的模组。",14,muted));}
   search.TextChanged+=(_,_)=>{modQuery=search.Text;Render();string q=modQuery,f=modFilter;RememberPage("模组管理",()=>{modQuery=q;modFilter=f;ShowMods();});};root.Children.Add(search);root.Children.Add(tabs);root.Children.Add(list);Render();
   string savedQuery=modQuery,savedFilter=modFilter;SetPage("模组管理",root,restore:()=>{modQuery=savedQuery;modFilter=savedFilter;ShowMods();});toast.Text="查看清单不会改动文件；启用或停用会先展示改动，确认后执行。";

@@ -13,7 +13,7 @@ dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64
 if ($LASTEXITCODE -ne 0) { throw '发布构建失败。' }
 $testRoot = Join-Path $runRoot '验证记录'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
-foreach ($mode in @('self-test','recommendation-self-test','online-self-test','update-self-test')) {
+foreach ($mode in @('self-test','recommendation-self-test','online-self-test','update-self-test','auto-update-self-test')) {
     $result = Join-Path $testRoot ($mode + '.txt')
     $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--' + $mode, ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $result)) { throw ('验证失败：' + $mode) }
@@ -23,6 +23,7 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot '更新日志.md') -Destination $a
 $notes = Join-Path $sourceRoot ('releases/v' + $version + '.md')
 if (!(Test-Path -LiteralPath $notes)) { throw '缺少本版本发布说明。' }
 Copy-Item -LiteralPath $notes -Destination (Join-Path $appFolder '本版更新内容.md')
+& (Join-Path $PSScriptRoot '生成程序清单.ps1') -Directory $appFolder
 $archive = Join-Path $runRoot ('SpirePatch-v' + $version + '-win-x64.zip')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($appFolder, $archive, [IO.Compression.CompressionLevel]::Optimal, $true)
