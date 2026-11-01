@@ -52,7 +52,11 @@ Require ($patchTag -cmatch '^[A-Za-z0-9._-]+$') '补丁发布标签无效。'
 Require ($bundle.download_url -ceq ('https://github.com/'+$patchRepo+'/releases/download/'+$patchTag+'/'+$bundle.file_name)) '下载地址与发布标签不一致。'
 $current=Api ('repos/'+$patchRepo+'/contents/manager-feed.json?ref=main')
 $release=Api ('repos/'+$patchRepo+'/releases/tags/'+$patchTag)
-Require (!$release.draft -and !$release.prerelease) '请先正式发布补丁载荷。'
+Require (!$release.draft) '请先公开发布补丁载荷。'
+# Payload releases may retain a prerelease label for limited gameplay testing;
+# publication must not silently upgrade that evidence. The manager itself must
+# still be a stable release below.
+if($release.prerelease){Write-Output '载荷保留预发布标记；此次仅审核管理器接入，不提升补丁的实机验证状态。'}
 $assets=@($release.assets | Where-Object name -CEQ $bundle.file_name)
 Require ($assets.Count -eq 1) '补丁发布附件必须唯一。'
 $asset=$assets[0]
@@ -92,7 +96,7 @@ try{
     try{$zipPlan=$reader.ReadToEnd() | ConvertFrom-Json -Depth 100}finally{$reader.Dispose()}
     Require ((Canonical $zipPlan) -ceq (Canonical $plan)) 'ZIP 配方与已发布管理器的配方不同。'
 }finally{$archive.Dispose()}
-$report=[ordered]@{validated_at=[DateTimeOffset]::Now.ToString('o');catalog_commit=$feed.catalog_commit;patch_count=$ids.Count;manager_tag=$ManagerTag;payload_sha256=$bundle.sha256;previous_feed_sha=$current.sha;published=$false}
+$report=[ordered]@{validated_at=[DateTimeOffset]::Now.ToString('o');catalog_commit=$feed.catalog_commit;patch_count=$ids.Count;manager_tag=$ManagerTag;payload_sha256=$bundle.sha256;payload_prerelease=[bool]$release.prerelease;previous_feed_sha=$current.sha;published=$false}
 Write-Output ('校验通过：'+$ids.Count+' 项补丁；管理器 '+$ManagerTag+'；载荷 '+$bundle.file_name)
 if($Publish){
     $latest=Api ('repos/'+$patchRepo+'/contents/manager-feed.json?ref=main')
