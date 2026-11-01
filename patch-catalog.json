@@ -1,5 +1,5 @@
 {
-  "commit": "0dca6e3dd775fe1e5c37399fa488dd41b98a12c1",
+  "commit": "f487b2bfa90fd3741221197b9185b9ba272add16",
   "patches": [
     {
       "component_id": "CanonicalRelicHoverFix",
@@ -2424,6 +2424,1135 @@
             "date": "2026-11-02",
             "changes": [
               "新增随补丁保存的结构化说明及玩家文档；二进制沿用当前整合包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "TurnEndOrderFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.turnendorderfix",
+        "version": "1.0.0",
+        "publication_status": "published",
+        "review_status": "approved",
+        "title": "回合结束选牌顺序修复",
+        "summary": "选牌尚未完整结束时，后续回合钩子提前修改炸弹层数或格挡，联机校验可能不同。",
+        "issue": {
+          "type": "other",
+          "symptoms": [
+            "选牌尚未完整结束时，后续回合钩子提前修改炸弹层数或格挡，联机校验可能不同。"
+          ],
+          "trigger_conditions": [
+            "酒狐规划专家等回合结束选牌与其他回合结算同时触发。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "BeforeSideTurnEnd 只等暂停信号便继续枚举后续钩子；现在逐项等待钩子任务及其 GameAction.CompletionTask，再进入下一项，并保留三个原有阶段。",
+            "evidence": [
+              "WineFox PlanningExpert 选牌与日志中的炸弹 2/3、格挡 3/0 对应。",
+              "真实 Hook dispatcher 隔离重现快慢两端炸弹 2/3；修后均为 3，随后仅递减一次。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "STS2_WineFox",
+            "display_name": "STS2_WineFox",
+            "role": "affected",
+            "explanation": "酒狐规划专家等回合结束选牌与其他回合结算同时触发。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-0.111.0-build",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "STS2_WineFox",
+                  "version_display": "1.2.18",
+                  "files": [
+                    {
+                      "relative_path": "STS2_WineFox.dll",
+                      "sha256": "9CBC6AF0943F8AF22BF5C168AAB4ECF9912DF3670C09EE7D9F25CC3430D01570"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "TurnEndOrderFix",
+              "relative_path": "TurnEndOrderFix.dll",
+              "sha256": "90727520C5332A33BCA6D53F22E0360EF49F7329BE659E6562D9BA233E844848"
+            },
+            {
+              "mod_id": "TurnEndOrderFix",
+              "relative_path": "TurnEndOrderFix.json",
+              "sha256": "A59371CA7D360564B16614017A04EB7CF3B7CAEC4DF8BC90072ED3738FF1FE9E"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "BeforeSideTurnEnd 只等暂停信号便继续枚举后续钩子；现在逐项等待钩子任务及其 GameAction.CompletionTask，再进入下一项，并保留三个原有阶段。",
+            "运行时按内嵌基线校验依赖；应用失败撤销本补丁已注册的 hooks。"
+          ],
+          "gameplay_impact": "调整全局回合结束钩子的完成顺序；选牌界面依次出现，后续结算延后。",
+          "files": [
+            {
+              "mod_id": "TurnEndOrderFix",
+              "relative_path": "TurnEndOrderFix.dll",
+              "purpose": "独立修复程序集，含兼容基线。"
+            },
+            {
+              "mod_id": "TurnEndOrderFix",
+              "relative_path": "TurnEndOrderFix.json",
+              "purpose": "游戏 MOD 加载清单。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "对照实际 DLL、日志及调用链；现场复现边界见限制。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "本轮 16 项隔离行为检查通过，另有 14 项运行时守卫及六项共同初始化检查。引擎/UI/网络边界使用夹具。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "仅适配列明的 0.111.0 文件构建；未知版本阻止安装。",
+          "未进行真人联机/完整对局回归；文件安装成功不代表原现场已解决。",
+          "尚未在真实网络/完整 ActionExecutor 中回归所有回合钩子；依赖第三方钩子彼此等待的特殊组合仍需实机验证。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "在支持本批补丁的管理器中检查最近一次回滚，再确认撤销该安装批次；未知后续文件或损坏备份会停止回滚。不更改存档。"
+        },
+        "distribution": {
+          "package_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/TurnEndOrderFix-1.0.0.zip",
+          "package_sha256": "54FFA31154ED4CD14C8AD36FCC462F1D8B53D0AADB07A453415E1490F1E33335",
+          "recipe_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/TurnEndOrderFix-1.0.0.recipe.json",
+          "recipe_sha256": "23C655E087A36129AFC4EA2FE4C13C2D1FC3154DEB936CE54BC359ACC4887A21"
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "BeforeSideTurnEnd 只等暂停信号便继续枚举后续钩子；现在逐项等待钩子任务及其 GameAction.CompletionTask，再进入下一项，并保留三个原有阶段。",
+              "使用管理器选择安装，不提供独立 CMD 修复包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "VictoryBreedsArroganceSyncFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.victorybreedsarrogancesyncfix",
+        "version": "1.0.0",
+        "publication_status": "published",
+        "review_status": "approved",
+        "title": "猪猪胜兵必骄联机判定修复",
+        "summary": "同次出牌在不同客户端判断是否获得力量的结果不同。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "同次出牌在不同客户端判断是否获得力量的结果不同。"
+          ],
+          "trigger_conditions": [
+            "胜兵必骄比较敌方意图伤害，双方玩家受伤修正不同。"
+          ],
+          "diagnosis": {
+            "confidence": "confirmed",
+            "conclusion": "该卡调用的意图工具最终读取 LocalContext.GetMe；只在该卡同步计算范围内显式使用出牌者作为受伤方，保留多段意图和原阈值判断。",
+            "evidence": [
+              "真实卡 OnPlay 的 async MoveNext 中找到唯一意图工具调用。",
+              "真实 AttackIntent/Hook 边界测试原来 60/20，补丁后两端一致；异常后恢复作用域。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "YuWanCard",
+            "display_name": "YuWanCard",
+            "role": "affected",
+            "explanation": "胜兵必骄比较敌方意图伤害，双方玩家受伤修正不同。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-0.111.0-build",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "YuWanCard",
+                  "version_display": "v0.5.12",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/YuWanCard.Content.dll",
+                      "sha256": "3D03979E0B951E113D50C3E154D220276608B020158E0D60EBB1E55A7491BE2F"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "VictoryBreedsArroganceSyncFix",
+              "relative_path": "VictoryBreedsArroganceSyncFix.dll",
+              "sha256": "7EDA9F2B76F871ADD8B9FF278040FBDE17E72B5F68C77892BC1136AE89A91EF5"
+            },
+            {
+              "mod_id": "VictoryBreedsArroganceSyncFix",
+              "relative_path": "VictoryBreedsArroganceSyncFix.json",
+              "sha256": "0469F397DEC693707597A71A49A066A0918E5224821C316E07CA434710DB29A0"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "该卡调用的意图工具最终读取 LocalContext.GetMe；只在该卡同步计算范围内显式使用出牌者作为受伤方，保留多段意图和原阈值判断。",
+            "运行时按内嵌基线校验依赖；应用失败撤销本补丁已注册的 hooks。"
+          ],
+          "gameplay_impact": "此卡按出牌者防御修正计算；其他 UI 意图预览仍依照本地玩家。",
+          "files": [
+            {
+              "mod_id": "VictoryBreedsArroganceSyncFix",
+              "relative_path": "VictoryBreedsArroganceSyncFix.dll",
+              "purpose": "独立修复程序集，含兼容基线。"
+            },
+            {
+              "mod_id": "VictoryBreedsArroganceSyncFix",
+              "relative_path": "VictoryBreedsArroganceSyncFix.json",
+              "purpose": "游戏 MOD 加载清单。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "pass",
+            "summary": "对照实际 DLL、日志及调用链；现场复现边界见限制。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "本轮 10 项隔离行为检查通过，另有 14 项运行时守卫及六项共同初始化检查。引擎/UI/网络边界使用夹具。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "仅适配列明的 0.111.0 文件构建；未知版本阻止安装。",
+          "未进行真人联机/完整对局回归；文件安装成功不代表原现场已解决。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "在支持本批补丁的管理器中检查最近一次回滚，再确认撤销该安装批次；未知后续文件或损坏备份会停止回滚。不更改存档。"
+        },
+        "distribution": {
+          "package_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/VictoryBreedsArroganceSyncFix-1.0.0.zip",
+          "package_sha256": "1A973AE4AA73FA3E3DAB38251518FB402E2F30587F96ECFC98C9C83B6EE0B688",
+          "recipe_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/VictoryBreedsArroganceSyncFix-1.0.0.recipe.json",
+          "recipe_sha256": "08E9D63922AB7DC3F803BCD14249EBBB7B72032F1660EA7AA82B18ED33EFF3D4"
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "该卡调用的意图工具最终读取 LocalContext.GetMe；只在该卡同步计算范围内显式使用出牌者作为受伤方，保留多段意图和原阈值判断。",
+              "使用管理器选择安装，不提供独立 CMD 修复包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "KakarotElbowTargetFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.kakarotelbowtargetfix",
+        "version": "1.0.0",
+        "publication_status": "published",
+        "review_status": "approved",
+        "title": "卡卡罗特肘击目标修复",
+        "summary": "肘击伤害完成后施加易伤/虚弱时空引用。",
+        "issue": {
+          "type": "single_mod_bug",
+          "symptoms": [
+            "肘击伤害完成后施加易伤/虚弱时空引用。"
+          ],
+          "trigger_conditions": [
+            "肘击被改为随机/群体攻击，CardPlay.Target 为空。"
+          ],
+          "diagnosis": {
+            "confidence": "confirmed",
+            "conclusion": "原卡把空 CardPlay.Target 交给 PowerCmd.Apply；空显式目标时执行原攻击一次，从实际 DamageResult.Receiver 去重取得目标，不重新抽取 RNG。",
+            "evidence": [
+              "原 KakarotElbowStrike.OnPlay 与 KakarotPowerCmd 转发链核对。",
+              "真实 OnPlay 原始空目标异常重现；0/1/2 目标、重复命中与显式目标路径通过。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "BaseLib",
+            "display_name": "BaseLib",
+            "role": "dependency",
+            "explanation": "本构建运行前置，按文件哈希匹配。"
+          },
+          {
+            "mod_id": "Kakarot",
+            "display_name": "Kakarot",
+            "role": "affected",
+            "explanation": "肘击被改为随机/群体攻击，CardPlay.Target 为空。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-0.111.0-build",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "Kakarot",
+                  "version_display": "6.1.1",
+                  "files": [
+                    {
+                      "relative_path": "Kakarot.dll",
+                      "sha256": "839C486E78516A5D5A32995880848778F2CB0935E557CAE0CF3071CAA7DA4E40"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "KakarotElbowTargetFix",
+              "relative_path": "KakarotElbowTargetFix.dll",
+              "sha256": "634947F0278B9B75381EF97381CFE06CB7331F13C4A81D933105E934DA9F9EC3"
+            },
+            {
+              "mod_id": "KakarotElbowTargetFix",
+              "relative_path": "KakarotElbowTargetFix.json",
+              "sha256": "6DC35A68A5B38C1F7B7D46DAD131AD793A6F2FFC7E90357C8BBEDBADD3882DB9"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "原卡把空 CardPlay.Target 交给 PowerCmd.Apply；空显式目标时执行原攻击一次，从实际 DamageResult.Receiver 去重取得目标，不重新抽取 RNG。",
+            "运行时按内嵌基线校验依赖；应用失败撤销本补丁已注册的 hooks。"
+          ],
+          "gameplay_impact": "对实际命中的目标各施加一次原数量的易伤和虚弱；显式单目标路径保持原卡逻辑。",
+          "files": [
+            {
+              "mod_id": "KakarotElbowTargetFix",
+              "relative_path": "KakarotElbowTargetFix.dll",
+              "purpose": "独立修复程序集，含兼容基线。"
+            },
+            {
+              "mod_id": "KakarotElbowTargetFix",
+              "relative_path": "KakarotElbowTargetFix.json",
+              "purpose": "游戏 MOD 加载清单。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "pass",
+            "summary": "对照实际 DLL、日志及调用链；现场复现边界见限制。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "本轮 11 项隔离行为检查通过，另有 14 项运行时守卫及六项共同初始化检查。引擎/UI/网络边界使用夹具。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "仅适配列明的 0.111.0 文件构建；未知版本阻止安装。",
+          "未进行真人联机/完整对局回归；文件安装成功不代表原现场已解决。",
+          "能天使的转发出现在堆栈中，但没有证据表明它是根因。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "在支持本批补丁的管理器中检查最近一次回滚，再确认撤销该安装批次；未知后续文件或损坏备份会停止回滚。不更改存档。"
+        },
+        "distribution": {
+          "package_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/KakarotElbowTargetFix-1.0.0.zip",
+          "package_sha256": "03735F9AC8FF793686B4C3076AD9AFCB67EDDE4082281A77F15404837559C090",
+          "recipe_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/KakarotElbowTargetFix-1.0.0.recipe.json",
+          "recipe_sha256": "1D1A13AD57A0E7B46C73ABEAF5353BE34DA8B621B4BE17146066A1CE4789D44A"
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "原卡把空 CardPlay.Target 交给 PowerCmd.Apply；空显式目标时执行原攻击一次，从实际 DamageResult.Receiver 去重取得目标，不重新抽取 RNG。",
+              "使用管理器选择安装，不提供独立 CMD 修复包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "NymphKazdelRewardFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.nymphkazdelrewardfix",
+        "version": "1.0.0",
+        "publication_status": "published",
+        "review_status": "approved",
+        "title": "妮芙卡兹戴尔奖励克隆修复",
+        "summary": "皇家争执等奖励抽到 GougeMemory 时触发 AssertCanonical。",
+        "issue": {
+          "type": "game_api_compat",
+          "symptoms": [
+            "皇家争执等奖励抽到 GougeMemory 时触发 AssertCanonical。"
+          ],
+          "trigger_conditions": [
+            "奖励池使用妮芙卡兹戴尔池生成的变体模板。"
+          ],
+          "diagnosis": {
+            "confidence": "confirmed",
+            "conclusion": "卡池返回已可变的 Kazdel 模板，而奖励工厂继续调用 ToMutable；仅登记该池生成的确切实例，并用 MutableClone 产生独立副本，保留变体字段。",
+            "evidence": [
+              "真实 Kazdel pool 和 GougeMemory 类型重现双重 ToMutable 失败。",
+              "两份奖励的变体、独立性、模板不变及其他可变卡仍被拒绝均已验证。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "BaseLib",
+            "display_name": "BaseLib",
+            "role": "dependency",
+            "explanation": "本构建运行前置，按文件哈希匹配。"
+          },
+          {
+            "mod_id": "CyanrainNymphBeta",
+            "display_name": "CyanrainNymphBeta",
+            "role": "affected",
+            "explanation": "奖励池使用妮芙卡兹戴尔池生成的变体模板。"
+          },
+          {
+            "mod_id": "STS2-RitsuLib",
+            "display_name": "STS2-RitsuLib",
+            "role": "dependency",
+            "explanation": "本构建运行前置，按文件哈希匹配。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-0.111.0-build",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "BaseLib",
+                  "version_display": "v3.4.7",
+                  "files": [
+                    {
+                      "relative_path": "BaseLib.dll",
+                      "sha256": "55863CA6ADC30A61A7544874E157A519FFE148CCF2B18025947609C4BFF813CE"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "CyanrainNymphBeta",
+                  "version_display": "v0.0.0-beta+exhaustfix.20261029",
+                  "files": [
+                    {
+                      "relative_path": "CyanrainNymphBeta.dll",
+                      "sha256": "D23EFDD37AAE216CCF9D780EF97D3EAD2CDF8F5A2CF4031E0C6823AE707C5ED5"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "STS2-RitsuLib",
+                  "version_display": "0.6.7",
+                  "files": [
+                    {
+                      "relative_path": "compat/0.111.0/STS2-RitsuLib.Runtime.dll",
+                      "sha256": "7A77583AF80792213C8DCD7572040A342E7EA0DBED7BBBC8ED8E20776445DCCF"
+                    },
+                    {
+                      "relative_path": "shared/STS2-RitsuLib.Shared.dll",
+                      "sha256": "6FEF35E9BD8F39852CC81E6A800128AF572DF312356B565815910B7A0BEF13D7"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "NymphKazdelRewardFix",
+              "relative_path": "NymphKazdelRewardFix.dll",
+              "sha256": "E4F5B75B270A976488FE78EEDB82BD10D0DBD9759762965E2D9F88040A03D830"
+            },
+            {
+              "mod_id": "NymphKazdelRewardFix",
+              "relative_path": "NymphKazdelRewardFix.json",
+              "sha256": "A843B5FF9489E7BAF8984D614982B6CF5C780EC86BEB07D8392742211862AF5A"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "卡池返回已可变的 Kazdel 模板，而奖励工厂继续调用 ToMutable；仅登记该池生成的确切实例，并用 MutableClone 产生独立副本，保留变体字段。",
+            "运行时按内嵌基线校验依赖；应用失败撤销本补丁已注册的 hooks。"
+          ],
+          "gameplay_impact": "保留卡兹戴尔变体及深复制数据，不把奖励替换为普通卡，也不放宽其他可变卡的断言。",
+          "files": [
+            {
+              "mod_id": "NymphKazdelRewardFix",
+              "relative_path": "NymphKazdelRewardFix.dll",
+              "purpose": "独立修复程序集，含兼容基线。"
+            },
+            {
+              "mod_id": "NymphKazdelRewardFix",
+              "relative_path": "NymphKazdelRewardFix.json",
+              "purpose": "游戏 MOD 加载清单。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [
+            {
+              "patch_id": "local.cyanrainnymphbeta",
+              "minimum_version": "1.0.0"
+            }
+          ],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "pass",
+            "summary": "对照实际 DLL、日志及调用链；现场复现边界见限制。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "本轮 7 项隔离行为检查通过，另有 14 项运行时守卫及六项共同初始化检查。引擎/UI/网络边界使用夹具。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "仅适配列明的 0.111.0 文件构建；未知版本阻止安装。",
+          "未进行真人联机/完整对局回归；文件安装成功不代表原现场已解决。",
+          "本版针对已应用消耗接口修复的妮芙 DLL；管理器自动关联该修复。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "在支持本批补丁的管理器中检查最近一次回滚，再确认撤销该安装批次；未知后续文件或损坏备份会停止回滚。不更改存档。"
+        },
+        "distribution": {
+          "package_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/NymphKazdelRewardFix-1.0.0.zip",
+          "package_sha256": "5C1FEC04F8EA295B0546A46F59B2F0F09876640242E42C559BA8E16BCE9E9425",
+          "recipe_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/NymphKazdelRewardFix-1.0.0.recipe.json",
+          "recipe_sha256": "120867FA58349873D73F3ECFBC580A8EBC2C52B8121128F1032CB8068B99E817"
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "卡池返回已可变的 Kazdel 模板，而奖励工厂继续调用 ToMutable；仅登记该池生成的确切实例，并用 MutableClone 产生独立副本，保留变体字段。",
+              "使用管理器选择安装，不提供独立 CMD 修复包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "Act3SnapshotSaveFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.act3snapshotsavefix",
+        "version": "1.0.0",
+        "publication_status": "published",
+        "review_status": "approved",
+        "title": "第四幕第三幕快照存取修复",
+        "summary": "第三幕历史快照写入或重载时报 JSON 类型元数据缺失。",
+        "issue": {
+          "type": "game_api_compat",
+          "symptoms": [
+            "第三幕历史快照写入或重载时报 JSON 类型元数据缺失。"
+          ],
+          "trigger_conditions": [
+            "第四幕调用 SaveManager 序列化私有 Act3SnapshotStore。"
+          ],
+          "diagnosis": {
+            "confidence": "confirmed",
+            "conclusion": "游戏源生成 resolver 没有 Mod 私有存储类型；仅替换这两处读写调用，在复制的序列化选项中组合反射 fallback，保留原转换器和 RunHistory 元数据。",
+            "evidence": [
+              "实际私有存储类型通过原 SaveManager 时重现 NotSupportedException。",
+              "私有类型和嵌套 RunHistory 中文数据往返、坏 JSON/schema/null 拒绝、全局 resolver 不变通过。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "Act4FinalAscent",
+            "display_name": "Act4FinalAscent",
+            "role": "affected",
+            "explanation": "第四幕调用 SaveManager 序列化私有 Act3SnapshotStore。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-0.111.0-build",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "Act4FinalAscent",
+                  "version_display": "0.1.3",
+                  "files": [
+                    {
+                      "relative_path": "Act4FinalAscent.dll",
+                      "sha256": "1100CE4C1BDC5140373EFC4AA39C9F61941BC39B0362ED37B0FE3BEA595F96DA"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "Act3SnapshotSaveFix",
+              "relative_path": "Act3SnapshotSaveFix.dll",
+              "sha256": "15CCBC5400C799E106448486B6C0151FF578737252EC6486943BC9222C839F65"
+            },
+            {
+              "mod_id": "Act3SnapshotSaveFix",
+              "relative_path": "Act3SnapshotSaveFix.json",
+              "sha256": "D794C3F149AD8153EC8E958AED3CB2CB57E7F3518C022C0ED004AB5143130227"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "游戏源生成 resolver 没有 Mod 私有存储类型；仅替换这两处读写调用，在复制的序列化选项中组合反射 fallback，保留原转换器和 RunHistory 元数据。",
+            "运行时按内嵌基线校验依赖；应用失败撤销本补丁已注册的 hooks。"
+          ],
+          "gameplay_impact": "只改变第四幕私有快照 JSON 编解码；原文件路径和读写流程保持，拒绝损坏数据及未知 schema。",
+          "files": [
+            {
+              "mod_id": "Act3SnapshotSaveFix",
+              "relative_path": "Act3SnapshotSaveFix.dll",
+              "purpose": "独立修复程序集，含兼容基线。"
+            },
+            {
+              "mod_id": "Act3SnapshotSaveFix",
+              "relative_path": "Act3SnapshotSaveFix.json",
+              "purpose": "游戏 MOD 加载清单。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [
+            {
+              "patch_id": "local.act4.ambient-timer-fix",
+              "minimum_version": "1.0.0"
+            }
+          ],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "pass",
+            "summary": "对照实际 DLL、日志及调用链；现场复现边界见限制。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "本轮 8 项隔离行为检查通过，另有 14 项运行时守卫及六项共同初始化检查。引擎/UI/网络边界使用夹具。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "仅适配列明的 0.111.0 文件构建；未知版本阻止安装。",
+          "未进行真人联机/完整对局回归；文件安装成功不代表原现场已解决。",
+          "不自动重建此前写入失败而缺失的快照；针对已有建筑家修复的第四幕 DLL。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "在支持本批补丁的管理器中检查最近一次回滚，再确认撤销该安装批次；未知后续文件或损坏备份会停止回滚。不更改存档。"
+        },
+        "distribution": {
+          "package_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/Act3SnapshotSaveFix-1.0.0.zip",
+          "package_sha256": "99D76D1BDBD4C2A47772F2EF00549A31F138E23D862B26568438626DF8030B4F",
+          "recipe_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/Act3SnapshotSaveFix-1.0.0.recipe.json",
+          "recipe_sha256": "BEA07CBDDC3204DBF102FC6CEF44F3A26C1933099C0EADF6B92FC2745A029A14"
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "游戏源生成 resolver 没有 Mod 私有存储类型；仅替换这两处读写调用，在复制的序列化选项中组合反射 fallback，保留原转换器和 RunHistory 元数据。",
+              "使用管理器选择安装，不提供独立 CMD 修复包。"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "component_id": "NeowOptionOrderFix",
+      "metadata": {
+        "$schema": "./patch.schema.json",
+        "schema_version": "1.0",
+        "id": "local.neowoptionorderfix",
+        "version": "1.0.0",
+        "publication_status": "published",
+        "review_status": "approved",
+        "title": "涅奥模组选项顺序同步修复",
+        "summary": "双方同一玩家同一选择索引，对应橡皮泥和雨暗等不同选项。",
+        "issue": {
+          "type": "mod_conflict",
+          "symptoms": [
+            "双方同一玩家同一选择索引，对应橡皮泥和雨暗等不同选项。"
+          ],
+          "trigger_conditions": [
+            "YUIExtra 与猪猪同时追加涅奥候选，追加顺序不同后使用同一 RNG 抽选。"
+          ],
+          "diagnosis": {
+            "confidence": "partial",
+            "conclusion": "主客日志同一选择索引分别记录 YUIEXTRA-PLASTICINE 与 YUWANCARD-RAIN_DARK。两个默认优先级 Postfix 无互相顺序声明；抽选前将原候选按 TextKey/Relic ID 作 Ordinal 排序。",
+            "evidence": [
+              "10/31 23:42 主客日志同一玩家第二次选择 index 1 对应不同选项键。",
+              "相同候选不同拼接顺序的机制已重现；真实 getter 经补丁后候选顺序一致，跨三种 culture 一致。"
+            ]
+          }
+        },
+        "components": [
+          {
+            "mod_id": "YUIExtra",
+            "display_name": "YUIExtra",
+            "role": "affected",
+            "explanation": "YUIExtra 与猪猪同时追加涅奥候选，追加顺序不同后使用同一 RNG 抽选。"
+          },
+          {
+            "mod_id": "YuWanCard",
+            "display_name": "YuWanCard",
+            "role": "affected",
+            "explanation": "YUIExtra 与猪猪同时追加涅奥候选，追加顺序不同后使用同一 RNG 抽选。"
+          }
+        ],
+        "compatibility": {
+          "profiles": [
+            {
+              "profile_id": "known-0.111.0-build",
+              "game_version_display": "0.111.0",
+              "game_files": [
+                {
+                  "relative_path": "data_sts2_windows_x86_64/sts2.dll",
+                  "sha256": "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/0Harmony.dll",
+                  "sha256": "EF1898322C9F5C86DC1B0758B272A9C440823B4A41CA9A0B82A3AA6B3D206387"
+                },
+                {
+                  "relative_path": "data_sts2_windows_x86_64/GodotSharp.dll",
+                  "sha256": "0E4897ECDFB31456A97C7D8028DFB8D7DBDC632E2F73FC9B438D7B266A139289"
+                }
+              ],
+              "required_mods": [
+                {
+                  "mod_id": "YUIExtra",
+                  "version_display": "0.1.1",
+                  "files": [
+                    {
+                      "relative_path": "YUIExtra.dll",
+                      "sha256": "D711D72258CF07891358C840BC1B903566B9E6981F2D85DB2CCB9F0C818D915A"
+                    }
+                  ]
+                },
+                {
+                  "mod_id": "YuWanCard",
+                  "version_display": "v0.5.12",
+                  "files": [
+                    {
+                      "relative_path": "lib/0.111.0/YuWanCard.Content.dll",
+                      "sha256": "3D03979E0B951E113D50C3E154D220276608B020158E0D60EBB1E55A7491BE2F"
+                    }
+                  ]
+                }
+              ],
+              "excluded_mod_ids": []
+            }
+          ],
+          "unknown_version_policy": "block_install"
+        },
+        "detection": {
+          "signals": [],
+          "installed_fingerprints": [
+            {
+              "mod_id": "NeowOptionOrderFix",
+              "relative_path": "NeowOptionOrderFix.dll",
+              "sha256": "DCE85BA5220D107BEA30125934B7BCA8A96919EAF05CD8638F4BC94C1F218BE3"
+            },
+            {
+              "mod_id": "NeowOptionOrderFix",
+              "relative_path": "NeowOptionOrderFix.json",
+              "sha256": "7A940D018EDEC869D25A3AA6FA47B41AFD0B3A02A05383132C5D8DF4D837605C"
+            }
+          ],
+          "installation_state_scope": "file_state_only"
+        },
+        "changes": {
+          "description": [
+            "主客日志同一选择索引分别记录 YUIEXTRA-PLASTICINE 与 YUWANCARD-RAIN_DARK。两个默认优先级 Postfix 无互相顺序声明；抽选前将原候选按 TextKey/Relic ID 作 Ordinal 排序。",
+            "运行时按内嵌基线校验依赖；应用失败撤销本补丁已注册的 hooks。"
+          ],
+          "gameplay_impact": "会改变旧种子的涅奥初始选项映射；保留原选项实例与回调，不额外消耗 RNG。",
+          "files": [
+            {
+              "mod_id": "NeowOptionOrderFix",
+              "relative_path": "NeowOptionOrderFix.dll",
+              "purpose": "独立修复程序集，含兼容基线。"
+            },
+            {
+              "mod_id": "NeowOptionOrderFix",
+              "relative_path": "NeowOptionOrderFix.json",
+              "purpose": "游戏 MOD 加载清单。"
+            }
+          ]
+        },
+        "relationships": {
+          "requires_patches": [],
+          "requires_when_mod_present": [],
+          "conflicts_patch_ids": [],
+          "supersedes_patch_ids": []
+        },
+        "multiplayer": {
+          "policy": "all_players",
+          "explanation": "内部组合统一使用相同修复文件；这是一致性要求，不等于完整联机回归已通过。",
+          "restart_required": true
+        },
+        "saved_runs": {
+          "support": "unknown",
+          "explanation": "本轮未验证所有已有存档和游戏场景。"
+        },
+        "validation": [
+          {
+            "kind": "code_review",
+            "result": "partial",
+            "summary": "对照实际 DLL、日志及调用链；现场复现边界见限制。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "automated",
+            "result": "pass",
+            "summary": "本轮 7 项隔离行为检查通过，另有 14 项运行时守卫及六项共同初始化检查。引擎/UI/网络边界使用夹具。",
+            "date": "2026-11-02"
+          },
+          {
+            "kind": "local_game",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          },
+          {
+            "kind": "multiplayer",
+            "result": "not_run",
+            "summary": "未启动真实游戏，未执行真人联机。",
+            "date": null
+          }
+        ],
+        "limitations": [
+          "仅适配列明的 0.111.0 文件构建；未知版本阻止安装。",
+          "未进行真人联机/完整对局回归；文件安装成功不代表原现场已解决。",
+          "尚未完整重放原局，追加顺序是高可信机制，不能断言是原局唯一原因。",
+          "双方必须使用相同模组与玩法配置；候选集合不同不由排序修复。其他同为 Priority.Last 且继续追加的补丁未验证。",
+          "建议新开局验证，已有不同步存档不会自动修复。"
+        ],
+        "rollback": {
+          "supported": true,
+          "description": "在支持本批补丁的管理器中检查最近一次回滚，再确认撤销该安装批次；未知后续文件或损坏备份会停止回滚。不更改存档。"
+        },
+        "distribution": {
+          "package_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/NeowOptionOrderFix-1.0.0.zip",
+          "package_sha256": "251C12D74C8714F6A8CFF322A42E96EB4B0E8C895134AE491A8C0A0AF292EEA9",
+          "recipe_url": "https://github.com/3462387900-hub/sts2-patches/releases/download/v2026.11.02.3/NeowOptionOrderFix-1.0.0.recipe.json",
+          "recipe_sha256": "D002574F956EEA53D065AC801AA460942DBDEF5D8BF478F3833A04617191D8C3"
+        },
+        "changelog": [
+          {
+            "version": "1.0.0",
+            "date": "2026-11-02",
+            "changes": [
+              "主客日志同一选择索引分别记录 YUIEXTRA-PLASTICINE 与 YUWANCARD-RAIN_DARK。两个默认优先级 Postfix 无互相顺序声明；抽选前将原候选按 TextKey/Relic ID 作 Ordinal 排序。",
+              "使用管理器选择安装，不提供独立 CMD 修复包。"
             ]
           }
         ]

@@ -14,12 +14,13 @@ public sealed record PreparedPackage(string Directory,IReadOnlyDictionary<string
 
 public sealed class BundleInstaller
 {
- public const string SupportedHash="E65D96B9EF095F551A0CE9994A9ECABCC0664C210C898A14B9783F9C58FA2A54";
- public const long SupportedSize=608697;
- public static readonly OnlineBundle SupportedBundle=new("STS2-All-Fixes-20261102-v2.zip",SupportedHash,SupportedSize,
-  OnlineSource.RepositoryUrl+"/releases/download/v2026.11.02.2/STS2-All-Fixes-20261102-v2.zip",
-  "https://api.github.com/repos/"+OnlineSource.Repository+"/releases/assets/699114016",
-  OnlineSource.RepositoryUrl+"/releases/tag/v2026.11.02.2");
+ public const string SupportedHash="6AD6F7340F3CDB2FE28042CDB3084737A4F7AA798E125EBFDF23AB2EAE8B30FC";
+ public const long SupportedSize=695637;
+ public const string PackageFolder="STS2-Manager-Payload-20261102-v3";
+ public static readonly OnlineBundle SupportedBundle=new(PackageFolder+".zip",SupportedHash,SupportedSize,
+  OnlineSource.RepositoryUrl+"/releases/download/v2026.11.02.3/"+PackageFolder+".zip",
+  "https://api.github.com/repos/"+OnlineSource.Repository+"/releases/assets/699687356",
+  OnlineSource.RepositoryUrl+"/releases/tag/v2026.11.02.3","manager_payload");
  public static bool Supports(OnlineBundle b)=>b.Size==SupportedSize&&b.Sha256.Equals(SupportedHash,StringComparison.OrdinalIgnoreCase);
  public string DataRoot{get;}
  static readonly JsonSerializerOptions JsonOptions=new(){PropertyNameCaseInsensitive=true};
@@ -47,7 +48,7 @@ public sealed class BundleInstaller
    }
    string stage=Child(DataRoot,"准备记录/"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(stage);
    ExtractArchive(cached,stage,ct);
-   string package=Child(stage,"STS2-All-Fixes-20261102-v2");
+   string package=Child(stage,PackageFolder);
    using var checks=JsonDocument.Parse(File.ReadAllText(Child(package,"checksums.json")));
    var files=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
    foreach(var f in checks.RootElement.EnumerateArray()){
@@ -67,7 +68,7 @@ public sealed class BundleInstaller
   if(zip.Entries.Count>2000)throw new InvalidDataException("压缩包文件数超限。");
   foreach(var entry in zip.Entries){
    ct.ThrowIfCancellationRequested();string name=entry.FullName;
-   if(name.Contains('\\')||!name.StartsWith("STS2-All-Fixes-20261102-v2/",StringComparison.Ordinal)||((entry.ExternalAttributes>>16)&0xF000)==0xA000)throw new InvalidDataException("压缩包包含不支持的路径或链接。");
+   if(name.Contains('\\')||!name.StartsWith(PackageFolder+"/",StringComparison.Ordinal)||((entry.ExternalAttributes>>16)&0xF000)==0xA000)throw new InvalidDataException("压缩包包含不支持的路径或链接。");
    bool directory=name.EndsWith('/');string path=Child(stage,directory?name.TrimEnd('/'):name);
    if(!names.Add(path))throw new InvalidDataException("压缩包存在重复路径。");
    if(directory){Directory.CreateDirectory(path);continue;}

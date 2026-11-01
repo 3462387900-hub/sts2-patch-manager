@@ -23,7 +23,7 @@ function Latest-Journal([string]$Root) {
   $r=Read-Json $journal
   if($r.status -eq 'prepared'){throw 'Incomplete previous transaction: inspect the retained backup before continuing.'}
   if($r.status -eq 'installed'){
-   if($r.version -notin @('20261102.1','20261102.2')){throw 'Unsupported backup version.'}
+   if($r.version -notin @('20261102.1','20261102.2','20261102.3')){throw 'Unsupported backup version.'}
    return [pscustomobject]@{folder=$dir.FullName;journal=$journal;record=$r}
   }
  }
@@ -66,7 +66,7 @@ try {
    if($record.Status -notin @('enabled','failed-restored') -and $record.ModId -in $scope){throw "Mod is disabled: $($record.ModId). Enable it in the mod manager first."}
   }}
  }
- $result=[ordered]@{success=$true;mode=$Mode;root=$root;version='20261102.2';token='';backup='';message='';files=@();changed=0;checkedFiles=@();selectedIds=$selected}
+ $result=[ordered]@{success=$true;mode=$Mode;root=$root;version=(Read-Json (Join-Path $PackageRoot 'plan.json')).version;token='';backup='';message='';files=@();changed=0;checkedFiles=@();selectedIds=$selected}
  if($Mode -in @('Preview','Install')){
   $null=Latest-Journal $root
   $plan=Plan-For $root
@@ -81,7 +81,7 @@ try {
    if($request.token -ne $result.token){throw 'Preview changed: check the new plan before confirming again.'}
    if($selected.Count -gt 0){
     Apply-Plan $root $plan 6>&1 | ForEach-Object {
-     if($_.ToString().StartsWith('Installed 11-component fix bundle;')){Write-Host "Installed selected batch: $($selected.Count) patches; $(@($plan.changes).Count) files changed."}
+     if($_.ToString().StartsWith('Installed fix bundle;') -or $_.ToString().StartsWith('Installed 11-component fix bundle;')){Write-Host "Installed selected batch: $($selected.Count) patches; $(@($plan.changes).Count) files changed."}
      else{Write-Host $_}
     }
    }else{Apply-Plan $root $plan}

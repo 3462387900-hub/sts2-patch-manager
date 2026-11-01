@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace SpirePatch;
 public record OnlinePatch(string Id,string ComponentId,string Title,string Summary,string Detail,string[] Limits,JsonElement Metadata);
-public record OnlineBundle(string FileName,string Sha256,long Size,string DownloadUrl,string AssetApiUrl,string ReleaseUrl);
+public record OnlineBundle(string FileName,string Sha256,long Size,string DownloadUrl,string AssetApiUrl,string ReleaseUrl,string InstallMode="manual_bundle");
 public record OnlineCatalog(string Commit,IReadOnlyList<OnlinePatch> Patches,OnlineBundle Bundle,DateTimeOffset RetrievedAt);
 
 public sealed class OnlineSource : IDisposable
@@ -63,13 +63,13 @@ public sealed class OnlineSource : IDisposable
   Require(Str(e,"encoding")=="base64","不支持的仓库文件编码。");
   using var document=JsonDocument.Parse(Convert.FromBase64String(Str(e,"content")));return document.RootElement.Clone();
  }
- public async Task<OnlineCatalog> LoadAsync(CancellationToken ct=default)
+ public async Task<OnlineCatalog> LoadAsync(CancellationToken ct=default,bool candidate=false)
  {
-  var feed=await Contents("manager-feed.json","main",ct);
+  var feed=await Contents(candidate?"manager-feed-v3.json":"manager-feed.json","main",ct);
   Require(feed.GetProperty("schema_version").GetInt32()==1&&Str(feed,"repository")==Repository,"不支持的补丁源。");
   string commit=Str(feed,"catalog_commit");Require(Regex.IsMatch(commit,@"\A[0-9a-f]{40}\z"),"补丁目录必须固定到提交版本。");
-  var b=feed.GetProperty("bundle");var bundle=new OnlineBundle(Str(b,"file_name"),Str(b,"sha256"),b.GetProperty("size").GetInt64(),Str(b,"download_url"),Str(b,"asset_api_url"),Str(b,"release_url"));ValidateBundle(bundle);
-  Require(Str(b,"install_mode")=="manual_bundle","此管理器只支持下载整合包后手动安装。");
+  var b=feed.GetProperty("bundle");var bundle=new OnlineBundle(Str(b,"file_name"),Str(b,"sha256"),b.GetProperty("size").GetInt64(),Str(b,"download_url"),Str(b,"asset_api_url"),Str(b,"release_url"),Str(b,"install_mode"));ValidateBundle(bundle);
+  Require(Str(b,"install_mode") is "manual_bundle" or "manager_payload","补丁源使用了本版不支持的安装协议，请更新管理器。");
   var index=await Contents("index.json",commit,ct);Require(Str(index,"schema_version")=="1.0","不支持的索引格式。");
   var entries=index.GetProperty("entries").EnumerateArray().ToArray();Require(entries.Length>0&&entries.Length<=100,"补丁目录条目数异常。");
   var ids=new HashSet<string>();var components=new HashSet<string>();

@@ -22,7 +22,7 @@ public partial class MainWindow
   var before=Snapshot();preparedPackage=await installer.PrepareAsync(zip);
   installPreview=await installer.RunAsync(preparedPackage,fixture,"Preview");var initial=installPreview;var view=new PlanPresentation(initial);
   Check(initial.Changed==40&&view.Documents.Length==40&&view.Runtime.Length==0&&view.Legacy.Length==0,"actual plan contains exactly 40 documentation additions and no payload changes");
-  Check(view.MatchedPatches==11&&view.Unchanged.Length==26,"all 11 runtime patches and 26 runtime files are explicitly skipped");
+  Check(view.MatchedPatches==17&&view.Unchanged.Length==38,"all 17 runtime patches and 38 runtime files are explicitly skipped");
   Check(Equal(before,Snapshot()),"preview leaves every fixture file unchanged");
   installStatus="检查完成：仅有说明文件需要处理。";ShowInstaller();await Shot("01-仅需补齐说明");
   await Click(view.Confirm);Check(lastInstallResult?.Message=="Installed"&&new PlanPresentation(lastInstallResult).DocumentsOnly,"documentation confirmation performs the actual verified transaction");await Shot("02-说明补齐完成");
@@ -30,7 +30,7 @@ public partial class MainWindow
   Check(Catalog.Scan(fixture).Patches.All(p=>p.Status=="已安装"),"documentation maintenance preserves all patch recommendations");
   using(var journal=JsonDocument.Parse(File.ReadAllText(Path.Combine(lastInstallResult!.Backup,"restore.json"))))
    Check(journal.RootElement.GetProperty("files").GetArrayLength()==40,"backup journal records only the 40 actual changes");
-  await Click("检查安装方案");Check(installPreview?.Changed==0&&new PlanPresentation(installPreview).Unchanged.Length==66,"recheck skips every payload and documentation file without rewriting");await Shot("03-全部匹配无需处理");
+  await Click("检查安装方案");Check(installPreview?.Changed==0&&new PlanPresentation(installPreview).Unchanged.Length==78,"recheck skips every payload and documentation file without rewriting");await Shot("03-全部匹配无需处理");
   Check(!Buttons(shell).Any(b=>b.Content?.ToString()?.StartsWith("确认")==true),"no-op preview offers no misleading apply button");
   await Click("检查最近一次回滚");Check(installPreview?.Changed==40&&new PlanPresentation(installPreview).DocumentsOnly,"rollback identifies a documentation-only transaction");await Shot("04-仅撤销说明改动");
   await Click(new PlanPresentation(installPreview!).Confirm);Check(lastInstallResult?.Message=="RolledBack"&&Equal(before,Snapshot()),"documentation rollback restores exact original fixture files and preserves fixes");await Shot("05-说明撤销完成");

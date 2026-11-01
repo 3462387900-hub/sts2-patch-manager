@@ -34,6 +34,13 @@ public static class OnlineChecks
   HttpResponseMessage Envelope(object o)=>new(HttpStatusCode.OK){Content=new StringContent(JsonSerializer.Serialize(o))};
   using(var source=new OnlineSource(new FakeHandler(r=>Envelope(r.RequestUri!.AbsolutePath.EndsWith("manager-feed.json")?feed:r.RequestUri.AbsolutePath.EndsWith("index.json")?index:metadata))))
   {var catalog=await source.LoadAsync();Check(catalog.Patches.Single().Title=="测试补丁"&&catalog.Patches.Single().Limits[0]=="没有实机测试","reads individual patch metadata and preserves test limits");}
+  var payloadFeed=System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(feed))!;
+  payloadFeed["bundle"]!["install_mode"]="manager_payload";
+  using(var source=new OnlineSource(new FakeHandler(r=>Envelope(r.RequestUri!.AbsolutePath.EndsWith("manager-feed.json")?payloadFeed:r.RequestUri.AbsolutePath.EndsWith("index.json")?index:metadata))))
+  {var catalog=await source.LoadAsync();Check(catalog.Bundle.InstallMode=="manager_payload","manager payload protocol loads and retains installation guidance");}
+  payloadFeed["bundle"]!["install_mode"]="execute_arbitrary_script";
+  using(var source=new OnlineSource(new FakeHandler(_=>Envelope(payloadFeed))))
+  {try{await source.LoadAsync();throw new Exception("unknown protocol accepted");}catch(InvalidDataException){}Check(true,"unknown installation protocol requests manager update");}
   var badIndex=new{schema_version="1.0",entries=new[]{new{id="local.test",component_id="Test",metadata="../../private.json"}}};
   using(var source=new OnlineSource(new FakeHandler(r=>Envelope(r.RequestUri!.AbsolutePath.EndsWith("manager-feed.json")?feed:badIndex))))
   {try{await source.LoadAsync();throw new Exception("bad metadata path accepted");}catch(InvalidDataException){}Check(true,"metadata path must stay inside its patch directory");}

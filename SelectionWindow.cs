@@ -40,7 +40,7 @@ public partial class MainWindow
   if(selectionReport==null){ChoosePatchSelection();return;}
   var root=V(Header("CHOOSE PATCHES","选择本次要处理的补丁","已匹配的文件会跳过。必要的关联修复会自动加入，并在确认前一起展示。"));Space(root,18);
   root.Children.Add(T(selectedInstallRoot??"",12,muted));Space(root,10);
-  root.Children.Add(T("当前可选择本版已审核整合包中的 11 项修复。下载仍使用完整 ZIP，写入只限所选项目；回滚按最近一次安装批次执行。",12,muted));Space(root,16);
+  root.Children.Add(T($"本版支持 {Catalog.All.Length} 项已审核修复。下载完整缓存包，写入只限所选及必要关联项；回滚按最近一次安装批次执行。",12,muted));Space(root,16);
   var actions=H(Btn("选择推荐项",()=>{requestedPatches.Clear();foreach(var p in selectionReport.Patches.Where(p=>p.Status is "待修复" or "需联动"))requestedPatches.Add(p.Patch.Id);ResolveSelection();ShowPatchSelection();},"Ghost"),Btn("清空选择",()=>{requestedPatches.Clear();ResolveSelection();ShowPatchSelection();},"Ghost"),Btn("重新扫描",ChoosePatchSelection,"Ghost"));root.Children.Add(actions);Space(root,12);
   root.Children.Add(T(selectionStatus,14,activeSelection==null?muted:gold));Space(root,12);
   var inspect=Btn("检查所选补丁方案",()=>BeginPreparation(false),"Primary");inspect.IsEnabled=activeSelection!=null&&!busy;root.Children.Add(inspect);Space(root,18);

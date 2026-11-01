@@ -26,7 +26,9 @@ public partial class MainWindow
   {
    var bundle=onlineCatalog.Bundle;
    var download=Btn("下载整合包并校验",DownloadOnline,"Primary");download.IsEnabled=!onlineBusy&&sourceCurrent;
-   root.Children.Add(Card(V(T("当前下载：修复整合包",19,ink,true),T(bundle.FileName,13,gold),T("可在安装与回滚页选择本版支持的补丁。下载仍为完整整合包，写入只限所选项目与必要关联项；也可下载后手动安装。",13,muted),H(Btn("进入安装与回滚",ShowInstaller,"Primary"),download,Btn("发布说明",()=>OpenUrl(bundle.ReleaseUrl),"Ghost")))));
+   string support=BundleInstaller.Supports(bundle)?$"本版可安装 {Catalog.All.Length} 项已审核补丁。下载完整包，写入只限所选项目与必要关联项。":"在线安装包已更新，请先在「检查更新」升级管理器，再安装新增补丁。";
+   string usage=bundle.InstallMode=="manager_payload"?"这是管理器专用载荷包，请在「安装与回滚」使用；离线时可导入 ZIP。":"可在管理器安装，也可解压后运行包内的 Install.cmd。";
+   root.Children.Add(Card(V(T("当前下载：修复整合包",19,ink,true),T(bundle.FileName,13,gold),T(support+"\n"+usage,13,muted),H(Btn("进入安装与回滚",ShowInstaller,"Primary"),download,Btn("发布说明",()=>OpenUrl(bundle.ReleaseUrl),"Ghost")))));
    Space(root,22);root.Children.Add(T($"仓库收录 {onlineCatalog.Patches.Count} 项 · "+onlineCatalog.RetrievedAt.ToLocalTime().ToString("MM-dd HH:mm"),16,ink,true));Space(root,10);
    foreach(var patch in onlineCatalog.Patches)
    {
@@ -72,7 +74,7 @@ public partial class MainWindow
   try{
    await onlineSource.DownloadAsync(onlineCatalog.Bundle,save.FileName,new Progress<long>(n=>toast.Text=$"已下载 {n/1024} / {onlineCatalog.Bundle.Size/1024} KB"),onlineCancellation.Token);
    onlineStatus="下载完成且 SHA256 一致。尚未安装到游戏。";
-   MessageBox.Show(this,"已下载并校验：\n"+save.FileName+"\n\n请完整解压后运行 Install.cmd，选择自己的游戏目录。","下载完成",MessageBoxButton.OK,MessageBoxImage.Information);
+   MessageBox.Show(this,"已下载并校验：\n"+save.FileName+"\n\n"+(onlineCatalog.Bundle.InstallMode=="manager_payload"?"请进入「安装与回滚」，导入此 ZIP 并选择自己的游戏目录。此包由管理器执行安装。":"请完整解压后运行 Install.cmd，选择自己的游戏目录。"),"下载完成",MessageBoxButton.OK,MessageBoxImage.Information);
   }catch(OperationCanceledException){onlineStatus="下载已取消或超时，未保留未完成文件。";}
   catch(Exception e){onlineStatus="下载未完成："+e.Message;}
   finally{onlineBusy=false;onlineCancellation.Dispose();onlineCancellation=null;if(currentVisit?.Key=="在线补丁")ShowOnline();}

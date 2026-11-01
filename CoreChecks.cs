@@ -8,7 +8,7 @@ public static class CoreChecks
  {
   var lines=new List<string>();
   void Check(bool yes,string label){if(!yes)throw new InvalidOperationException(label);lines.Add("PASS "+label);}
-  Check(Catalog.All.Length==11,"catalog contains the 11 verified fix components");
+  Check(Catalog.All.Length==17,"catalog contains the 17 reviewed fix components");
   Check(Catalog.Demo().Count(s=>s.Status=="待修复")==2,"demo has two related fixes pending");
   Check(Catalog.Demo(true).All(s=>s.Status=="已安装"),"demo completion state updates without game access");
   var root=Path.Combine(Path.GetDirectoryName(output)!,"scan-test-中文 空格-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(Path.Combine(root,"mods"));File.WriteAllText(Path.Combine(root,"SlayTheSpire2.exe"),"");

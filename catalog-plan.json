@@ -1,5 +1,5 @@
 {
-  "version": "20261102.1",
+  "version": "20261102.3",
   "gameVersion": "0.111.0",
   "components": [
     {
@@ -32,6 +32,46 @@
             "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37"
           ],
           "isManifest": false
+        },
+        {
+          "source": "payload/CanonicalRelicHoverFix/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "B2AFBF453685EDB47529433BFFF19BD58DA5E94814BBE85AC3B1023C00D59E8A",
+          "allowedExisting": [
+            "B2AFBF453685EDB47529433BFFF19BD58DA5E94814BBE85AC3B1023C00D59E8A"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/CanonicalRelicHoverFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "A2ED162E62BE52AA6CD8C21BD042E0087F83D4A36061B5EA9211935EA9ABE56C",
+          "allowedExisting": [
+            "A2ED162E62BE52AA6CD8C21BD042E0087F83D4A36061B5EA9211935EA9ABE56C"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/CanonicalRelicHoverFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/CanonicalRelicHoverFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "EA54A2616B2F27061844C82C9441C2EB0E77F0759FE13973E748F37C0BFF7EAD",
+          "allowedExisting": [
+            "EA54A2616B2F27061844C82C9441C2EB0E77F0759FE13973E748F37C0BFF7EAD"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -67,6 +107,46 @@
             "B6FCB18337E25F1792DA309635A588E9B88217AD5823EDF9FA8413765282D69D"
           ],
           "isManifest": false
+        },
+        {
+          "source": "payload/DoctorPigRewardFix/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "B0802E4A12EB7DBB3A8BE3A59E551F9C30F217A82E15373FAD9F62BB2CAD4700",
+          "allowedExisting": [
+            "B0802E4A12EB7DBB3A8BE3A59E551F9C30F217A82E15373FAD9F62BB2CAD4700"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/DoctorPigRewardFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "46BC2497A1B2A10C21C0C07EF283DA148ACB09E8393B7E93BB1A04803DB0BE97",
+          "allowedExisting": [
+            "46BC2497A1B2A10C21C0C07EF283DA148ACB09E8393B7E93BB1A04803DB0BE97"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/DoctorPigRewardFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/DoctorPigRewardFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "2FD8D4103D68AED819502BA4A6E1C3E5FA5EA40EC55BF38E4D5CC66899BDAA04",
+          "allowedExisting": [
+            "2FD8D4103D68AED819502BA4A6E1C3E5FA5EA40EC55BF38E4D5CC66899BDAA04"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -100,6 +180,46 @@
             "34D42C2961059B6BEB6B3244495C0ECBD14571862C9E160B710A4CFF96856135"
           ],
           "isManifest": false
+        },
+        {
+          "source": "payload/IgnisTurnSyncFix/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "537D79D86AA33AC3E984305E48B94525944A35952BBDD6ADED5208B714BB0184",
+          "allowedExisting": [
+            "537D79D86AA33AC3E984305E48B94525944A35952BBDD6ADED5208B714BB0184"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/IgnisTurnSyncFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "51630ABCE582C72DF80669626C22846D5ABCBB8C4EA50684538720FD5772432C",
+          "allowedExisting": [
+            "51630ABCE582C72DF80669626C22846D5ABCBB8C4EA50684538720FD5772432C"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/IgnisTurnSyncFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/IgnisTurnSyncFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "921F4C08C798669B6B9C3411A23F78BA321D26FDBE234BCBF0DC1827B21C8D84",
+          "allowedExisting": [
+            "921F4C08C798669B6B9C3411A23F78BA321D26FDBE234BCBF0DC1827B21C8D84"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -124,6 +244,46 @@
             "E03D9F1E1D3AAEB7640BBC91B66203EDEE3CFB0B415CBC1E10CA01DF2CCD4404"
           ],
           "isManifest": true
+        },
+        {
+          "source": "payload/KakarotTenfoldSyncFix/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "379C99E6846CF3C0A1104476B30700E16D2C036F094C6A744C7FC49724E21E51",
+          "allowedExisting": [
+            "379C99E6846CF3C0A1104476B30700E16D2C036F094C6A744C7FC49724E21E51"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/KakarotTenfoldSyncFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "2162F7C956FF7BE3BBB40787C32B6349EF20E266D6E82DB7B91016E3F6CC655D",
+          "allowedExisting": [
+            "2162F7C956FF7BE3BBB40787C32B6349EF20E266D6E82DB7B91016E3F6CC655D"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/KakarotTenfoldSyncFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/KakarotTenfoldSyncFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "3F02EAE293CCBD795F7F87C1247EF2B5329A86087230236F169E0EEC4ED7C8CB",
+          "allowedExisting": [
+            "3F02EAE293CCBD795F7F87C1247EF2B5329A86087230236F169E0EEC4ED7C8CB"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -148,6 +308,46 @@
             "1BCC88A32102E9DF2149D15346292C58239A18756782FB37BE1A5E075082A24E"
           ],
           "isManifest": true
+        },
+        {
+          "source": "payload/LargeHealDisplayFix/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "3959C91B20059735B85DE9C7195EB7993F202A983540AF9286718321207A8F50",
+          "allowedExisting": [
+            "3959C91B20059735B85DE9C7195EB7993F202A983540AF9286718321207A8F50"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/LargeHealDisplayFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "81EA7570A82E535DEF822EC4586673CAF86525767822F72F6F1CC69466C17A27",
+          "allowedExisting": [
+            "81EA7570A82E535DEF822EC4586673CAF86525767822F72F6F1CC69466C17A27"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/LargeHealDisplayFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/LargeHealDisplayFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "DC4A8D5C8F00851CAA1AD112BE4E1A9E8BEC695539813AFEE1D7869ED5E87C12",
+          "allowedExisting": [
+            "DC4A8D5C8F00851CAA1AD112BE4E1A9E8BEC695539813AFEE1D7869ED5E87C12"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -184,6 +384,46 @@
             "BB9A93A50E0E3322B18CDABFDDABD05DA917A3717485536B0982120367B75392"
           ],
           "isManifest": false
+        },
+        {
+          "source": "payload/NymphStampSyncFix/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "C966B2574B250813B716DF78B6F70A61F48025618D1A8A5786AC6D52DAC57C9C",
+          "allowedExisting": [
+            "C966B2574B250813B716DF78B6F70A61F48025618D1A8A5786AC6D52DAC57C9C"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/NymphStampSyncFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "19FB477756F4A91E3A0CE2A083695BC142B3E5D929501BF5D1619239456E683B",
+          "allowedExisting": [
+            "19FB477756F4A91E3A0CE2A083695BC142B3E5D929501BF5D1619239456E683B"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/NymphStampSyncFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/NymphStampSyncFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "D8B96818EC80E7DF4FA3938839E2D54C7EA59A0D6F9A0D352BBD1C57722EE7D2",
+          "allowedExisting": [
+            "D8B96818EC80E7DF4FA3938839E2D54C7EA59A0D6F9A0D352BBD1C57722EE7D2"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -217,6 +457,36 @@
             "44D23CE6337B6DAAF98984BFB679AD9F6B1710B1F481002076C867AFF6987A37"
           ],
           "isManifest": false
+        },
+        {
+          "source": "payload/PhrolovaNoteSyncFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "A5086DC9AF4EDDAD092006D1CC09AE9389639B2DB54F30B1A404C7CCA0B8C08D",
+          "allowedExisting": [
+            "A5086DC9AF4EDDAD092006D1CC09AE9389639B2DB54F30B1A404C7CCA0B8C08D"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/PhrolovaNoteSyncFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/PhrolovaNoteSyncFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "1140E18670254395A1BD186CC027CB55963BB6E0C6A9A61BD551D2ED26EAA881",
+          "allowedExisting": [
+            "1140E18670254395A1BD186CC027CB55963BB6E0C6A9A61BD551D2ED26EAA881"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -251,6 +521,36 @@
             "299979951081F08464415753BBA72E8CA1D4C970688F8BC44299025767EC1F3D"
           ],
           "isManifest": true
+        },
+        {
+          "source": "payload/SpireTogetherFix/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "E65DBC85ECB5518B1718A83AEF3C19AAB0B4DD024F83183A338230C2CCF36916",
+          "allowedExisting": [
+            "E65DBC85ECB5518B1718A83AEF3C19AAB0B4DD024F83183A338230C2CCF36916"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/SpireTogetherFix/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/SpireTogetherFix/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "8890502550AEEA6F08BEDFBC0BA106B827D9272EB3599D8ADFDC5D3C677A5A0C",
+          "allowedExisting": [
+            "8890502550AEEA6F08BEDFBC0BA106B827D9272EB3599D8ADFDC5D3C677A5A0C"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -277,6 +577,46 @@
             "6564DE0ED7A9F9447663435FEAB5CE52C64310C64DF9908E7CD458CF82C1F0A0"
           ],
           "isManifest": true
+        },
+        {
+          "source": "payload/CyanrainNymphBeta/patch-info/historical-validation.txt",
+          "name": "patch-info/historical-validation.txt",
+          "sha256": "B58D2FF4228F415E0E41BE0D37FCD5E14E5A921175A2E7DE6C2F5425D32F2EE9",
+          "allowedExisting": [
+            "B58D2FF4228F415E0E41BE0D37FCD5E14E5A921175A2E7DE6C2F5425D32F2EE9"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/CyanrainNymphBeta/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "5D6A82DA6B7F73A195080D7EE2B64C3170450BE87868F8FBB23887C2ABBBAD90",
+          "allowedExisting": [
+            "5D6A82DA6B7F73A195080D7EE2B64C3170450BE87868F8FBB23887C2ABBBAD90"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/CyanrainNymphBeta/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/CyanrainNymphBeta/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "9B37A5020FB8F592AE54C8AB8146769B66CD6EE6AA812AC543C8B68A6555B073",
+          "allowedExisting": [
+            "9B37A5020FB8F592AE54C8AB8146769B66CD6EE6AA812AC543C8B68A6555B073"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -293,6 +633,36 @@
             "575BAC6AE6CD178F1D1EEF7C58ABAD0038E7A2A1B45ABEE577CD0D60E0DF1E7F"
           ],
           "isManifest": true
+        },
+        {
+          "source": "payload/StartingDeckTweaks/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "497690C7AA9CDE074EBA96573C75F8430F5DBE66AB551997AEA44CA6A1A9FE21",
+          "allowedExisting": [
+            "497690C7AA9CDE074EBA96573C75F8430F5DBE66AB551997AEA44CA6A1A9FE21"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/StartingDeckTweaks/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/StartingDeckTweaks/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "BDFE32D1D6FC4EA824407D392E18B8128BBB9545F5CFD219A6F6D386A6993F08",
+          "allowedExisting": [
+            "BDFE32D1D6FC4EA824407D392E18B8128BBB9545F5CFD219A6F6D386A6993F08"
+          ],
+          "isManifest": false,
+          "allowMissing": true
         }
       ]
     },
@@ -309,6 +679,180 @@
             "38F2FE4F89009113D7991F1FD47044B7FB2EBBD0F60836A6310C6103BE1D7276"
           ],
           "isManifest": false
+        },
+        {
+          "source": "payload/Act4FinalAscent/patch-info/patch.json",
+          "name": "patch-info/patch.json",
+          "sha256": "6FBD56DB27CE6A1E4DA013B623706FC415819A924379FD4CF900C88667ABCFA8",
+          "allowedExisting": [
+            "6FBD56DB27CE6A1E4DA013B623706FC415819A924379FD4CF900C88667ABCFA8"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/Act4FinalAscent/patch-info/patch.schema.json",
+          "name": "patch-info/patch.schema.json",
+          "sha256": "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680",
+          "allowedExisting": [
+            "141D5893904CE8155134DFA1C402C281A82429831D93A94769C183CFA203D680"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        },
+        {
+          "source": "payload/Act4FinalAscent/patch-info/README.zh-CN.md",
+          "name": "patch-info/README.zh-CN.md",
+          "sha256": "34976CE5A346F808C25D7F88369C480A2BDB8F82F77A4191018BEB72A64D04D7",
+          "allowedExisting": [
+            "34976CE5A346F808C25D7F88369C480A2BDB8F82F77A4191018BEB72A64D04D7"
+          ],
+          "isManifest": false,
+          "allowMissing": true
+        }
+      ]
+    },
+    {
+      "id": "TurnEndOrderFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/TurnEndOrderFix/TurnEndOrderFix.dll",
+          "name": "TurnEndOrderFix.dll",
+          "sha256": "90727520C5332A33BCA6D53F22E0360EF49F7329BE659E6562D9BA233E844848",
+          "allowedExisting": [
+            "90727520C5332A33BCA6D53F22E0360EF49F7329BE659E6562D9BA233E844848"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/TurnEndOrderFix/TurnEndOrderFix.json",
+          "name": "TurnEndOrderFix.json",
+          "sha256": "A59371CA7D360564B16614017A04EB7CF3B7CAEC4DF8BC90072ED3738FF1FE9E",
+          "allowedExisting": [
+            "A59371CA7D360564B16614017A04EB7CF3B7CAEC4DF8BC90072ED3738FF1FE9E"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "VictoryBreedsArroganceSyncFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/VictoryBreedsArroganceSyncFix/VictoryBreedsArroganceSyncFix.dll",
+          "name": "VictoryBreedsArroganceSyncFix.dll",
+          "sha256": "7EDA9F2B76F871ADD8B9FF278040FBDE17E72B5F68C77892BC1136AE89A91EF5",
+          "allowedExisting": [
+            "7EDA9F2B76F871ADD8B9FF278040FBDE17E72B5F68C77892BC1136AE89A91EF5"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/VictoryBreedsArroganceSyncFix/VictoryBreedsArroganceSyncFix.json",
+          "name": "VictoryBreedsArroganceSyncFix.json",
+          "sha256": "0469F397DEC693707597A71A49A066A0918E5224821C316E07CA434710DB29A0",
+          "allowedExisting": [
+            "0469F397DEC693707597A71A49A066A0918E5224821C316E07CA434710DB29A0"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "KakarotElbowTargetFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/KakarotElbowTargetFix/KakarotElbowTargetFix.dll",
+          "name": "KakarotElbowTargetFix.dll",
+          "sha256": "634947F0278B9B75381EF97381CFE06CB7331F13C4A81D933105E934DA9F9EC3",
+          "allowedExisting": [
+            "634947F0278B9B75381EF97381CFE06CB7331F13C4A81D933105E934DA9F9EC3"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/KakarotElbowTargetFix/KakarotElbowTargetFix.json",
+          "name": "KakarotElbowTargetFix.json",
+          "sha256": "6DC35A68A5B38C1F7B7D46DAD131AD793A6F2FFC7E90357C8BBEDBADD3882DB9",
+          "allowedExisting": [
+            "6DC35A68A5B38C1F7B7D46DAD131AD793A6F2FFC7E90357C8BBEDBADD3882DB9"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "NymphKazdelRewardFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/NymphKazdelRewardFix/NymphKazdelRewardFix.dll",
+          "name": "NymphKazdelRewardFix.dll",
+          "sha256": "E4F5B75B270A976488FE78EEDB82BD10D0DBD9759762965E2D9F88040A03D830",
+          "allowedExisting": [
+            "E4F5B75B270A976488FE78EEDB82BD10D0DBD9759762965E2D9F88040A03D830"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/NymphKazdelRewardFix/NymphKazdelRewardFix.json",
+          "name": "NymphKazdelRewardFix.json",
+          "sha256": "A843B5FF9489E7BAF8984D614982B6CF5C780EC86BEB07D8392742211862AF5A",
+          "allowedExisting": [
+            "A843B5FF9489E7BAF8984D614982B6CF5C780EC86BEB07D8392742211862AF5A"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "Act3SnapshotSaveFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/Act3SnapshotSaveFix/Act3SnapshotSaveFix.dll",
+          "name": "Act3SnapshotSaveFix.dll",
+          "sha256": "15CCBC5400C799E106448486B6C0151FF578737252EC6486943BC9222C839F65",
+          "allowedExisting": [
+            "15CCBC5400C799E106448486B6C0151FF578737252EC6486943BC9222C839F65"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/Act3SnapshotSaveFix/Act3SnapshotSaveFix.json",
+          "name": "Act3SnapshotSaveFix.json",
+          "sha256": "D794C3F149AD8153EC8E958AED3CB2CB57E7F3518C022C0ED004AB5143130227",
+          "allowedExisting": [
+            "D794C3F149AD8153EC8E958AED3CB2CB57E7F3518C022C0ED004AB5143130227"
+          ],
+          "isManifest": true
+        }
+      ]
+    },
+    {
+      "id": "NeowOptionOrderFix",
+      "required": false,
+      "files": [
+        {
+          "source": "payload/NeowOptionOrderFix/NeowOptionOrderFix.dll",
+          "name": "NeowOptionOrderFix.dll",
+          "sha256": "DCE85BA5220D107BEA30125934B7BCA8A96919EAF05CD8638F4BC94C1F218BE3",
+          "allowedExisting": [
+            "DCE85BA5220D107BEA30125934B7BCA8A96919EAF05CD8638F4BC94C1F218BE3"
+          ],
+          "isManifest": false
+        },
+        {
+          "source": "payload/NeowOptionOrderFix/NeowOptionOrderFix.json",
+          "name": "NeowOptionOrderFix.json",
+          "sha256": "7A940D018EDEC869D25A3AA6FA47B41AFD0B3A02A05383132C5D8DF4D837605C",
+          "allowedExisting": [
+            "7A940D018EDEC869D25A3AA6FA47B41AFD0B3A02A05383132C5D8DF4D837605C"
+          ],
+          "isManifest": true
         }
       ]
     }
@@ -418,6 +962,16 @@
       "modId": "Kakarot",
       "path": "Kakarot.dll",
       "sha256": "839C486E78516A5D5A32995880848778F2CB0935E557CAE0CF3071CAA7DA4E40"
+    },
+    {
+      "modId": "STS2_WineFox",
+      "path": "STS2_WineFox.dll",
+      "sha256": "9CBC6AF0943F8AF22BF5C168AAB4ECF9912DF3670C09EE7D9F25CC3430D01570"
+    },
+    {
+      "modId": "YUIExtra",
+      "path": "YUIExtra.dll",
+      "sha256": "D711D72258CF07891358C840BC1B903566B9E6981F2D85DB2CCB9F0C818D915A"
     }
   ],
   "retired": [

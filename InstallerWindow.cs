@@ -23,7 +23,7 @@ public partial class MainWindow
   location.Children.Add(H(Btn("选择游戏目录",ChooseInstallRoot),Btn("选择已下载的 ZIP",ChooseInstallZip,"Ghost")));
   if(localPackage!=null)location.Children.Add(T("本地修复包："+localPackage,11,muted));
   root.Children.Add(Card(location));Space(root,16);
-  if(!busy){root.Children.Add(H(Btn(selectionMode?"调整补丁选择":"选择要处理的补丁",ChoosePatchSelection,"Primary"),Btn("使用完整整合包",()=>{ClearSelection();installPreview=null;lastInstallResult=null;installStatus="已切换为完整包检查，将核对所有 11 项修复。";ShowInstaller();},"Ghost")));Space(root,12);}
+  if(!busy){root.Children.Add(H(Btn(selectionMode?"调整补丁选择":"选择要处理的补丁",ChoosePatchSelection,"Primary"),Btn("使用完整整合包",()=>{ClearSelection();installPreview=null;lastInstallResult=null;installStatus=$"已切换为完整包检查，将核对本版 {Catalog.All.Length} 项修复。";ShowInstaller();},"Ghost")));Space(root,12);}
   if(selectionMode){root.Children.Add(T(activeSelection==null?"请选择补丁后再检查方案。":$"本次范围：{activeSelection.Included.Length} 项补丁，其中 {activeSelection.Automatic.Length} 项自动关联。",13,gold));Space(root,12);}
   root.Children.Add(T(installStatus,14,busy?gold:muted));Space(root,16);
   if(busy){
@@ -79,7 +79,7 @@ public partial class MainWindow
  }
  void ChooseInstallZip()
  {
-  if(busy)return;var open=new OpenFileDialog{Title="选择修复整合包 v2",Filter="ZIP 修复包|*.zip"};if(open.ShowDialog(this)!=true)return;
+  if(busy)return;var open=new OpenFileDialog{Title="选择本版支持的修复载荷 ZIP",Filter="ZIP 修复包|*.zip"};if(open.ShowDialog(this)!=true)return;
   localPackage=open.FileName;preparedPackage=null;installPreview=null;lastInstallResult=null;installStatus="已选择本地 ZIP；准备时会重新校验完整文件。";ShowInstaller();
  }
  async Task<PreparedPackage> GetPreparedPackageAsync(CancellationToken ct,Action<string>? showStatus=null)
@@ -104,7 +104,7 @@ public partial class MainWindow
   selectedInstallRoot??=!demo?report?.Directory:null;
   if(selectedInstallRoot==null){ChooseInstallRoot();if(selectedInstallRoot==null)return;}
   if(!rollback&&selectionMode&&activeSelection==null){ShowPatchSelection();return;}
-  if(!rollback&&localPackage==null&&sourceCurrent&&onlineCatalog!=null&&!BundleInstaller.Supports(onlineCatalog.Bundle)){installStatus="在线包已经更新，本版尚未验证新安装器。请更新管理器或使用下载包的手动安装入口。";ShowInstaller();return;}
+  if(!rollback&&localPackage==null&&sourceCurrent&&onlineCatalog!=null&&!BundleInstaller.Supports(onlineCatalog.Bundle)){installStatus="在线包已经更新，本版尚未支持此安装包。请在「检查更新」升级管理器后重试。";ShowInstaller();return;}
   busy=true;installPreview=null;lastInstallResult=null;preparationCancellation=new(TimeSpan.FromMinutes(5));installStatus=rollback?"正在核对最近一次备份与当前文件…":"正在检查适用版本与原文件…";ShowInstaller();
   try{
    var package=await GetPreparedPackageAsync(preparationCancellation.Token);

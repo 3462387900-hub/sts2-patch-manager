@@ -17,6 +17,7 @@ public partial class MainWindow
   async Task Click(string name){UpdateLayout();Controls<Button>(shell).Single(b=>b.Content?.ToString()==name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));while(busy)await Task.Delay(70);UpdateLayout();}
   async Task Shot(string name){await Task.Delay(100);UpdateLayout();var bitmap=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);bitmap.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
   ShowInstaller();await Click("选择要处理的补丁");Check(selectionReport!=null&&activeSelection!=null,"actual selection button scans and opens supported patch choices");
+  Check(Controls<CheckBox>(shell).Count()==17&&CatalogV3Checks.Added.All(id=>Controls<CheckBox>(shell).Any(c=>c.Content?.ToString()==Catalog.All.Single(p=>p.Id==id).Name)),"selection UI exposes all 17 patches including the new six");
   await Click("清空选择");Check(activeSelection==null&&!Controls<Button>(shell).Single(b=>b.Content?.ToString()=="检查所选补丁方案").IsEnabled,"empty UI selection cannot start installation");
   UpdateLayout();Controls<CheckBox>(shell).Single(c=>c.Content?.ToString()==Catalog.All.Single(p=>p.Id=="Act4FinalAscent").Name).IsChecked=true;
   Check(activeSelection?.Included.ToHashSet().SetEquals(["Act4FinalAscent","SpireTogetherFix"])==true,"checking Act4 automatically selects only its linked Spire update");
