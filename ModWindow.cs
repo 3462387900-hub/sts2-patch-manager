@@ -41,7 +41,7 @@ public partial class MainWindow
      if(enabled&&candidates.Length>0)
      {
       modStatus="发现可能失去对应 MOD 的独立修复补丁，等待文件操作结束并再次校验…";
-      await Task.Delay(1500);
+      await Task.Delay(3500);
       if(watchVersion!=modChangeVersion||!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
       {
        modInventoryDirty=true;
