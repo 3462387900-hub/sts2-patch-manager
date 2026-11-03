@@ -14,7 +14,9 @@ public partial class MainWindow
   string root=selectedInstallRoot;busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";ShowMods();
   try{modInventory=await Task.Run(()=>ModManager.Scan(root));modStatus=$"共 {modInventory.Mods.Count} 项 · {modInventory.Mods.Count(m=>m.Enabled)} 项启用 · {modInventory.Mods.Count(m=>!m.Enabled)} 项停用";}
   catch(Exception e){modInventory=null;modStatus="无法读取模组："+e.Message;}
-  finally{busy=fals void ShowMods()
+  finally{busy=false;ShowMods();}
+ }
+ void ShowMods()
  {
   var root=V(Header("LOCAL MODS","模组管理","普通 MOD 与独立修复补丁分别查看；任何启用、停用操作都先预览。"));Space(root,18);
   if(selectedInstallRoot==null){
@@ -112,8 +114,6 @@ public partial class MainWindow
    modQuery=savedQuery;modFilter=savedFilter;modSection=savedSection;ShowMods();
   });
   toast.Text="分类只影响列表展示；所有启停操作仍需预览、依赖校验和文件核对。";
- }
-先展示改动，确认后执行。";
  }
  void ShowModDetail(string folder)
  {
