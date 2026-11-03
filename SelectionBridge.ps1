@@ -28,7 +28,7 @@ function Get-SelectedPlan([string]$Root,[string[]]$Selected) {
  foreach($id in @($chosen.Keys|Sort-Object)){
   $c=$known[$id];$mf=if($map.ContainsKey($id)){$map[$id]}else{$null}
   if($c.required -and -not $mf){throw "Required original mod missing: $id"}
-  $folder=if($mf){$mf.DirectoryName}else{Safe-Child $mods $id}
+  $folder=if($mf){$mf.DirectoryName}elseif(-not $c.required){Safe-Child (Safe-Child $mods '_SpirePatch_Fixes') $id}else{Safe-Child $mods $id}
   if($id -eq 'StartingDeckTweaks' -and (Test-Path -LiteralPath (Safe-Child $folder 'StartingDeckTweaks.pck'))){throw 'Unexpected StartingDeckTweaks PCK.'}
   foreach($f in $c.files){
    $target=if($f.isManifest -and $mf){$mf.FullName}else{Safe-Child $folder $f.name}
