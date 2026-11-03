@@ -24,6 +24,18 @@ foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','o
         throw ('验证失败：' + $mode)
     }
 }
+# Verify the real WPF navigation and row actions against isolated mock game folders.
+$uiFixtures = Join-Path $testRoot 'ui-fixtures'
+$uiOutput = Join-Path $testRoot 'ui-capture'
+New-Item -ItemType Directory -Path $uiFixtures, $uiOutput -Force | Out-Null
+$uiProcess = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--capture-workspace', ('"' + $uiFixtures + '"'), ('"' + $uiOutput + '"')) -WindowStyle Hidden -Wait -PassThru
+$uiProof = Join-Path $uiOutput '四项功能界面验证.txt'
+if ($uiProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $uiProof)) {
+    if (Test-Path -LiteralPath $uiProof) { Get-Content -LiteralPath $uiProof | Write-Output }
+    $errorFile = Join-Path $appFolder 'startup-error.txt'
+    if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
+    throw 'WPF 界面回归验证失败。'
+}
 if ($BuildOnly) { Write-Output ('构建与检查完成，未生成发布包：' + $runRoot); return }
 $integrationResult = Join-Path $testRoot 'integration-check.txt'
 $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--integration-check', ('"' + [IO.Path]::GetFullPath($Bundle) + '"'), ('"' + [IO.Path]::GetFullPath($Fixture) + '"'), ('"' + $integrationResult + '"')) -WindowStyle Hidden -Wait -PassThru
