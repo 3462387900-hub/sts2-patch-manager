@@ -91,7 +91,7 @@ internal static class ModHistory
   GameEnvironment.WithLock(root,()=>{
    string path=HistoryPath(root,dataRoot);
    var previous=Read(root,path)??throw new InvalidOperationException("尚未生成扫描基线，请先扫描。");
-   if(!previous.PendingReview?.Any(x=>x.ModId.Equals(modId,StringComparison.OrdinalIgnoreCase))??true)
+   if(previous.PendingReview?.Any(x=>x.ModId.Equals(modId,StringComparison.OrdinalIgnoreCase))!=true)
     throw new InvalidOperationException("此 MOD 没有待核对的更新记录。");
    var current=Capture(root);
    if(!previous.Files.SequenceEqual(current.Files))
