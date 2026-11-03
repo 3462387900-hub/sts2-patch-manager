@@ -20,6 +20,8 @@ public static class WorkspaceChecks
   Dictionary<string,string> Snapshot()=>Directory.EnumerateFiles(Path.Combine(root,"mods"),"*",SearchOption.AllDirectories).ToDictionary(f=>f,Catalog.Hash);
   bool Same(Dictionary<string,string> expected)=>expected.Count==Snapshot().Count&&expected.All(f=>File.Exists(f.Key)&&Catalog.Hash(f.Key)==f.Value);
   var original=Snapshot();Check(ModManager.Scan(root).Mods.Count==7,"manifest inventory reads IDs and shared directories without changing files");
+  Check(ModPresentation.IsIndependentPatch(Find("LargeHealDisplayFix"))&&!ModPresentation.IsIndependentPatch(Find("TestSolo"))&&
+   !ModPresentation.IsIndependentPatch(Find("HextechRunes")),"mod list groups only catalogued independent patches, never original mods");
   Reject(()=>ModManager.Preview(root,Find("TestBase").Folder,false),"cannot disable a declared dependency while a dependent mod is active");
   Reject(()=>ModManager.Preview(root,Find("SharedOne").Folder,false),"shared mod directory cannot be moved as a single mod");
   var solo=Find("TestSolo");var preview=ModManager.Preview(root,solo.Folder,false);Check(Same(original)&&!Directory.Exists(Path.Combine(root,ModManager.StorageName)),"toggle preview is read-only and creates no storage folder");
