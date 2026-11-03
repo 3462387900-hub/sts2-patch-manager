@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net9.0-windows</TargetFramework><UseWPF>true</UseWPF>
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>SpirePatch</AssemblyName>
-    <Version>0.10.3</Version><ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.11.0</Version><ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup><EmbeddedResource Include="catalog-plan.json" /><EmbeddedResource Include="patch-catalog.json" /><EmbeddedResource Include="InstallerBridge.ps1" /><EmbeddedResource Include="SelectionBridge.ps1" /><EmbeddedResource Include="ManagerUpdateWorker.ps1" /></ItemGroup>
 </Project>
