@@ -9,7 +9,7 @@ public partial class MainWindow
  readonly List<FileSystemWatcher> modWatchers=[];
  DispatcherTimer? modWatchDebounce;
  string? watchedGameRoot;
- bool modInventoryDirty,modWatchOverflow;
+ bool modInventoryDirty,modWatchOverflow,modWatchTreeChanged;
  int modChangeVersion;
 
  void StopModWatch()
@@ -23,7 +23,7 @@ public partial class MainWindow
  {
   if(root.Equals(watchedGameRoot,StringComparison.OrdinalIgnoreCase))return;
   StopModWatch();
-  modInventoryDirty=false;modWatchOverflow=false;
+  modInventoryDirty=false;modWatchOverflow=false;modWatchTreeChanged=false;
   watchedGameRoot=root;
   modWatchDebounce??=new DispatcherTimer(DispatcherPriority.Background){Interval=TimeSpan.FromMilliseconds(850)};
   modWatchDebounce.Tick-=OnModWatchQuiet;
@@ -57,21 +57,28 @@ public partial class MainWindow
    watcher.Filters.Add("mods");
    watcher.Filters.Add(ModManager.StorageName);
   }
-  watcher.Changed+=(_,_)=>QueueModChange(root,false);
-  watcher.Created+=(_,_)=>QueueModChange(root,false);
-  watcher.Deleted+=(_,_)=>QueueModChange(root,false);
-  watcher.Renamed+=(_,_)=>QueueModChange(root,false);
-  watcher.Error+=(_,_)=>QueueModChange(root,true);
+  watcher.Changed+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
+  watcher.Created+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
+  watcher.Deleted+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
+  watcher.Renamed+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
+  watcher.Error+=(_,_)=>QueueModChange(root,true,onlyTopFolders);
   modWatchers.Add(watcher);
   watcher.EnableRaisingEvents=true;
  }
 
- void QueueModChange(string root,bool overflow)
+ void QueueModChange(string root,bool overflow,bool tree)
  {
   if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
   _=Dispatcher.BeginInvoke(new Action(()=>{
    if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
    modChangeVersion++;
+   modWatchTreeChanged|=tree;
+   if(transactionWriting)
+   {
+    modInventoryDirty=true;
+    modWatchDebounce?.Stop();modWatchDebounce?.Start();
+    return;
+   }
    // One burst invalidates the current report once, but subsequent writes restart the quiet timer.
    if(!modInventoryDirty||overflow)
    {
@@ -95,13 +102,17 @@ public partial class MainWindow
   if(busy||transactionWriting){modWatchDebounce?.Start();return;}
   string root=selectedInstallRoot;
   // A new mods / disabled-folder tree may have appeared since monitoring began.
-  if(modWatchOverflow||modWatchers.Count<2)
+  if(modWatchOverflow||modWatchTreeChanged||modWatchers.Count<2)
   {
    watchedGameRoot=null;
    StartModWatch(root);
-   // Keep the stale warning even if a watcher was successfully recreated.
+   // Keep the stale warning even if monitoring was successfully recreated.
    modInventoryDirty=true;
-   modWatchOverflow=false;
+  }
+  if(modInventoryDirty&&HasValidLifecycleReport)
+  {
+   InvalidateLifecycle("文件监测发现 MOD 环境变化，请重新扫描补丁健康状态。");
+   report=null;states=[];ClearCoop();ClearSelection();installPreview=null;modTogglePreview=null;
   }
   if(modInventoryDirty&&page=="模组管理"&&currentVisit?.Key=="模组管理")
    RefreshMods();
