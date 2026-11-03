@@ -1,103 +1,165 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Media;
 
 namespace SpirePatch;
 
-// Data-only rows and recycled WPF item templates: typing no longer recreates every card.
+// Immutable, UI-only data. Safe enable/disable still goes through ModManager.Preview/Apply.
 internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason)
 {
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
  public string Name=>Mod.Name;
- public string Details=>Mod.Id+" · "+Mod.Version+" · "+Mod.Author+" · "+(Mod.Enabled?"已启用":"已停用");
- public string HealthText=>IsFix?"补丁健康："+Health:string.Empty;
- public string WarningText=>BlockReason==null?string.Empty:"启停受限："+BlockReason;
+ public string Details=>Mod.Id+"  ·  "+Mod.Version+"  ·  "+Mod.Author;
+ public string State=>Mod.Enabled?"已启用":"已停用";
+ public string HealthText=>IsFix?"补丁健康："+Health:"";
+ public string WarningText=>BlockReason==null?"":ModListView.BriefBlockReason(BlockReason);
 }
 
 internal static class ModListView
 {
  internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health)=>
   inventory.Mods.Select(mod=>new ModListRow(mod,
-    ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
-    ModManager.BlockReason(root,mod,inventory)))
-   .OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+   ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
+   ModManager.BlockReason(root,mod,inventory)))
+  .OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
 
  internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query)=>
-  rows.Where(row=>row.IsFix==(section=="修复补丁") &&
-   (state=="全部" || (state=="启用")==row.Mod.Enabled) &&
+  rows.Where(row=>row.IsFix==(section=="修复补丁")&&
+   (state=="全部"||(state=="启用")==row.Mod.Enabled)&&
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
   .ToArray();
 
- static FrameworkElementFactory Label(string property,double size,Brush color,bool strong=false)
+ internal static string BriefBlockReason(string reason)
  {
-  var label=new FrameworkElementFactory(typeof(TextBlock));
-  label.SetBinding(TextBlock.TextProperty,new Binding(property));
-  label.SetValue(TextBlock.FontSizeProperty,size);
-  label.SetValue(TextBlock.ForegroundProperty,color);
-  label.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);
-  if(strong)label.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);
-  return label;
+  const string deps="这些启用项依赖它，请先停用依赖项：";
+  if(reason.StartsWith(deps,StringComparison.Ordinal))
+  {
+   int total=reason[deps.Length..].Split('、',StringSplitOptions.RemoveEmptyEntries).Length;
+   return $"依赖保护 · {total} 项已启用 MOD 需要它（详情查看完整名单）";
+  }
+  return reason.Length>78?"操作受限 · "+reason[..74]+"…":"操作受限 · "+reason;
  }
 
  internal static ListBox Create(Action<ModListRow> details,Action<ModListRow,Button> more)
  {
-  var list=new ListBox{Height=400,Background=Brushes.Transparent,BorderThickness=new Thickness(0),
-   HorizontalContentAlignment=HorizontalAlignment.Stretch,SelectionMode=SelectionMode.Single};
+  var list=new ListBox{
+   Background=Brushes.Transparent,BorderThickness=new Thickness(0),
+   HorizontalContentAlignment=HorizontalAlignment.Stretch,
+   HorizontalAlignment=HorizontalAlignment.Stretch,
+   SelectionMode=SelectionMode.Single,MinHeight=130
+  };
   VirtualizingPanel.SetIsVirtualizing(list,true);
   VirtualizingPanel.SetVirtualizationMode(list,VirtualizationMode.Recycling);
   ScrollViewer.SetCanContentScroll(list,true);
   ScrollViewer.SetVerticalScrollBarVisibility(list,ScrollBarVisibility.Auto);
+  // Without this, an extremely long dependency message gives a row infinite width,
+  // measuring the action buttons beyond the visible right edge of the list.
+  ScrollViewer.SetHorizontalScrollBarVisibility(list,ScrollBarVisibility.Disabled);
   var itemStyle=new Style(typeof(ListBoxItem));
   itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty,HorizontalAlignment.Stretch));
   itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0)));
   itemStyle.Setters.Add(new Setter(Control.BackgroundProperty,Brushes.Transparent));
   itemStyle.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(0)));
   list.ItemContainerStyle=itemStyle;
-  var panel=new FrameworkElementFactory(typeof(VirtualizingStackPanel));
-  list.ItemsPanel=new ItemsPanelTemplate(panel);
-
-  var shell=new FrameworkElementFactory(typeof(Border));
-  shell.SetValue(Border.BackgroundProperty,Brushes.White);
-  shell.SetValue(Border.BorderBrushProperty,new SolidColorBrush(Color.FromRgb(221,227,216)));
-  shell.SetValue(Border.BorderThicknessProperty,new Thickness(1));
-  shell.SetValue(Border.CornerRadiusProperty,new CornerRadius(10));
-  shell.SetValue(Border.PaddingProperty,new Thickness(13,10,13,10));
-  shell.SetValue(FrameworkElement.MarginProperty,new Thickness(0,3,6,3));
-
-  var dock=new FrameworkElementFactory(typeof(DockPanel));
-  dock.SetValue(DockPanel.LastChildFillProperty,true);
-  shell.AppendChild(dock);
-  var actions=new FrameworkElementFactory(typeof(StackPanel));
-  actions.SetValue(StackPanel.OrientationProperty,Orientation.Horizontal);
-  actions.SetValue(DockPanel.DockProperty,Dock.Right);
-  actions.SetValue(FrameworkElement.VerticalAlignmentProperty,VerticalAlignment.Center);
-  actions.SetValue(FrameworkElement.MarginProperty,new Thickness(8,0,0,0));
-  RoutedEventHandler onRowAction=(sender,e)=>{
-   if(sender is not Button button||button.DataContext is not ModListRow row)return;
-   e.Handled=true;
-   if((string?)button.Tag=="detail")details(row);
-   else if((string?)button.Tag=="more")more(row,button);
-  };
-  foreach(var (label,tag) in new[]{("详情","detail"),("更多","more")})
-  {
-   var button=new FrameworkElementFactory(typeof(Button));
-   button.SetValue(ContentControl.ContentProperty,label);
-   button.SetValue(FrameworkElement.TagProperty,tag);
-   button.SetValue(Control.PaddingProperty,new Thickness(10,7,10,7));
-   button.SetValue(FrameworkElement.MarginProperty,new Thickness(0,0,6,0));
-   button.AddHandler(Button.ClickEvent,onRowAction);
-   actions.AppendChild(button);
-  }
-  dock.AppendChild(actions);
-  var info=new FrameworkElementFactory(typeof(StackPanel));
-  info.AppendChild(Label(nameof(ModListRow.Name),15,new SolidColorBrush(Color.FromRgb(40,53,45)),true));
-  info.AppendChild(Label(nameof(ModListRow.Details),11,new SolidColorBrush(Color.FromRgb(97,112,100))));
-  info.AppendChild(Label(nameof(ModListRow.HealthText),11,new SolidColorBrush(Color.FromRgb(57,115,79))));
-  info.AppendChild(Label(nameof(ModListRow.WarningText),11,new SolidColorBrush(Color.FromRgb(135,93,37))));
-  dock.AppendChild(info);
-  list.ItemTemplate=new DataTemplate(typeof(ModListRow)){VisualTree=shell};
+  list.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
+  list.ItemTemplate=new DataTemplate(typeof(ModListRow)){VisualTree=new FrameworkElementFactory(typeof(ModRowControl))};
+  list.AddHandler(ModRowControl.DetailsRequestedEvent,new RoutedEventHandler((_,e)=>{
+   if(e.OriginalSource is ModRowControl view&&view.DataContext is ModListRow row)details(row);
+  }));
+  list.AddHandler(ModRowControl.MoreRequestedEvent,new RoutedEventHandler((_,e)=>{
+   if(e.OriginalSource is ModRowControl view&&view.DataContext is ModListRow row)more(row,view.MoreButton);
+  }));
   list.SelectionChanged+=(_,_)=>{if(list.SelectedItem!=null)list.SelectedItem=null;};
   return list;
+ }
+}
+
+// A real Grid enforces a finite text column and permanently reserves width for actions.
+// The virtualizing ItemsControl only creates this control for rows currently on screen.
+internal sealed class ModRowControl : Border
+{
+ internal static readonly RoutedEvent DetailsRequestedEvent=EventManager.RegisterRoutedEvent(
+  "DetailsRequested",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModRowControl));
+ internal static readonly RoutedEvent MoreRequestedEvent=EventManager.RegisterRoutedEvent(
+  "MoreRequested",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModRowControl));
+
+ readonly TextBlock title=new(){FontSize=15,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock subtitle=new(){FontSize=11,Foreground=Paint("#6B796F"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#44795B"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock warning=new(){FontSize=11,Foreground=Paint("#93642F"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock status=new(){FontSize=11,FontWeight=FontWeights.SemiBold};
+ readonly Border statusPill;
+ readonly Border stripe;
+ internal Button MoreButton{get;}
+
+ static Brush Paint(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
+
+ internal ModRowControl()
+ {
+  Background=Brushes.White;
+  BorderBrush=Paint("#DCE4D9");
+  BorderThickness=new Thickness(1);
+  CornerRadius=new CornerRadius(10);
+  Margin=new Thickness(0,3,6,4);
+  Padding=new Thickness(0);
+  MinHeight=82;
+  HorizontalAlignment=HorizontalAlignment.Stretch;
+
+  var grid=new Grid();
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(4)});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  stripe=new Border{Background=Paint("#7C9E86"),CornerRadius=new CornerRadius(9,0,0,9)};
+  grid.Children.Add(stripe);
+  var info=new StackPanel{Margin=new Thickness(14,11,8,11),VerticalAlignment=VerticalAlignment.Center};
+  title.Foreground=Paint("#29392E");
+  info.Children.Add(title);
+  subtitle.Margin=new Thickness(0,2,0,0);info.Children.Add(subtitle);
+  health.Margin=new Thickness(0,4,0,0);info.Children.Add(health);
+  warning.Margin=new Thickness(0,4,0,0);info.Children.Add(warning);
+  Grid.SetColumn(info,1);grid.Children.Add(info);
+
+  statusPill=new Border{CornerRadius=new CornerRadius(6),Padding=new Thickness(8,5,8,5),
+   VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(5,0,8,0),Child=status};
+  Grid.SetColumn(statusPill,2);grid.Children.Add(statusPill);
+
+  var actions=new StackPanel{Orientation=Orientation.Horizontal,
+   Margin=new Thickness(0,0,9,0),VerticalAlignment=VerticalAlignment.Center};
+  var details=MakeButton("详情",()=>RaiseEvent(new RoutedEventArgs(DetailsRequestedEvent,this)));
+  MoreButton=MakeButton("更多",()=>RaiseEvent(new RoutedEventArgs(MoreRequestedEvent,this)));
+  actions.Children.Add(details);actions.Children.Add(MoreButton);
+  Grid.SetColumn(actions,3);grid.Children.Add(actions);
+  Child=grid;
+
+  DataContextChanged+=(_,_)=>Refresh();
+  MouseEnter+=(_,_)=>BorderBrush=Paint("#A3B9A7");
+  MouseLeave+=(_,_)=>BorderBrush=Paint("#DCE4D9");
+ }
+
+ static Button MakeButton(string name,Action action)
+ {
+  var b=new Button{Content=name,MinWidth=56,Padding=new Thickness(9,7,9,7),
+   Margin=new Thickness(0,0,6,0),VerticalAlignment=VerticalAlignment.Center};
+  if(Application.Current?.TryFindResource("Ghost") is Style style)b.Style=style;
+  b.Click+=(_,_)=>action();
+  return b;
+ }
+
+ void Refresh()
+ {
+  if(DataContext is not ModListRow item)return;
+  title.Text=item.Name;title.ToolTip=item.Name;
+  subtitle.Text=item.Details;subtitle.ToolTip=item.Details;
+  status.Text=item.State;
+  status.Foreground=item.Mod.Enabled?Paint("#37694A"):Paint("#6F776F");
+  statusPill.Background=item.Mod.Enabled?Paint("#E7F2E8"):Paint("#EEF0ED");
+  stripe.Background=item.IsFix?Paint("#5D96A3"):item.Mod.Enabled?Paint("#78A48A"):Paint("#A9B0A7");
+  health.Text=item.HealthText;
+  health.Visibility=item.IsFix?Visibility.Visible:Visibility.Collapsed;
+  health.ToolTip=item.HealthText;
+  warning.Text=item.WarningText;
+  warning.ToolTip=item.BlockReason;
+  warning.Visibility=item.BlockReason==null?Visibility.Collapsed:Visibility.Visible;
  }
 }
