@@ -6,9 +6,14 @@ using System.Text.Json;
 namespace SpirePatch;
 
 internal record ModBaselineFile(string ModId,string Version,string RelativePath,string Hash);
-internal record ModBaseline(string Root,DateTimeOffset Time,ModBaselineFile[] Files);
+internal record ModBaseline(string Root,DateTimeOffset Time,ModBaselineFile[] Files,
+ ModBaselineChange[]? PendingReview=null);
 internal record ModBaselineChange(string ModId,string OldVersion,string NewVersion,int ChangedFiles);
-internal record ModHistoryResult(bool FirstScan,ModBaseline Current,ModBaselineChange[] Changes);
+internal record ModHistoryResult(bool FirstScan,ModBaseline Current,ModBaselineChange[] Changes)
+{
+ // Persistent review items do not disappear just because a second scan found no new changes.
+ internal ModBaselineChange[] PendingReview=>Current.PendingReview??[];
+}
 
 /// <summary>Private, local-only snapshots of mod metadata and DLL/PCK hashes; never copies mod files.</summary>
 internal static class ModHistory
@@ -64,11 +69,38 @@ internal static class ModHistory
   var result=JsonSerializer.Deserialize<ModBaseline>(File.ReadAllText(path))
     ??throw new InvalidDataException("MOD 历史记录无法读取。");
   if(!string.Equals(result.Root,root,StringComparison.OrdinalIgnoreCase)||
-    result.Files.Length>6000||result.Files.Any(f=>f.ModId.Length>160||f.RelativePath.Length>400||f.Hash.Length!=64))
+    result.Files.Length>6000||result.Files.Any(f=>f.ModId.Length>160||f.RelativePath.Length>400||f.Hash.Length!=64)||
+   (result.PendingReview?.Length??0)>6000||
+   (result.PendingReview?.Any(x=>string.IsNullOrWhiteSpace(x.ModId)||x.ModId.Length>160||
+    x.OldVersion.Length>200||x.NewVersion.Length>200||x.ChangedFiles<0)??false))
    throw new InvalidDataException("MOD 历史记录不属于此游戏或格式异常。");
   return result;
  }
  static string Key(ModBaselineFile f)=>f.ModId.ToLowerInvariant()+"\n"+f.RelativePath.ToLowerInvariant();
+ static void Save(string path,ModBaseline data)
+ {
+  // Write only the manager-owned record, atomically replacing the old baseline.
+  Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+  string temp=path+"."+Guid.NewGuid().ToString("N")+".tmp";
+  try{File.WriteAllText(temp,JsonSerializer.Serialize(data));File.Move(temp,path,true);}
+  finally{if(File.Exists(temp))File.Delete(temp);}
+ }
+ internal static void AcknowledgeReview(string root,string dataRoot,string modId)
+ {
+  root=GameEnvironment.Root(root);
+  GameEnvironment.WithLock(root,()=>{
+   string path=HistoryPath(root,dataRoot);
+   var previous=Read(root,path)??throw new InvalidOperationException("尚未生成扫描基线，请先扫描。");
+   if(!previous.PendingReview?.Any(x=>x.ModId.Equals(modId,StringComparison.OrdinalIgnoreCase))??true)
+    throw new InvalidOperationException("此 MOD 没有待核对的更新记录。");
+   var current=Capture(root);
+   if(!previous.Files.SequenceEqual(current.Files))
+    throw new InvalidOperationException("MOD 文件已发生变化，请先重新扫描，再标记已核对。");
+   Save(path,previous with{PendingReview=previous.PendingReview!
+    .Where(x=>!x.ModId.Equals(modId,StringComparison.OrdinalIgnoreCase)).ToArray()});
+   return true;
+  });
+ }
  internal static ModHistoryResult CompareAndStore(string root,string dataRoot)
  {
   root=GameEnvironment.Root(root);
@@ -96,11 +128,20 @@ internal static class ModHistory
      if(count>0||oldVersion!=newVersion)changes.Add(new(id,oldVersion,newVersion,count));
     }
    }
-   // No game writes. Atomic replace of manager-owned history only after a complete scan.
-   Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-   string temp=path+"."+Guid.NewGuid().ToString("N")+".tmp";
-   try{File.WriteAllText(temp,JsonSerializer.Serialize(current));File.Move(temp,path,true);}
-   finally{if(File.Exists(temp))File.Delete(temp);}
+   // Keep pending reviews until the user explicitly acknowledges them. A second scan
+   // alone cannot turn a previously changed MOD into "already reviewed".
+   var pending=(previous?.PendingReview??[])
+    .ToDictionary(x=>x.ModId,StringComparer.OrdinalIgnoreCase);
+   foreach(var change in changes)
+   {
+    if(pending.TryGetValue(change.ModId,out var old))
+     pending[change.ModId]=change with{OldVersion=old.OldVersion,
+      ChangedFiles=Math.Max(old.ChangedFiles,change.ChangedFiles)};
+    else pending[change.ModId]=change;
+   }
+   current=current with{PendingReview=pending.Values
+    .OrderBy(x=>x.ModId,StringComparer.OrdinalIgnoreCase).ToArray()};
+   Save(path,current);
    return new(previous==null,current,changes.OrderBy(x=>x.ModId,StringComparer.OrdinalIgnoreCase).ToArray());
   });
  }
