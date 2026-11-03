@@ -31,6 +31,21 @@ function Latest-Journal([string]$Root) {
 }
 function Rollback-State([string]$Root,$Chosen) {
  if(-not $Chosen){return @()}
+ $disabledRoot=Safe-Child $Root '已停用模组_尖塔修补站'
+ if(Test-Path -LiteralPath $disabledRoot){
+  foreach($slot in @(Get-ChildItem -LiteralPath $disabledRoot -Directory)){
+   $recordPath=Safe-Child $slot.FullName '记录.json'
+   if(-not(Test-Path -LiteralPath $recordPath)){continue}
+   $record=Read-Json $recordPath
+   if($record.Status -ne 'disabled'){continue}
+   $prefix=$record.Original.TrimEnd('\\')+'\\'
+   foreach($f in @($Chosen.record.files)){
+    if($f.relative.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){
+     throw ('Rollback requires disabled MOD '+$record.ModId+' to be re-enabled in 模组管理 first.')
+    }
+   }
+  }
+ }
  $rows=@();$seen=@{}
  foreach($f in @($Chosen.record.files)){
   if(-not $f.relative.StartsWith('mods\',[StringComparison]::OrdinalIgnoreCase) -or $f.operation -notin @('write','remove')){throw 'Invalid backup target or operation.'}
