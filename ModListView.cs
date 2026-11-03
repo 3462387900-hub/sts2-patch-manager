@@ -76,7 +76,7 @@ internal static class ModListView
 
 // A real Grid enforces a finite text column and permanently reserves width for actions.
 // The virtualizing ItemsControl only creates this control for rows currently on screen.
-internal sealed class ModRowControl : Border
+public sealed class ModRowControl : Border
 {
  internal static readonly RoutedEvent DetailsRequestedEvent=EventManager.RegisterRoutedEvent(
   "DetailsRequested",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModRowControl));
@@ -94,7 +94,7 @@ internal sealed class ModRowControl : Border
 
  static Brush Paint(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
 
- internal ModRowControl()
+ public ModRowControl()
  {
   Background=Brushes.White;
   BorderBrush=Paint("#DCE4D9");
