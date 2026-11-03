@@ -82,13 +82,16 @@ public partial class MainWindow
    report = null; states = []; demo = false;
    modInventory = await Task.Run(() => ModManager.Scan(plan.Root));
    modStatus = $"整理完成：移动 {result.Moved} 项独立补丁。记录：" + result.Journal;
-   ShowMods();
   }
   catch(Exception ex)
   {
    patchOrganizationStatus = "整理未成功：" + ex.Message;
-   ShowPatchOrganization();
   }
-  finally { busy = false; transactionWriting = false; }
+  finally
+  {
+   busy = false; transactionWriting = false;
+   if(patchOrganizationStatus.StartsWith("整理未成功：", StringComparison.Ordinal))ShowPatchOrganization();
+   else ShowMods();
+  }
  }
 }
