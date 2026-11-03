@@ -89,6 +89,9 @@ public partial class MainWindow : Window
  void SetPage(string active,UIElement element,string? key=null,Action? restore=null)
  {
   TrackPage(key??active,restore??(()=>Navigate(active)));page=active;
+  // The virtualized MOD list owns scrolling; other pages keep the normal page scrollbar.
+  pageScroll!.VerticalScrollBarVisibility=active=="模组管理"&&(key??active)=="模组管理"
+   ?ScrollBarVisibility.Disabled:ScrollBarVisibility.Auto;
   if(IsPatchCenterPage(active)){
    var group=V(PatchCenterTabs(active),element);
    content.Content=group;
