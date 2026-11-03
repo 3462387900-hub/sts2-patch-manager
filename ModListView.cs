@@ -73,6 +73,12 @@ internal static class ModListView
   actions.SetValue(DockPanel.DockProperty,Dock.Right);
   actions.SetValue(FrameworkElement.VerticalAlignmentProperty,VerticalAlignment.Center);
   actions.SetValue(FrameworkElement.MarginProperty,new Thickness(8,0,0,0));
+  RoutedEventHandler onRowAction=(sender,e)=>{
+   if(sender is not Button button||button.DataContext is not ModListRow row)return;
+   e.Handled=true;
+   if((string?)button.Tag=="detail")details(row);
+   else if((string?)button.Tag=="more")more(row,button);
+  };
   foreach(var (label,tag) in new[]{("详情","detail"),("更多","more")})
   {
    var button=new FrameworkElementFactory(typeof(Button));
@@ -80,6 +86,7 @@ internal static class ModListView
    button.SetValue(FrameworkElement.TagProperty,tag);
    button.SetValue(Control.PaddingProperty,new Thickness(10,7,10,7));
    button.SetValue(FrameworkElement.MarginProperty,new Thickness(0,0,6,0));
+   button.AddHandler(Button.ClickEvent,onRowAction);
    actions.AppendChild(button);
   }
   dock.AppendChild(actions);
@@ -90,12 +97,6 @@ internal static class ModListView
   info.AppendChild(Label(nameof(ModListRow.WarningText),11,new SolidColorBrush(Color.FromRgb(135,93,37))));
   dock.AppendChild(info);
   list.ItemTemplate=new DataTemplate(typeof(ModListRow)){VisualTree=shell};
-  list.AddHandler(Button.ClickEvent,new RoutedEventHandler((_,e)=>{
-   if(e.Source is not Button button||button.DataContext is not ModListRow row)return;
-   e.Handled=true;
-   if((string?)button.Tag=="detail")details(row);
-   else if((string?)button.Tag=="more")more(row,button);
-  }));
   list.SelectionChanged+=(_,_)=>{if(list.SelectedItem!=null)list.SelectedItem=null;};
   return list;
  }
