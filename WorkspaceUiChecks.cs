@@ -38,6 +38,19 @@ public partial class MainWindow
   var patchMore=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="更多");
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()==2,
    "compact patch rows expose enable/disable preview and folder action in the menu");
+  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
+   "repair patch rows show a descriptive health status even before a scan");
+  await Click("详情");
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="查看依据"),
+   "independent patch details expose the evidence viewer");
+  await Click("查看依据");
+  Check(currentVisit?.Key=="patch-evidence:LargeHealDisplayFix"&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="重新检查健康状态"),
+   "evidence viewer explains unscanned state and exposes a rescan");
+  await Click("← 上一步");
+  Check(currentVisit?.Key.StartsWith("mod:")==true,"back returns from evidence to original patch detail");
+  await Click("← 上一步");
+  Check(page=="模组管理","back returns to repair patch list");
   await Click("普通 MOD  (6)");
   Check(Controls<Button>(shell).Count(b=>b.Content?.ToString()=="详情")==6,
    "regular MOD tab excludes the catalogued independent patch");
@@ -50,7 +63,14 @@ public partial class MainWindow
   ShowModDetail(modInventory.Mods.Single(m=>m.Id=="TestBase").Folder);await Idle();Check(!Controls<Button>(shell).Single(b=>b.Content?.ToString()=="预览停用").IsEnabled,"UI disables unsafe base-mod toggle and shows dependency reason");await Shot("05-前置依赖保护");
   var baseline=ModHistory.CompareAndStore(first,Path.Combine(fixtures,"ui-lifecycle-history"));
   lifecycleReport=PatchLifecycle.Evaluate(first,baseline,LifecycleEvidenceSource.Empty,"fixture",Catalog.Scan(first),ModManager.Scan(first));
-  Check(lifecycleReport!=null,"lifecycle report is present before directory change");
+  Check(lifecycleReport!=null&&HasValidLifecycleReport,"lifecycle report is present before directory change");
+  ShowMods();await Idle();await Click("修复补丁  (1)");
+  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")&&!x.Text.Contains("健康：需重新检查")),
+   "valid lifecycle reports appear as live labels on the patch list");
+  ShowPatchEvidence("LargeHealDisplayFix");await Idle();
+  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("检查结论：")),
+   "evidence details display the matching lifecycle conclusion");
+  ShowMods();modSection="普通 MOD";ShowMods();
   installPreview=new(true,"Preview",first,"test","old-token","","",[],0);UseGameRoot(second);ShowMods();Check(installPreview==null&&report==null&&selectedInstallRoot==second,"switching game directory invalidates old scan and install preview");Check(lifecycleReport==null&&retirePreview==null,"switching game directory invalidates patch-health report");await Click("← 上一步");Check(selectedInstallRoot==second&&installPreview==null,"back across a directory switch cannot restore old operation scope");
   Check(File.Exists(Path.Combine(first,"mods","独立 模组","TestSolo.dll")),"UI checks end with original mod enabled and never launch a game");
  }

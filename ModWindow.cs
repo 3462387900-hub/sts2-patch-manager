@@ -45,8 +45,12 @@ public partial class MainWindow
     :"这里显示普通 MOD 和含有内置修复的原 MOD；独立修复补丁在右侧标签页单独管理。",12,muted));
   Space(root,12);
   if(modSection=="修复补丁"){
+   root.Children.Add(T(HasValidLifecycleReport
+    ?"上次健康检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")+" · 这是检查时的快照"
+    :lifecycleStale?"环境已变化，健康状态需要重新检查。":"尚无健康检查结果。",12,muted));
+   Space(root,8);
    root.Children.Add(H(Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),
-    Btn("补丁健康检查",()=>{ShowLifecycle();RefreshLifecycle();},"Ghost")));
+    Btn("重新检查健康状态",RefreshLifecycleFromMods,"Ghost")));
    Space(root,12);
   }
   if(modInventory?.Issues.Count>0){
@@ -77,6 +81,11 @@ public partial class MainWindow
     row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
     row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
     var title=V(T(mod.Name,15,ink,true),T(mod.Id+" · "+mod.Version+" · "+mod.Author,11,muted));
+    if(ModPresentation.IsIndependentPatch(mod))
+    {
+     Space(title,4);
+     title.Children.Add(Badge("健康："+LifecycleTag(mod.Id),muted));
+    }
     row.Children.Add(title);
     var state=Badge(mod.Enabled?"已启用":"已停用",mod.Enabled?green:muted);
     state.Margin=new(10,0,12,0);state.VerticalAlignment=VerticalAlignment.Center;
@@ -121,6 +130,12 @@ public partial class MainWindow
   var root=V(Header("MOD DETAILS",mod.Name,mod.Id));Space(root,18);root.Children.Add(T(mod.Description.Length>0?mod.Description:"作者未填写简介。",14,muted));Space(root,18);
   root.Children.Add(T("版本："+mod.Version+"\n作者："+mod.Author+"\n状态："+(mod.Enabled?"启用":"停用")+"\n目录："+mod.Folder,13,muted));Space(root,18);
   root.Children.Add(T("声明的前置模组",17,ink,true));Space(root,8);root.Children.Add(T(mod.Dependencies.Length==0?"清单未声明前置；这不代表一定没有其他依赖。":string.Join("\n",mod.Dependencies.Select(d=>d.Id+(d.Minimum.Length>0?" ≥ "+d.Minimum:"")+(d.Maximum.Length>0?" ≤ "+d.Maximum:""))),13,muted));Space(root,20);
+  if(ModPresentation.IsIndependentPatch(mod))
+  {
+   root.Children.Add(H(Badge("健康："+LifecycleTag(mod.Id),muted),
+    Btn("查看依据",()=>ShowPatchEvidence(mod.Id),"Ghost")));
+   Space(root,18);
+  }
   string? blocked=ModManager.BlockReason(selectedInstallRoot!,mod,modInventory!);var toggle=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Primary");toggle.IsEnabled=!busy&&blocked==null;root.Children.Add(H(toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost")));Space(root,10);if(blocked!=null)root.Children.Add(T(blocked,13,gold));
   SetPage("模组管理",root,"mod:"+folder,()=>ShowModDetail(folder));toast.Text="启用或停用前会重新核对文件及声明的前置模组。";
  }

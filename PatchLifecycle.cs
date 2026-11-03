@@ -44,7 +44,7 @@ internal static class PatchLifecycle
  {
   if(inventory.Issues.Count>0||!scan.InventoryComplete)
    throw new InvalidDataException("扫描不完整，不能给出补丁退役判断。");
-  var changed=history.Changes.Select(m=>m.ModId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  var changed=history.PendingReview.Select(m=>m.ModId).ToHashSet(StringComparer.OrdinalIgnoreCase);
   var patches=new List<LifecyclePatchItem>();
   foreach(var meta in Catalog.Bundled)
   {
