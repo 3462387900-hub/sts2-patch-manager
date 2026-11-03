@@ -106,11 +106,12 @@ internal static class OrphanPatchAutoStop
   return candidates.ToArray();
  }
 
- internal static OrphanPatchCandidate[] Observe(string root,string dataRoot,ModInventory inventory)
+ internal static OrphanPatchCandidate[] Observe(string root,string dataRoot,ModInventory inventory,bool enabled=true)
  {
   root=GameEnvironment.Root(root);
   return GameEnvironment.WithLock(root,()=>{
    if(inventory.Issues.Count>0)throw new InvalidDataException("MOD 清单不完整，无法安全检查孤立补丁。");
+   if(!enabled){Save(root,dataRoot,inventory);return [];}
    var previous=Read(root,dataRoot);
    if(previous==null){Save(root,dataRoot,inventory);return [];}
    var candidates=Candidates(previous,inventory);
