@@ -22,7 +22,7 @@ public partial class MainWindow
   if(selectedInstallRoot==null){root.Children.Add(Card(V(T("先定位你的游戏目录",20,ink,true),H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));SetPage("模组管理",root,restore:ShowMods);return;}
   var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;
   var toolbar=new Grid();toolbar.ColumnDefinitions.Add(new(){Width=GridLength.Auto});toolbar.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
-  toolbar.Children.Add(H(refresh,Btn("打开模组目录",()=>{string path=Path.Combine(selectedInstallRoot,"mods");if(Directory.Exists(path))OpenUrl(path);else toast.Text="此目录尚未创建 mods 文件夹。";},"Ghost"),Btn("整理独立补丁",PreparePatchOrganization,"Ghost")));
+  toolbar.Children.Add(H(refresh,Btn("打开模组目录",()=>{string path=Path.Combine(selectedInstallRoot,"mods");if(Directory.Exists(path))OpenUrl(path);else toast.Text="此目录尚未创建 mods 文件夹。";},"Ghost"),Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),Btn("补丁健康检查",()=>{ShowLifecycle();RefreshLifecycle();},"Ghost")));
   var count=T(modStatus,12,muted);count.VerticalAlignment=VerticalAlignment.Center;count.HorizontalAlignment=HorizontalAlignment.Right;Grid.SetColumn(count,1);toolbar.Children.Add(count);root.Children.Add(toolbar);Space(root,12);
   root.Children.Add(T("启用表示文件位于 mods 目录，游戏内另有设置时以游戏实际加载为准。启用/停用前请退出游戏。",12,muted));Space(root,12);
   if(modInventory?.Issues.Count>0){root.Children.Add(Card(V(T("有清单问题需要核对，启停操作暂不可用",15,gold,true),T(string.Join("\n",modInventory.Issues.Take(5)),12,muted))));Space(root,16);}
