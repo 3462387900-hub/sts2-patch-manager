@@ -18,6 +18,7 @@ public partial class App : Application
         try
         {
             if(e.Args.Contains("--integration-check")){await IntegrationChecks.RunAsync(e.Args[1],e.Args[2],e.Args[3]);Shutdown(0);return;}
+            if(e.Args.Contains("--patch-lifecycle-self-test")){PatchLifecycleChecks.Run(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--patch-organizer-self-test")){PatchOrganizerChecks.Run(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--workspace-integration-self-test")){await IntegrationChecks.WorkspaceAsync(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--safety-self-test")){SafetyChecks.Run(e.Args.Last());Shutdown(0);return;}
