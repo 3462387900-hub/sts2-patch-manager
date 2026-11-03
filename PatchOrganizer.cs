@@ -18,7 +18,7 @@ internal static class PatchOrganizer
  public const string CollectionName = "_SpirePatch_Fixes";
  static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
- static bool ApprovedStandalone(ManagedMod mod)
+ internal static bool ApprovedStandalone(ManagedMod mod)
  {
   using var plan = Catalog.Plan();
   var component = plan.RootElement.GetProperty("components").EnumerateArray()

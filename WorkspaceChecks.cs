@@ -46,6 +46,62 @@ public static class WorkspaceChecks
   var backend=new BundleInstaller(Path.Combine(parent,"安装器联动验证"));var package=await backend.PrepareAsync(zip);bool blocked=false;
   try{await backend.RunAsync(package,root,"Preview");}catch(InvalidOperationException e){blocked=e.Message.Contains("已停用");}Check(blocked,"full installer rejects a disabled component inside the shared transaction lock");
   ModManager.Apply(ModManager.Preview(root,Find("LargeHealDisplayFix").Folder,true));Check(Same(original),"all toggle checks leave original mod files intact");
+  // Orphaned repair patches: explicit target removal, stable recheck and reversible folder transaction.
+  string orphanRoot=Fixture(parent),orphanData=Path.Combine(parent,"孤立补丁测试数据");
+  var originalInventory=ModManager.Scan(orphanRoot);
+  Check(OrphanPatchAutoStop.Observe(orphanRoot,orphanData,originalInventory).Length==0,
+   "first complete MOD observation establishes a baseline without auto-disabling any patch");
+  var largePatch=Catalog.Bundled.Single(x=>x.ComponentId=="LargeHealDisplayFix");
+  Check(OrphanPatchAutoStop.Targets(largePatch).SequenceEqual(new[]{"HextechRunes"})&&
+   OrphanPatchAutoStop.Targets(Catalog.Bundled.Single(x=>x.ComponentId=="CanonicalRelicHoverFix")).SequenceEqual(new[]{"Phrolova"})&&
+   OrphanPatchAutoStop.Targets(Catalog.Bundled.Single(x=>x.ComponentId=="SpireTogetherFix")).Length==0,
+   "target detection uses affected/trigger roles, never generic dependencies or the patch itself");
+  var multi=Catalog.Bundled.Single(x=>x.ComponentId=="NeowOptionOrderFix");
+  Check(OrphanPatchAutoStop.Targets(multi).ToHashSet(StringComparer.OrdinalIgnoreCase)
+   .SetEquals(new[]{"YUIExtra","YuWanCard"}),"multi-target fixes list both affected MODs");
+  var dummy=originalInventory.Mods.Single(m=>m.Id=="LargeHealDisplayFix")
+   with{Id="NeowOptionOrderFix",Manifest=Path.Combine(orphanRoot,"mods","NeowOptionOrderFix.json")};
+  var dummyTarget=originalInventory.Mods.Single(m=>m.Id=="TestSolo") with{Id="YuWanCard"};
+  var pair=new PatchRemovalObservation(orphanRoot,["YUIExtra","YuWanCard"],DateTimeOffset.UtcNow);
+  Check(OrphanPatchAutoStop.Candidates(pair,new([dummy,dummyTarget],[])).Length==0&&
+   OrphanPatchAutoStop.Candidates(pair,new([dummy],[])).Length==1,
+   "multi-target repair patch remains enabled while ANY affected MOD still exists");
+  string hexFolder=originalInventory.Mods.Single(m=>m.Id=="HextechRunes").Folder;
+  string removedHex=Path.Combine(parent,"暂时移出 "+Guid.NewGuid().ToString("N"));
+  Directory.Move(hexFolder,removedHex);
+  var missing=ModManager.Scan(orphanRoot);
+  var missingList=OrphanPatchAutoStop.Observe(orphanRoot,orphanData,missing);
+  Check(missingList.Length==1&&missingList[0].PatchId=="LargeHealDisplayFix",
+   "removing the previously observed HextechRunes targets exactly its reviewed standalone fix");
+  Directory.Move(removedHex,hexFolder);
+  var restored=OrphanPatchAutoStop.Reconcile(orphanRoot,orphanData,fixture:true);
+  Check(restored.Disabled.Length==0&&restored.Inventory.Mods.Any(m=>m.Id=="LargeHealDisplayFix"&&m.Enabled),
+   "target MOD re-added before execution cancels automatic patch disable");
+  Directory.Move(hexFolder,removedHex);
+  Check(OrphanPatchAutoStop.Observe(orphanRoot,orphanData,ModManager.Scan(orphanRoot)).Length==1,
+   "a later real deletion is detected after the restored baseline");
+  var unreviewed=OrphanPatchAutoStop.Reconcile(orphanRoot,orphanData);
+  Check(unreviewed.Disabled.Length==0&&unreviewed.Skipped.Length==1&&
+   ModManager.Scan(orphanRoot).Mods.Any(m=>m.Id=="LargeHealDisplayFix"&&m.Enabled),
+   "unreviewed fixture fingerprints do not auto-disable in the real-game code path");
+  var safe=OrphanPatchAutoStop.Reconcile(orphanRoot,orphanData,fixture:true);
+  var storedFix=safe.Inventory.Mods.Single(m=>m.Id=="LargeHealDisplayFix");
+  Check(safe.Disabled.Length==1&&!storedFix.Enabled&&File.Exists(Path.Combine(storedFix.Folder,"LargeHealDisplayFix.dll"))&&
+   !Directory.Exists(Path.Combine(orphanRoot,"mods","回血修复测试")),
+   "approved isolated transaction moves only the orphan patch into recoverable disabled storage");
+  Check(OrphanPatchAutoStop.Reconcile(orphanRoot,orphanData,fixture:true).Disabled.Length==0,
+   "repeated scans never disable the same patch twice");
+  Directory.Move(removedHex,hexFolder);
+  ModManager.Apply(ModManager.Preview(orphanRoot,storedFix.Folder,true));
+  Check(ModManager.Scan(orphanRoot).Mods.Single(m=>m.Id=="LargeHealDisplayFix").Enabled,
+   "manually restoring an auto-disabled patch uses the original reversible enable action");
+  OrphanPatchAutoStop.SetEnabled(orphanData,false);
+  Check(!OrphanPatchAutoStop.Enabled(orphanData)&&
+   OrphanPatchAutoStop.Observe(orphanRoot,orphanData,ModManager.Scan(orphanRoot),enabled:false).Length==0,
+   "user opt-out is saved and disables automatic patch retirement");
+  OrphanPatchAutoStop.SetEnabled(orphanData,true);
+  Check(OrphanPatchAutoStop.Enabled(orphanData),"user can opt back into orphan-patch automation");
+
   // Discovery fixtures are not executable and are never launched.
   string steam=Path.Combine(parent,"Steam 测试"),library=Path.Combine(parent,"第二个 游戏库");Directory.CreateDirectory(Path.Combine(steam,"steamapps"));Directory.CreateDirectory(Path.Combine(library,"steamapps"));
   string first=Path.Combine(steam,"steamapps","common","Slay the Spire 2"),second=Path.Combine(library,"steamapps","common","中文自选名称");

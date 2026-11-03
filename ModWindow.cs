@@ -7,6 +7,7 @@ namespace SpirePatch;
 public partial class MainWindow
 {
  ModInventory? modInventory;
+ string? orphanPatchNotice;
  ModTogglePlan? modTogglePreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
@@ -29,6 +30,58 @@ public partial class MainWindow
    }
    modInventory=inventory;modInventoryDirty=false;
    modStatus=$"共 {inventory.Mods.Count} 项 · {inventory.Mods.Count(m=>m.Enabled)} 项启用 · {inventory.Mods.Count(m=>!m.Enabled)} 项停用";
+   // Only a complete, stable inventory is eligible for orphan-patch automation.
+   // This observation belongs to the manager data directory, not the game.
+   if(inventory.Issues.Count==0)
+   {
+    try
+    {
+     bool enabled=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+     var candidates=await Task.Run(()=>OrphanPatchAutoStop.Observe(root,installer.DataRoot,inventory,enabled));
+     if(enabled&&candidates.Length>0)
+     {
+      modStatus="发现可能失去对应 MOD 的独立修复补丁，等待文件操作结束并再次校验…";
+      await Task.Delay(3500);
+      if(watchVersion!=modChangeVersion||!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+      {
+       modInventoryDirty=true;
+       modStatus="扫描期间 MOD 环境再次发生变化，已取消自动停用并安排复查。";
+       modWatchDebounce?.Stop();modWatchDebounce?.Start();
+       return;
+      }
+      if(OrphanPatchAutoStop.Enabled(installer.DataRoot))
+      {
+       transactionWriting=true;
+       try
+       {
+        var outcome=await Task.Run(()=>OrphanPatchAutoStop.Reconcile(root,installer.DataRoot));
+        modInventory=outcome.Inventory;
+        modStatus=$"共 {outcome.Inventory.Mods.Count} 项 · {outcome.Inventory.Mods.Count(m=>m.Enabled)} 项启用 · {outcome.Inventory.Mods.Count(m=>!m.Enabled)} 项停用";
+        if(outcome.Disabled.Length>0)
+        {
+         orphanPatchNotice="已自动停用 "+outcome.Disabled.Length+" 个失去目标 MOD 的修复补丁："+string.Join("、",outcome.Disabled.Take(3))+
+          (outcome.Disabled.Length>3?" 等":"")+"。补丁文件完整保留，可在修复补丁中重新启用。";
+         toast.Text=orphanPatchNotice;
+         InvalidateLifecycle("目标 MOD 已移除，相关修复补丁已安全停用，请重新扫描。");
+         report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+        }
+        if(outcome.Skipped.Length>0)
+        {
+         orphanPatchNotice="部分修复补丁未能自动停用："+string.Join("；",outcome.Skipped.Take(2))+
+          "。未改变这些补丁的文件，请退出游戏或检查 MOD 目录后再刷新。";
+         toast.Text=orphanPatchNotice;
+        }
+       }
+       finally{transactionWriting=false;}
+      }
+     }
+    }
+    catch(Exception e)
+    {
+     orphanPatchNotice="孤立补丁自动检查未完成："+e.Message+"。不会未经核对移动补丁文件。";
+     toast.Text=orphanPatchNotice;
+    }
+   }
   }
   catch(Exception ex){modInventoryDirty=true;modStatus="无法读取模组："+ex.Message;}
   finally
@@ -80,6 +133,11 @@ public partial class MainWindow
     T("补丁健康结论已失效，需要重新扫描。",11,muted)),padding:10));
    Space(header,10);
   }
+  if(orphanPatchNotice!=null)
+  {
+   header.Children.Add(Card(V(T("自动补丁管理",13,ink,true),T(orphanPatchNotice,12,muted)),padding:10));
+   Space(header,10);
+  }
   var mods=modInventory?.Mods??[];
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
   var groups=new WrapPanel{Margin=new Thickness(0,0,0,9)};
@@ -105,6 +163,20 @@ public partial class MainWindow
    Space(header,5);
    header.Children.Add(H(Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),
     Btn("重新检查健康状态",RefreshLifecycleFromMods,"Ghost")));
+   Space(header,8);
+   bool autoOn=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+   header.Children.Add(H(
+    Btn("删除目标 MOD 后自动停用补丁："+(autoOn?"开启":"关闭"),()=>{
+     try
+     {
+      OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!autoOn);
+      orphanPatchNotice=autoOn?"已关闭自动停用；之后只手动管理修复补丁。":
+       "已开启自动停用；首次完整扫描会记录 MOD 环境，之后删除目标 MOD 时会自动核对、停用并保留文件。";
+      ShowMods();
+      if(!autoOn)RefreshMods();
+     }
+     catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
+    },"Ghost")));
    Space(header,8);
   }
   if(modInventory?.Issues.Count>0)

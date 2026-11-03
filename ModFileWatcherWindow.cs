@@ -114,7 +114,9 @@ public partial class MainWindow
    InvalidateLifecycle("文件监测发现 MOD 环境变化，请重新扫描补丁健康状态。");
    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;modTogglePreview=null;
   }
-  if(modInventoryDirty&&page=="模组管理"&&currentVisit?.Key=="模组管理")
+  // Even when the user is viewing another tab, a known previous inventory
+  // must be reconciled so manually removed target MODs can retire their fixes.
+  if(modInventoryDirty&&(modInventory!=null||page=="模组管理"&&currentVisit?.Key=="模组管理"))
    RefreshMods();
   else if(modInventoryDirty)
    toast.Text="检测到 MOD 文件变化。进入模组管理刷新列表，并重新检查补丁健康状态。";
