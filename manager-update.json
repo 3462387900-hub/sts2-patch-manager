@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.10.2",
+  "tag_name": "v0.10.3",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 0.10.2\r\n\r\n本版本在「模组管理」新增独立修复补丁整理功能；**普通 MOD 保持原位**，也不会将已修改原 MOD 的内置修复拆开。\r\n\r\n## 新增\r\n- 「整理独立补丁」：先预览，再确认移动已审核且文件指纹匹配的独立修复补丁，集中到 `mods/_SpirePatch_Fixes/<原文件夹名>`。\r\n- 整理时检测文件变化、重复 ID、共用目录、目标占用和游戏运行状态，默认跳过未知或冲突的项目。\r\n- 含历史活跃回滚记录的补丁不直接移动，避免破坏此前安装批次的恢复路径。\r\n- 新的**选择安装**流程默认把尚未安装的独立补丁写入该目录；已安装项继续原位更新。完整整合包流程暂沿用此前的定位逻辑。\r\n- 保存整理操作日志，发生错误时尝试撤销已完成的目录移动；增加隔离自检。\r\n\r\n## 如何使用\r\n在管理器中选择正确游戏目录，退出游戏，在「模组管理」点击「整理独立补丁」，核对预览中的每一项路径后确认。不要手动拆散 DLL/JSON/PCK，也不要清理历史备份。\r\n\r\n## 验证边界\r\nWindows 托管 CI 构建与基础检查已通过。**本次为小范围使用正式发布，尚未完成完整隔离安装/回滚测试，也未验证真实游戏对嵌套目录的加载行为。** 使用前请备份整个 Mods 目录；整理失败或游戏无法加载时依据操作记录恢复原目录。\r\n",
-  "published_at": "2026-11-03T20:29:12Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.10.2",
+  "body": "# 尖塔修补站 v0.10.3\r\n\r\n## 修复：已安装的独立补丁无法整理\r\nv0.10.2 在发现有效历史安装回滚记录时，会把所有已安装的独立修复补丁标记为“安全跳过”。如果页面显示“可整理 0 项，跳过 14 项”，本版针对这一情况修复。\r\n\r\n- 现在会在整理前读取已安装批次的 `restore.json`，验证备份、相对路径与版本。可安全迁移的独立补丁仍移动到 `mods/_SpirePatch_Fixes/<补丁目录>`。\r\n- 移动前保存原始回滚记录的完整副本；移动后只调整受影响记录的相对路径，不删除历史补丁备份。\r\n- 记录整理事务；操作失败时尝试恢复目录和记录。发生进程中断时，管理器会阻止新的整理，并提供“恢复上次中断的整理”入口。\r\n- 仍不移动普通 MOD、原 MOD 内置修复、未知文件、共用文件夹或校验不通过的补丁。\r\n\r\n## 更新方式\r\n在 v0.10.2 的“检查更新”中下载并更新，或从本 Release 下载 Windows ZIP。关闭游戏，并先备份 `Mods` 与 `mod_fix_backups` 两个目录，再运行“模组管理 → 整理独立补丁”，逐项确认预览。\r\n\r\n## 验证边界\r\n已通过 GitHub Actions Windows/.NET 9 构建和隔离自检，包括历史记录迁移、预览后修改拦截、损坏备份拒绝、BOM 兼容及中断恢复。尚未在真实游戏与多人对局中验证二级目录加载行为；遇到异常不要手动删除回滚备份。\r\n",
+  "published_at": "2026-11-03T21:07:55Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.10.3",
   "assets": [
     {
-      "name": "SpirePatch-v0.10.2-win-x64.zip",
+      "name": "SpirePatch-v0.10.3-win-x64.zip",
       "state": "uploaded",
-      "size": 63488612,
-      "digest": "sha256:2bb13d59268c5e890fc56b9d68bb43305075319c9889ae1fc0cb063e26bde1e5",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.10.2/SpirePatch-v0.10.2-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/706989338"
+      "size": 63493814,
+      "digest": "sha256:5ca7086ed44bca3f1a5220a4370487514cfbc6075ed8bad32ea772a3fd84a53e",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.10.3/SpirePatch-v0.10.3-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/707099956"
     }
   ]
 }
