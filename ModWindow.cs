@@ -45,6 +45,10 @@ public partial class MainWindow
     :"这里显示普通 MOD 和含有内置修复的原 MOD；独立修复补丁在右侧标签页单独管理。",12,muted));
   Space(root,12);
   if(modSection=="修复补丁"){
+   root.Children.Add(T(HasValidLifecycleReport
+    ?"上次健康检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")+" · 这是检查时的快照"
+    :lifecycleStale?"环境已变化，健康状态需要重新检查。":"尚无健康检查结果。",12,muted));
+   Space(root,8);
    root.Children.Add(H(Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),
     Btn("重新检查健康状态",RefreshLifecycleFromMods,"Ghost")));
    Space(root,12);
