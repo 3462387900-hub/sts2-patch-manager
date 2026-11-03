@@ -33,7 +33,7 @@ internal static class PatchJournalRelocator
    string path=GameEnvironment.Child(dir,"restore.json");
    if(!File.Exists(path))throw new InvalidOperationException("历史安装备份缺少 restore.json：" + dir);
    byte[] bytes=File.ReadAllBytes(path);
-   string text=Encoding.UTF8.GetString(bytes);
+   string text=File.ReadAllText(path); // Recognize Windows PowerShell UTF-8 BOM journals.
    using var document=JsonDocument.Parse(text);
    var record=document.RootElement;
    string status=record.GetProperty("status").GetString()??"";
