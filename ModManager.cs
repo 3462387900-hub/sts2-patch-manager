@@ -44,21 +44,38 @@ public static class ModManager
   // a new toggle token while holding the same game lock as the actual move.
   Apply(Preview(plan.Root,plan.Folder,plan.Enable));return true;
  });
- static IEnumerable<(string Slot,DisabledModRecord Record)> Stored(string root)
+ static IEnumerable<(string Slot,DisabledModRecord Record)> Stored(string root)=>GameEnvironment.WithLock(root,()=>StoredLocked(root).ToArray());
+ static IEnumerable<(string Slot,DisabledModRecord Record)> StoredLocked(string root)
  {
   string parent=GameEnvironment.Child(root,StorageName);if(!Directory.Exists(parent))yield break;
   foreach(var slot in Directory.EnumerateDirectories(parent)){
    GameEnvironment.NoLinks(slot);string recordPath=GameEnvironment.Child(slot,"记录.json");
-   if(!File.Exists(recordPath))throw new InvalidOperationException("停用区记录缺失，请核对："+slot);
+   if(!File.Exists(recordPath)){
+    // A crash may occur immediately after creating the empty transaction slot.
+    if(!Directory.EnumerateFileSystemEntries(slot).Any())continue;
+    throw new InvalidOperationException("停用区记录缺失，请核对："+slot);
+   }
    var r=JsonSerializer.Deserialize<DisabledModRecord>(File.ReadAllText(recordPath))??throw new InvalidDataException("停用记录无效");
    if(r.Status is "enabled" or "failed-restored")continue;
    if(r.Status is not("disabled" or "prepared"))throw new InvalidDataException("未知停用记录状态");
    string original=GameEnvironment.Child(root,r.Original);string prefix=Path.Combine(root,"mods").TrimEnd('\\')+"\\";
    if(!original.StartsWith(prefix,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("停用记录的原目录超出 mods 范围。");
    string payload=GameEnvironment.Child(slot,"内容");
-   if(!Directory.Exists(payload))throw new InvalidOperationException("停用区内容与记录不一致，请核对："+slot);
+   if(!Directory.Exists(payload)){
+    // No file moves during recovery: only finalize a journal after exact verification.
+    if(File.Exists(payload)||!Directory.Exists(original)||!Matches(original,r.Files))throw new InvalidOperationException("停用事务中断且文件无法核对，请保留两处目录并核对："+slot);
+    WriteRecord(slot,r with{Status=r.Status=="prepared"?"failed-restored":"enabled"});continue;
+   }
+   if(r.Status=="prepared"){
+    if(File.Exists(original)||Directory.Exists(original)||!Matches(payload,r.Files))throw new InvalidOperationException("停用事务中断且目录冲突或内容变化，请核对："+slot);
+    WriteRecord(slot,r with{Status="disabled"});r=r with{Status="disabled"};
+   }
    yield return(slot,r);
   }
+ }
+ static bool Matches(string directory,Dictionary<string,string> expected){
+  if(expected==null||expected.Count==0)return false;
+  var actual=Snapshot(directory);return actual.Count==expected.Count&&actual.All(f=>expected.TryGetValue(f.Key,out var hash)&&hash==f.Value);
  }
  public static string[] DisabledIds(string root)=>Stored(root).Select(x=>x.Record.ModId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
  public static ModInventory Scan(string path)

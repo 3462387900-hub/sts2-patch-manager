@@ -17,6 +17,9 @@ public partial class App : Application
         base.OnStartup(e);
         try
         {
+            if(e.Args.Contains("--integration-check")){await IntegrationChecks.RunAsync(e.Args[1],e.Args[2],e.Args[3]);Shutdown(0);return;}
+            if(e.Args.Contains("--workspace-integration-self-test")){await IntegrationChecks.WorkspaceAsync(e.Args.Last());Shutdown(0);return;}
+            if(e.Args.Contains("--safety-self-test")){SafetyChecks.Run(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--catalog-v3-self-test")){CatalogV3Checks.Contract(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--catalog-v3-check")){await CatalogV3Checks.RunAsync(e.Args[1],e.Args[2],e.Args[3]);Shutdown(0);return;}
             if(e.Args.Contains("--online-candidate-scan-check")){using var source=new OnlineSource();var catalog=await source.LoadAsync(candidate:true);var report=Catalog.Scan(e.Args[1],catalog.Patches,catalog.Commit);File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(report,new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));Shutdown(0);return;}

@@ -156,7 +156,7 @@ internal sealed class RecommendationScanner
  {
   NoLinks(root);
   if(!File.Exists(Path.Combine(root,"SlayTheSpire2.exe"))||!Directory.Exists(Path.Combine(root,"mods")))throw new InvalidOperationException("请选择包含 SlayTheSpire2.exe 和 mods 文件夹的游戏根目录。");
-  Inventory(Path.Combine(root,"mods"));foreach(var m in mods.Where(m=>m.Value.Count>1))issues.Add("重复模组 ID："+m.Key);
+  Inventory(Path.Combine(root,"mods"));foreach(var m in mods.Where(m=>m.Value.Count>1))Incomplete("重复模组 ID："+m.Key);
   foreach(var patch in source){var e=new Entry(patch);entries.Add(e);try{Parse(e);}catch(Exception ex) when(ex is InvalidDataException or InvalidOperationException or KeyNotFoundException or FormatException or ArgumentException){e.Eligible=false;e.Error="适配需核对："+ex.Message;}}
   var duplicate=entries.GroupBy(e=>e.Patch.Id).Where(g=>g.Count()>1).SelectMany(g=>g).Concat(entries.GroupBy(e=>e.Patch.ComponentId,StringComparer.OrdinalIgnoreCase).Where(g=>g.Count()>1).SelectMany(g=>g)).ToHashSet();
   foreach(var e in entries.Where(e=>e.Eligible)){

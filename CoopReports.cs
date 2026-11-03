@@ -20,7 +20,22 @@ internal static class CoopReports
   return JsonSerializer.SerializeToElement(new{schema=2,presenceEvidenceVersion=inventory!=null&&!demo?1:0,catalogVersion=demo?"demo-0.4":report!.CatalogRevision,inventoryComplete=demo||report!.InventoryComplete,mode=demo?"demo":"read-only",time=demo?DateTimeOffset.Now:new DateTimeOffset(report!.Time),modCount=demo?51:report!.ModCount,patches=states.Select(s=>new{id=s.Patch.Id,name=s.Patch.Name,status=s.Status,reason=s.Reason,filesMatch=s.FilesMatch,presence=Presence(s),patchVersion=s.Patch.Version,relatedPatchIds=s.RelatedPatchIds,evidence=s.Evidence}),issues=demo?[]:report!.Issues});
  }
  public static void Write(string path,JsonElement snapshot)=>File.WriteAllText(path,JsonSerializer.Serialize(snapshot,new JsonSerializerOptions{WriteIndented=true}));
- public static JsonElement Read(string path){using var doc=JsonDocument.Parse(File.ReadAllText(path));return doc.RootElement.Clone();}
+ internal const int MaxReportBytes=2*1024*1024,MaxPatches=512,MaxStringLength=16384;
+ public static JsonElement Read(string path){
+  using var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+  if(input.Length>MaxReportBytes)throw new InvalidDataException("联机清单不能超过 2 MB，请让队友重新导出。");
+  // Bounded reads also protect against a file growing after the length check.
+  using var buffer=new MemoryStream();var bytes=new byte[8192];int count;
+  while((count=input.Read(bytes,0,bytes.Length))>0){if(buffer.Length+count>MaxReportBytes)throw new InvalidDataException("联机清单超过大小限制。");buffer.Write(bytes,0,count);}
+  buffer.Position=0;using var reader=new StreamReader(buffer,System.Text.Encoding.UTF8,detectEncodingFromByteOrderMarks:true);
+  using var doc=JsonDocument.Parse(reader.ReadToEnd(),new JsonDocumentOptions{MaxDepth=32});
+  ValidateLimits(doc.RootElement);return doc.RootElement.Clone();
+ }
+ static void ValidateLimits(JsonElement value){
+  if(value.ValueKind==JsonValueKind.String&&value.GetString()!.Length>MaxStringLength)throw new InvalidDataException("联机清单文字过长。");
+  if(value.ValueKind==JsonValueKind.Array){if(value.GetArrayLength()>MaxPatches)throw new InvalidDataException("联机清单条目过多。");foreach(var item in value.EnumerateArray())ValidateLimits(item);}
+  if(value.ValueKind==JsonValueKind.Object)foreach(var property in value.EnumerateObject()){if(property.Name.Length>MaxStringLength)throw new InvalidDataException("联机清单字段名过长。");ValidateLimits(property.Value);}
+ }
  internal static Dictionary<string,JsonElement> Patches(JsonElement report)
  {
   var result=new Dictionary<string,JsonElement>(StringComparer.OrdinalIgnoreCase);

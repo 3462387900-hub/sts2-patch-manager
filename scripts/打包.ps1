@@ -1,4 +1,5 @@
-param([string]$OutputRoot = '')
+param([string]$OutputRoot = '', [switch]$BuildOnly, [string]$Bundle = '', [string]$Fixture = '')
+if (!$BuildOnly -and (!$Bundle -or !$Fixture)) { throw '正式打包必须提供 -Bundle 和 -Fixture 运行完整隔离集成测试；仅构建检查请指定 -BuildOnly（不会生成发布 ZIP）。' }
 $ErrorActionPreference = 'Stop'
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 if (!$OutputRoot) { $OutputRoot = Join-Path $sourceRoot 'artifacts' }
@@ -13,11 +14,15 @@ dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64
 if ($LASTEXITCODE -ne 0) { throw '发布构建失败。' }
 $testRoot = Join-Path $runRoot '验证记录'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
-foreach ($mode in @('self-test','recommendation-self-test','online-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test')) {
+foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','online-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test','workspace-integration-self-test')) {
     $result = Join-Path $testRoot ($mode + '.txt')
     $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--' + $mode, ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $result)) { throw ('验证失败：' + $mode) }
 }
+if ($BuildOnly) { Write-Output ('构建与检查完成，未生成发布包：' + $runRoot); return }
+$integrationResult = Join-Path $testRoot 'integration-check.txt'
+$process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--integration-check', ('"' + [IO.Path]::GetFullPath($Bundle) + '"'), ('"' + [IO.Path]::GetFullPath($Fixture) + '"'), ('"' + $integrationResult + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $integrationResult)) { throw '完整隔离集成测试失败，不生成发布 ZIP。' }
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'README.md') -Destination (Join-Path $appFolder '使用说明.md')
 Copy-Item -LiteralPath (Join-Path $sourceRoot '更新日志.md') -Destination $appFolder
 Copy-Item -LiteralPath (Join-Path $sourceRoot '发布指南.md') -Destination $appFolder

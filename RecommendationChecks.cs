@@ -44,6 +44,8 @@ public static class RecommendationChecks
   File.WriteAllText(Path.Combine(root,"mods","中文 修复目录","Fix.dll"),"unknown");Check(State(root,patch)=="需核对","unknown existing patch DLL is not upgradeable");
   File.Delete(Path.Combine(root,"mods","中文 修复目录","Fix.dll"));Check(State(root,patch)=="需核对","partial patch is blocked");
   root=NewRoot();Put(root,"Target",folder:"自选名称");Check(State(root,patch)=="待修复","renamed target folder is supported");Put(root,"Target",folder:"duplicate");Check(Scan(root,patch).Issues.Any(x=>x.Contains("重复"))&&State(root,patch)=="需核对","duplicate IDs block ambiguous dependency");
+  root=NewRoot();Put(root,"Target");Put(root,"Unrelated",folder:"one");Put(root,"Unrelated",folder:"two");
+  var duplicateReport=Scan(root,patch);Check(!duplicateReport.InventoryComplete&&duplicateReport.Patches.All(p=>p.Status=="需核对"),"unrelated duplicate IDs invalidate the entire inventory");
   root=NewRoot();Put(root,"Target");var alternative=Make();var good=Profile(alternative).DeepClone();Profile(alternative)["game_files"]![0]!["sha256"]=new string('A',64);alternative["compatibility"]!["profiles"]!.AsArray().Add(good);Check(State(root,alternative)=="待修复","profiles are OR and conditions within them are AND");
   var excluded=Make();Profile(excluded)["excluded_mod_ids"]!.AsArray().Add("Target");Check(State(root,excluded)=="不适用","excluded combination is not recommended");
   var draft=Make();draft["publication_status"]="draft";draft["review_status"]="pending";Check(State(root,draft)=="需核对","new unreviewed draft is not trusted as bundled");

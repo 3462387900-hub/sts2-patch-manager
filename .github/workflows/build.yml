@@ -16,7 +16,7 @@ jobs:
           dotnet-version: 9.0.x
       - name: Build and test without touching a game
         shell: pwsh
-        run: ./scripts/打包.ps1
+        run: ./scripts/打包.ps1 -BuildOnly
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-build-and-checks
