@@ -14,7 +14,19 @@ public partial class MainWindow
   var checks=new List<string>();void Check(bool ok,string name){if(!ok)throw new InvalidOperationException(name);checks.Add("PASS "+name);File.WriteAllLines(Path.Combine(output,"四项功能界面验证.txt"),checks);}
   IEnumerable<T> Controls<T>(DependencyObject parent) where T:DependencyObject {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var child=VisualTreeHelper.GetChild(parent,i);if(child is T control)yield return control;foreach(var next in Controls<T>(child))yield return next;}}
   async Task Idle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);UpdateLayout();UpdateGlobalControls();}
-  async Task Click(string label,bool firstMatch=false){await Idle();var buttons=Controls<Button>(shell).Where(b=>b.Content?.ToString()==label);(firstMatch?buttons.First():buttons.Single()).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));while(busy)await Task.Delay(60);await Idle();}
+  async Task Click(string label,bool firstMatch=false)
+  {
+   // FileSystemWatcher refreshes can begin between UI assertions. Wait for a usable
+   // control before clicking; testing a click while the app is busy is not user input.
+   for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
+   if(busy||transactionWriting)throw new InvalidOperationException("后台检查一直占用界面："+label);
+   await Idle();
+   var buttons=Controls<Button>(shell).Where(b=>b.Content?.ToString()==label);
+   (firstMatch?buttons.First():buttons.Single()).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
+   if(busy||transactionWriting)throw new InvalidOperationException("UI 操作超时："+label);
+   await Idle();
+  }
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");
   await Click("使用此目录",true);Check(selectedInstallRoot==first&&modInventory?.Mods.Count==7&&folderLabel.Text==first,"directory choice is shared by mod management and global controls");Check(launchButton?.IsEnabled==true,"launch game button becomes available after directory selection");
