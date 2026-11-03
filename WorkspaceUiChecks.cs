@@ -79,7 +79,7 @@ public partial class MainWindow
   ShowMods();await Idle();int beforeChange=modChangeVersion;
   string external=Path.Combine(second,"mods","外部测试模组");Directory.CreateDirectory(external);
   File.WriteAllText(Path.Combine(external,"ExternalProbe.json"),
-   "{\\"id\\":\\"ExternalProbe\\",\\"name\\":\\"External Probe\\",\\"version\\":\\"1.0\\",\\"has_dll\\":true}");
+   """{"id":"ExternalProbe","name":"External Probe","version":"1.0","has_dll":true}""");
   File.WriteAllText(Path.Combine(external,"ExternalProbe.dll"),"only an isolated fixture");
   for(int i=0;i<45&&modChangeVersion==beforeChange;i++){await Task.Delay(100);await Idle();}
   Check(modChangeVersion>beforeChange&&lifecycleStale&&!HasValidLifecycleReport,
