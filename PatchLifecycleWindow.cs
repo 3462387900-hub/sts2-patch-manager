@@ -7,8 +7,20 @@ namespace SpirePatch;
 public partial class MainWindow
 {
  PatchLifecycleReport? lifecycleReport;
+ bool lifecycleStale,lifecycleScanning;
+ int lifecycleEpoch;
+ bool HasValidLifecycleReport=>lifecycleReport!=null&&selectedInstallRoot!=null&&
+  lifecycleReport.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase);
+ string LifecycleTag(string id)
+ {
+  if(lifecycleScanning)return "检查中";
+  if(!HasValidLifecycleReport)return lifecycleStale?"需重新检查":"未检查";
+  var item=lifecycleReport!.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(id,StringComparison.OrdinalIgnoreCase));
+  return item==null?"未收录":LifecycleLabel(item.State);
+ }
  void InvalidateLifecycle(string reason="游戏环境已变化，请重新扫描补丁健康状态。")
  {
+  lifecycleEpoch++;lifecycleStale=true;
   lifecycleReport=null;
   lifecycleEvidence=LifecycleEvidenceSource.Empty;
   retirePreview=null;
@@ -31,15 +43,26 @@ public partial class MainWindow
   LifecycleState.Disabled=>"已停用",
   _=>"暂无确认证据"
  };
- async void RefreshLifecycle()
+ async void RefreshLifecycle()=>await RefreshLifecycleAsync(ShowLifecycle);
+ async void RefreshLifecycleFromMods()
+ {
+  string? key=currentVisit?.Key;
+  Action render=key!=null&&key.StartsWith("patch-evidence:",StringComparison.Ordinal)
+   ?()=>ShowPatchEvidence(key["patch-evidence:".Length..]):ShowMods;
+  await RefreshLifecycleAsync(render);
+ }
+ async Task RefreshLifecycleAsync(Action render)
  {
   if(busy)return;
   if(selectedInstallRoot==null){LocateGame();return;}
-  string root=selectedInstallRoot;busy=true;lifecycleStatus="正在扫描 MOD 文件及补丁适配情况…";
-  ShowLifecycle();
+  string root=selectedInstallRoot;
+  int epoch=lifecycleEpoch;
+  busy=true;lifecycleScanning=true;
+  lifecycleStatus="正在扫描 MOD 文件及补丁适配情况…";
+  render();
   try
   {
-   var scan=await Task.Run(()=> {
+   var scan=await Task.Run(()=>{
     var history=ModHistory.CompareAndStore(root,installer.DataRoot);
     var inventory=ModManager.Scan(root);
     var patchStates=Catalog.Scan(root);
@@ -57,14 +80,19 @@ public partial class MainWindow
     evidence=LifecycleEvidenceSource.Empty;
     evidenceStatus="在线退役证据不可用，仅显示本地状态，禁止自动退役："+ex.Message;
    }
-   lifecycleEvidence=evidence;
-   lifecycleReport=PatchLifecycle.Evaluate(root,scan.history,evidence,evidenceStatus,scan.patchStates,scan.inventory);
+   var evaluated=PatchLifecycle.Evaluate(root,scan.history,evidence,evidenceStatus,scan.patchStates,scan.inventory);
+   if(epoch!=lifecycleEpoch||!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+   {
+    InvalidateLifecycle("检查期间环境已变化，请重新扫描。");
+    return;
+   }
+   lifecycleEvidence=evidence;lifecycleReport=evaluated;lifecycleStale=false;
    lifecycleStatus=scan.history.FirstScan
-     ?"已保存首次扫描基线。后续扫描可以判断 MOD 更新；已有补丁仍会核对已审核的适配指纹。"
-     :$"检测到 {scan.history.Changes.Length} 个 MOD 的文件或版本变化。";
+    ?"已建立首次扫描基线；适配标签仅依据已收录条件，不能证明游戏运行没有错误。"
+    :$"本次新增变化 {scan.history.Changes.Length} 项 · 尚待核对的 MOD {scan.history.PendingReview.Length} 项。";
   }
-  catch(Exception ex){lifecycleReport=null;lifecycleStatus="扫描未完成："+ex.Message;}
-  finally{busy=false;ShowLifecycle();}
+  catch(Exception ex){InvalidateLifecycle("扫描未完成，请检查后重试："+ex.Message);}
+  finally{lifecycleScanning=false;busy=false;render();}
  }
 
  void ShowLifecycle()
@@ -81,13 +109,14 @@ public partial class MainWindow
   scan.IsEnabled=!busy;
   root.Children.Add(H(scan,Btn("返回模组管理",ShowMods,"Ghost")));Space(root,13);
   root.Children.Add(T(lifecycleStatus,13,busy?gold:muted));Space(root,12);
-  if(lifecycleReport is not { } report)
+  if(!HasValidLifecycleReport||lifecycleReport is not { } report)
   {
    root.Children.Add(Card(V(T("暂未生成检查报告",16,ink,true),
      T("首次扫描只会保存管理器自己的指纹记录，不会更改 MOD、存档或补丁。",13,muted))));
    SetPage("补丁健康",root,restore:ShowLifecycle);return;
   }
   var change=report.History.Changes;
+  var pending=report.History.PendingReview;
   root.Children.Add(Card(V(
    T($"本次发现 {change.Length} 个 MOD 文件变化",17,ink,true),
    T(report.EvidenceStatus,12,muted),
@@ -97,6 +126,10 @@ public partial class MainWindow
       string.Join("\n",change.Take(12).Select(x=>$"{x.ModId}：{x.OldVersion} → {x.NewVersion}，变化文件 {x.ChangedFiles} 个"))),
       12,muted)
   )));Space(root,14);
+  if(pending.Length>0){
+   root.Children.Add(T($"尚有 {pending.Length} 个 MOD 更新待人工核对；重复扫描不会自动清除此提醒。",12,gold));
+   Space(root,12);
+  }
   var filters=H();
   foreach(var f in new[]{"全部","需要核对","可退役"})
   {
