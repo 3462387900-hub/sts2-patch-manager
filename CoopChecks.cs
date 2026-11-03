@@ -56,6 +56,8 @@ public partial class MainWindow
   Check(CoopReports.Compare(exported,Edit(n=>n["patches"]!.AsArray().Clear())).Contains("队友清单 未记录"),"missing peer record is a difference");
   Check(CoopReports.Compare(exported,Edit(n=>n["patches"]![0]!["filesMatch"]=false)).Contains("文件校验结果不同"),"same labels with different file verification differ");
   File.WriteAllText(latest,"{");await RunReportActionAsync(()=>CompareFreshReportAsync(latest));Check(coopComparison!.StartsWith("本次操作未完成")&&!busy&&content.IsEnabled,"invalid import clears previous success and unlocks UI");
+  // Release monitoring handles before simulating the entire installed game disappearing.
+  StopModWatch();
   Directory.Move(root,Path.Combine(home,"移走的游戏"));
   string failed=Path.Combine(home,"失败不应导出.json");await RunReportActionAsync(()=>ExportFreshReportAsync(failed));
   Check(!File.Exists(failed)&&report==null&&states.Count==0&&!busy&&content.IsEnabled,"failed rescan never exports cached data and unlocks UI");

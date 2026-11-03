@@ -20,6 +20,12 @@ public static class WorkspaceChecks
   Dictionary<string,string> Snapshot()=>Directory.EnumerateFiles(Path.Combine(root,"mods"),"*",SearchOption.AllDirectories).ToDictionary(f=>f,Catalog.Hash);
   bool Same(Dictionary<string,string> expected)=>expected.Count==Snapshot().Count&&expected.All(f=>File.Exists(f.Key)&&Catalog.Hash(f.Key)==f.Value);
   var original=Snapshot();Check(ModManager.Scan(root).Mods.Count==7,"manifest inventory reads IDs and shared directories without changing files");
+  var presentation=ModListView.Rows(root,ModManager.Scan(root),_=>"未检查");
+  Check(ModListView.Filter(presentation,"修复补丁","全部","").Length==1&&
+   ModListView.Filter(presentation,"普通 MOD","全部","").Length==6&&
+   ModListView.Filter(presentation,"普通 MOD","全部","独立").Single().Mod.Id=="TestSolo"&&
+   ModListView.Filter(presentation,"普通 MOD","启用","").Length==6,
+   "virtual list filters only data by category, enabled state, and search");
   Check(ModPresentation.IsIndependentPatch(Find("LargeHealDisplayFix"))&&!ModPresentation.IsIndependentPatch(Find("TestSolo"))&&
    !ModPresentation.IsIndependentPatch(Find("HextechRunes")),"mod list groups only catalogued independent patches, never original mods");
   Reject(()=>ModManager.Preview(root,Find("TestBase").Folder,false),"cannot disable a declared dependency while a dependent mod is active");

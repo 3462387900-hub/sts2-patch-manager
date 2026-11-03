@@ -32,12 +32,14 @@ public partial class MainWindow
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="修复补丁  (1)"),
    "mod management exposes regular MOD and independent patch tabs with accurate counts");
   await Click("修复补丁  (1)");
-  Check(Controls<Button>(shell).Count(b=>b.Content?.ToString()=="详情")==1&&
+  Check(activeModList?.Items.Count==1&&Controls<Button>(shell).Any(b=>b.Content?.ToString()=="详情")&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
    "independent patch tab filters to known patch records");
   var patchMore=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="更多");
+  patchMore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Idle();
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()==2,
-   "compact patch rows expose enable/disable preview and folder action in the menu");
+   "on-demand compact patch menu exposes preview toggle and folder action");
+  patchMore.ContextMenu!.IsOpen=false;
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
    "repair patch rows show a descriptive health status even before a scan");
   await Click("详情");
@@ -52,7 +54,7 @@ public partial class MainWindow
   await Click("← 上一步");
   Check(page=="模组管理","back returns to repair patch list");
   await Click("普通 MOD  (6)");
-  Check(Controls<Button>(shell).Count(b=>b.Content?.ToString()=="详情")==6,
+  Check(activeModList?.Items.Count==6,
    "regular MOD tab excludes the catalogued independent patch");
   var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();await Click("详情");Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();pageScroll!.ScrollToVerticalOffset(180);await Idle();double offset=pageScroll.VerticalOffset;
@@ -73,6 +75,29 @@ public partial class MainWindow
   ShowMods();modSection="普通 MOD";ShowMods();
   installPreview=new(true,"Preview",first,"test","old-token","","",[],0);UseGameRoot(second);ShowMods();Check(installPreview==null&&report==null&&selectedInstallRoot==second,"switching game directory invalidates old scan and install preview");Check(lifecycleReport==null&&retirePreview==null,"switching game directory invalidates patch-health report");await Click("← 上一步");Check(selectedInstallRoot==second&&installPreview==null,"back across a directory switch cannot restore old operation scope");
   Check(File.Exists(Path.Combine(first,"mods","独立 模组","TestSolo.dll")),"UI checks end with original mod enabled and never launch a game");
+  // FileSystemWatcher listens to this fixture game's real mods directory.
+  ShowMods();await Idle();int beforeChange=modChangeVersion;
+  string external=Path.Combine(second,"mods","外部测试模组");Directory.CreateDirectory(external);
+  File.WriteAllText(Path.Combine(external,"ExternalProbe.json"),
+   """{"id":"ExternalProbe","name":"External Probe","version":"1.0","has_dll":true}""");
+  File.WriteAllText(Path.Combine(external,"ExternalProbe.dll"),"only an isolated fixture");
+  for(int i=0;i<45&&modChangeVersion==beforeChange;i++){await Task.Delay(100);await Idle();}
+  Check(modChangeVersion>beforeChange&&lifecycleStale&&!HasValidLifecycleReport,
+   "actual external file changes invalidate cached patch health");
+  for(int i=0;i<45&&(modInventory?.Mods.Any(m=>m.Id=="ExternalProbe")!=true);i++)
+   {await Task.Delay(100);await Idle();}
+  Check(modInventory?.Mods.Any(m=>m.Id=="ExternalProbe")==true,
+   "MOD list reloads automatically once external writes become quiet");
+  // Recycled item templates must not eagerly create one WPF card for each MOD.
+  ShowMods();await Idle();
+  var virtualList=activeModList!;
+  var sample=modInventory!.Mods.First();
+  var many=Enumerable.Range(0,160).Select(i=>new ModListRow(sample with{Id="UI"+i,Name="测试模组 "+i},"",null)).ToArray();
+  virtualList.ItemsSource=many;await Idle();
+  Check(virtualList.Items.Count==160&&VirtualizingPanel.GetIsVirtualizing(virtualList)&&
+   VirtualizingPanel.GetVirtualizationMode(virtualList)==VirtualizationMode.Recycling&&
+   Controls<Button>(virtualList).Count(b=>b.Content?.ToString()=="详情")<30,
+   "160 virtualized MOD rows only materialize the visible WPF controls");
  }
  public async Task CaptureLiveModsAsync(string root,string output)
  {
