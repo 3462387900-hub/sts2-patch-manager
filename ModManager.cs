@@ -106,7 +106,7 @@ public static class ModManager
   if(mod.Enabled){
    string mods=Path.Combine(root,"mods").TrimEnd('\\');
    if(mod.Folder.Equals(mods,StringComparison.OrdinalIgnoreCase))return "清单位于 mods 根目录，无法作为独立模组移动。";
-   if(inventory.Mods.Any(m=>m!=mod&&m.Enabled&&(m.Folder.Equals(mod.Folder,StringComparison.OrdinalIgnoreCase)||m.Folder.StartsWith(mod.Folder.TrimEnd('\\')+"\\",StringComparison.OrdinalIgnoreCase)||mod.Folder.StartsWith(m.Folder.TrimEnd('\\')+"\\",StringComparison.OrdinalIgnoreCase))))return "此目录与其他模组共用或嵌套，请先手动整理为独立目录。";
+   if(inventory.Mods.Any(m=>m!=mod&&m.Enabled&&!m.Folder.TrimEnd('\\').Equals(mods,StringComparison.OrdinalIgnoreCase)&&(m.Folder.Equals(mod.Folder,StringComparison.OrdinalIgnoreCase)||m.Folder.StartsWith(mod.Folder.TrimEnd('\\')+"\\",StringComparison.OrdinalIgnoreCase)||mod.Folder.StartsWith(m.Folder.TrimEnd('\\')+"\\",StringComparison.OrdinalIgnoreCase))))return "此目录与其他模组共用或嵌套，请先手动整理为独立目录。";
    var dependents=enabled.Where(m=>m!=mod&&(m.Dependencies.Any(d=>d.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase))||RequiredByPatch(m.Id).Contains(mod.Id,StringComparer.OrdinalIgnoreCase))).Select(m=>m.Name).ToArray();
    if(dependents.Length>0)return "这些启用项依赖它，请先停用依赖项："+string.Join("、",dependents);
   }else{

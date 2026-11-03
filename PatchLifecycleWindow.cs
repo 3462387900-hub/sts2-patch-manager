@@ -98,7 +98,7 @@ public partial class MainWindow
   }
   root.Children.Add(filters);Space(root,12);
   int actionable=report.Patches.Count(x=>x.CanRetire);
-  int review=report.Patches.Count(x=>x.State is LifecycleState.NeedsReview or LifecycleState.SuspectedUpstreamFix or LifecycleState.Unknown);
+  int review=report.Patches.Count(x=>x.State is LifecycleState.NeedsReview or LifecycleState.SuspectedUpstreamFix);
   root.Children.Add(T($"已收录 {report.Patches.Length} 项补丁 · {review} 项待观察/复核 · {actionable} 项有依据可安全停用",13,muted));
   Space(root,12);
   var shown=report.Patches.Where(p=>lifecycleFilter=="全部"||
@@ -171,7 +171,15 @@ public partial class MainWindow
   busy=true;transactionWriting=true;
   try
   {
-   await Task.Run(()=>ModManager.Apply(plan));
+   await Task.Run(()=>GameEnvironment.WithLock(plan.Root,()=>
+   {
+    var proof=item.Evidence??throw new InvalidOperationException("缺少可审核的上游修复证据，请重新预览。");
+    if(proof.ReviewStatus!="approved"||proof.Decision is not("fixed_upstream" or "incompatible")||
+       !PatchLifecycle.MatchesEvidence(plan.Root,ModManager.Scan(plan.Root),proof))
+     throw new InvalidOperationException("原 MOD 的文件指纹在预览后发生变化，请重新扫描并核对。");
+    ModManager.Apply(plan);
+    return true;
+   }));
    try{PatchLifecycle.RecordRetirement(plan.Root,installer.DataRoot,item,plan);}
    catch(Exception e){lifecycleStatus="补丁已停用，但退役审计记录写入失败："+e.Message;}
    installPreview=null;lastInstallResult=null;ClearSelection();ClearCoop();report=null;states=[];demo=false;

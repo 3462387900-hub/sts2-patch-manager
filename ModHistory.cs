@@ -29,10 +29,20 @@ internal static class ModHistory
   {
    if(!ids.Add(mod.Id))throw new InvalidDataException("MOD ID 重复："+mod.Id);
    GameEnvironment.NoLinks(mod.Folder);
-   var options=new EnumerationOptions{RecurseSubdirectories=true,AttributesToSkip=FileAttributes.ReparsePoint,IgnoreInaccessible=false};
+   var modsRoot=GameEnvironment.Child(root,"mods");
+   bool loose=mod.Folder.TrimEnd('\\').Equals(modsRoot.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase);
+   var options=new EnumerationOptions{RecurseSubdirectories=!loose,AttributesToSkip=FileAttributes.ReparsePoint,IgnoreInaccessible=false};
+   string manifestBase=Path.GetFileNameWithoutExtension(mod.Manifest);
+   // A manifest directly inside Mods does not own the other MOD subfolders or unrelated loose DLLs.
+   var otherFolders=inventory.Mods.Where(m=>m.Enabled&&m!=mod&&
+     m.Folder.StartsWith(mod.Folder.TrimEnd('\\')+"\\",StringComparison.OrdinalIgnoreCase))
+     .Select(m=>m.Folder.TrimEnd('\\')+"\\").ToArray();
    var monitored=Directory.EnumerateFiles(mod.Folder,"*",options)
+    .Where(p=>!otherFolders.Any(other=>p.StartsWith(other,StringComparison.OrdinalIgnoreCase)))
     .Where(p=>p.Equals(mod.Manifest,StringComparison.OrdinalIgnoreCase)||
-     p.EndsWith(".dll",StringComparison.OrdinalIgnoreCase)||p.EndsWith(".pck",StringComparison.OrdinalIgnoreCase))
+     ((p.EndsWith(".dll",StringComparison.OrdinalIgnoreCase)||p.EndsWith(".pck",StringComparison.OrdinalIgnoreCase)) &&
+      (!loose||Path.GetFileNameWithoutExtension(p).Equals(manifestBase,StringComparison.OrdinalIgnoreCase)||
+       Path.GetFileNameWithoutExtension(p).Equals(mod.Id,StringComparison.OrdinalIgnoreCase))))
     .OrderBy(p=>p,StringComparer.OrdinalIgnoreCase).Take(501).ToArray();
    if(monitored.Length>500)throw new InvalidDataException("MOD 文件过多，暂停生成历史："+mod.Id);
    foreach(string p in monitored)
