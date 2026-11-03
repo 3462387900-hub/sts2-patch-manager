@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace SpirePatch;
 public partial class MainWindow
@@ -36,96 +37,144 @@ public partial class MainWindow
    if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
   }
  }
+ double modListOffset;
+ static ScrollViewer? ListScroll(DependencyObject element)
+ {
+  if(element is ScrollViewer viewer)return viewer;
+  for(int i=0;i<VisualTreeHelper.GetChildrenCount(element);i++)
+  {
+   var found=ListScroll(VisualTreeHelper.GetChild(element,i));
+   if(found!=null)return found;
+  }
+  return null;
+ }
+ void CaptureModListOffset()
+ {
+  if(activeModList!=null&&ListScroll(activeModList) is { } viewer)
+   modListOffset=viewer.VerticalOffset;
+ }
  void ShowMods()
  {
-  var root=V(Header("LOCAL MODS","模组管理","普通 MOD 与独立修复补丁分别查看；任何启用、停用操作都先预览。"));Space(root,18);
+  var root=new Grid();
+  root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+  root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
+  root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+  var header=V(Header("LOCAL MODS","模组管理","普通 MOD 和独立修复补丁分开管理；启停操作始终需要预览。"));
+  root.Children.Add(header);Space(header,13);
   if(selectedInstallRoot==null)
   {
-   root.Children.Add(Card(V(T("先定位你的游戏目录",20,ink,true),
+   header.Children.Add(Card(V(T("请先定位游戏目录",17,ink,true),
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
    SetPage("模组管理",root,restore:ShowMods);return;
   }
   var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;
-  root.Children.Add(H(refresh,Btn("打开模组目录",()=>{
-   string path=Path.Combine(selectedInstallRoot,"mods");
-   if(Directory.Exists(path))OpenUrl(path);else toast.Text="此目录尚未创建 mods 文件夹。";
+  header.Children.Add(H(refresh,Btn("打开模组目录",()=>{
+   string directory=Path.Combine(selectedInstallRoot,"mods");
+   if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
   },"Ghost")));
-  Space(root,10);root.Children.Add(T(modStatus,12,muted));Space(root,12);
+  Space(header,6);
+  header.Children.Add(T(modStatus,12,muted));Space(header,11);
   if(modInventoryDirty)
   {
-   root.Children.Add(Card(V(T("检测到 MOD 文件变化",15,gold,true),
-    T("自动刷新只更新模组列表；旧补丁健康结果已经失效，请在修复补丁页重新检查。",12,muted)),padding:14));
-   Space(root,10);
+   header.Children.Add(Card(V(T("检测到 MOD 文件变化 · 正在核对列表",13,gold,true),
+    T("补丁健康结论已失效，需要重新扫描。",11,muted)),padding:10));
+   Space(header,10);
   }
   var mods=modInventory?.Mods??[];
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
-  var groups=new WrapPanel{Margin=new(0,0,0,12)};
+  var groups=new WrapPanel{Margin=new Thickness(0,0,0,9)};
   foreach(var (name,count) in new[]{("普通 MOD",normalCount),("修复补丁",fixCount)})
   {
    string selected=name;
-   var tab=Btn($"{name}  ({count})",()=>{modSection=selected;ShowMods();},
-    modSection==name?"Primary":"Ghost");
-   tab.Margin=new(0,0,9,0);groups.Children.Add(tab);
+   var tab=Btn($"{name}  ({count})",()=>{
+    CaptureModListOffset();modListOffset=0;modSection=selected;ShowMods();
+   },modSection==name?"Primary":"Ghost");
+   tab.Margin=new Thickness(0,0,9,0);
+   groups.Children.Add(tab);
   }
-  root.Children.Add(groups);
-  root.Children.Add(T(modSection=="修复补丁"
-   ?"仅将已收录的独立补丁 ID 与同名清单归入本页。分类不代表文件已通过校验；原 MOD 内置修复仍归在普通 MOD 中。"
-   :"这里显示普通 MOD 和含有内置修复的原 MOD；独立修复补丁在右侧标签页单独管理。",12,muted));
-  Space(root,12);
+  header.Children.Add(groups);
+  header.Children.Add(T(modSection=="修复补丁"
+   ?"已收录的独立补丁集中在此；分类不代表通过文件指纹校验。"
+   :"普通 MOD（包括原 MOD 内置修复）显示在此。",12,muted));
+  Space(header,9);
   if(modSection=="修复补丁")
   {
-   root.Children.Add(T(HasValidLifecycleReport
-    ?"上次健康检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")+" · 这是检查时的快照"
-    :lifecycleStale?"环境已变化，健康状态需要重新检查。":"尚无健康检查结果。",12,muted));
-   Space(root,8);
-   root.Children.Add(H(Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),
-    Btn("重新检查健康状态",RefreshLifecycleFromMods,"Ghost")));Space(root,12);
+   header.Children.Add(T(HasValidLifecycleReport
+    ?"补丁健康最近检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+    :lifecycleStale?"文件有变化，建议重新检查补丁健康。":"尚未检查补丁健康。",12,muted));
+   Space(header,5);
+   header.Children.Add(H(Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),
+    Btn("重新检查健康状态",RefreshLifecycleFromMods,"Ghost")));
+   Space(header,8);
   }
   if(modInventory?.Issues.Count>0)
   {
-   root.Children.Add(Card(V(T("模组清单存在问题，部分操作可能被阻止",15,gold,true),
-    T(string.Join("\n",modInventory.Issues.Take(5)),12,muted))));
-   Space(root,14);
+   header.Children.Add(Card(V(T("部分 MOD 清单需要处理",14,gold,true),
+    T(string.Join("\n",modInventory.Issues.Take(3)),12,muted)),padding:12));
+   Space(header,8);
   }
-  var search=new TextBox{Text=modQuery,ToolTip="搜索名称、ID 或作者",Margin=new(0,0,0,10)};
+
+  var searchArea=new Grid{Margin=new Thickness(0,0,0,8)};
+  var search=new TextBox{Text=modQuery,ToolTip="按 MOD 名称、ID、作者搜索"};
   search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索模组");
-  root.Children.Add(search);
-  var filters=new WrapPanel{Margin=new(0,0,0,10)};
+  searchArea.Children.Add(search);
+  var placeholder=T("搜索名称、MOD ID 或作者…",12,muted);
+  placeholder.Margin=new Thickness(12,0,0,0);
+  placeholder.VerticalAlignment=VerticalAlignment.Center;
+  placeholder.IsHitTestVisible=false;
+  placeholder.Visibility=string.IsNullOrEmpty(modQuery)?Visibility.Visible:Visibility.Collapsed;
+  searchArea.Children.Add(placeholder);
+  header.Children.Add(searchArea);
+  var filterBar=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,7)};
+  var shownCount=T("",12,muted);shownCount.VerticalAlignment=VerticalAlignment.Center;
+  DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
+  var filters=new WrapPanel();
   foreach(var name in new[]{"全部","启用","停用"})
   {
    string selected=name;
-   var button=Btn(name,()=>{modFilter=selected;ShowMods();},
+   var button=Btn(name,()=>{CaptureModListOffset();modListOffset=0;modFilter=selected;ShowMods();},
     modFilter==name?"Primary":"Ghost");
-   button.Margin=new(0,0,7,0);filters.Children.Add(button);
+   button.Margin=new Thickness(0,0,7,0);filters.Children.Add(button);
   }
-  root.Children.Add(filters);
+  filterBar.Children.Add(filters);header.Children.Add(filterBar);
+
   var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag);
-  var list=ModListView.Create(row=>ShowModDetail(row.Mod.Folder),(row,button)=>{
+  var list=ModListView.Create(row=>{
+   CaptureModListOffset();ShowModDetail(row.Mod.Folder);
+  },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
    var toggle=new MenuItem{Header=row.Mod.Enabled?"预览停用":"预览启用",
     IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty&&row.BlockReason==null,
     ToolTip=modInventoryDirty?"MOD 环境有变动，请先刷新。":row.BlockReason};
-   toggle.Click+=(_,_)=>PrepareModToggle(row.Mod);menu.Items.Add(toggle);
+   toggle.Click+=(_,_)=>{CaptureModListOffset();PrepareModToggle(row.Mod);};
+   menu.Items.Add(toggle);
    var open=new MenuItem{Header="打开文件夹"};
    open.Click+=(_,_)=>OpenUrl(row.Mod.Folder);menu.Items.Add(open);
    button.ContextMenu=menu;menu.IsOpen=true;
   });
-  activeModList=list;
-  var hint=T("当前分类或搜索条件下没有符合的模组。",13,muted);
+  activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
+  var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
+  var footer=V(empty);
+  Grid.SetRow(footer,2);root.Children.Add(footer);
   void FilterRows()
   {
    var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
    list.ItemsSource=visible;
-   hint.Visibility=visible.Length==0&&!busy?Visibility.Visible:Visibility.Collapsed;
+   shownCount.Text=$"显示 {visible.Length} / {(modSection=="修复补丁"?fixCount:normalCount)} 项";
+   empty.Visibility=visible.Length==0&&!busy?Visibility.Visible:Visibility.Collapsed;
   }
   search.TextChanged+=(_,_)=>{
-   modQuery=search.Text;FilterRows();
+   modQuery=search.Text;
+   placeholder.Visibility=string.IsNullOrEmpty(modQuery)?Visibility.Visible:Visibility.Collapsed;
+   modListOffset=0;
+   FilterRows();ListScroll(list)?.ScrollToTop();
    string q=modQuery,f=modFilter,g=modSection;
    RememberPage("模组管理",()=>{modQuery=q;modFilter=f;modSection=g;ShowMods();});
   };
-  root.Children.Add(list);root.Children.Add(hint);FilterRows();
-  Space(root,8);
-  root.Children.Add(T("列表按需加载可见行；滚动模组请使用列表右侧滚动条。",11,muted));
+  FilterRows();
+  list.Loaded+=(_,_)=>Dispatcher.BeginInvoke(new Action(()=>{
+   if(activeModList==list&&ListScroll(list) is { } scroll)scroll.ScrollToVerticalOffset(modListOffset);
+  }),System.Windows.Threading.DispatcherPriority.Loaded);
   string savedQuery=modQuery,savedFilter=modFilter,savedSection=modSection;
   SetPage("模组管理",root,restore:()=>{
    modQuery=savedQuery;modFilter=savedFilter;modSection=savedSection;ShowMods();

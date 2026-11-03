@@ -57,8 +57,17 @@ public partial class MainWindow
   Check(activeModList?.Items.Count==6,
    "regular MOD tab excludes the catalogued independent patch");
   var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();await Click("详情");Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
-  Controls<TextBox>(shell).Single().Text="";await Idle();pageScroll!.ScrollToVerticalOffset(180);await Idle();double offset=pageScroll.VerticalOffset;
-  string soloFolder=modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder;ShowModDetail(soloFolder);await Idle();await Click("← 上一步");Check(offset>0&&Math.Abs(pageScroll.VerticalOffset-offset)<1,"back restores previous list scroll position");pageScroll.ScrollToTop();await Shot("02-模组管理列表");
+  Controls<TextBox>(shell).Single().Text="";await Idle();
+  Check(pageScroll!.VerticalScrollBarVisibility==ScrollBarVisibility.Disabled&&
+   ScrollViewer.GetHorizontalScrollBarVisibility(activeModList!)==ScrollBarVisibility.Disabled,
+   "MOD list has one vertical scrollbar and no offscreen horizontal scrolling");
+  var listScroll=ListScroll(activeModList!)!;
+  listScroll.ScrollToEnd();await Idle();double offset=listScroll.VerticalOffset;
+  string soloFolder=modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder;
+  CaptureModListOffset();ShowModDetail(soloFolder);await Idle();await Click("← 上一步");
+  Check(offset>0&&Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
+   "back restores virtualized MOD list scroll position");
+  ListScroll(activeModList!)!.ScrollToTop();modListOffset=0;await Idle();await Shot("02-模组管理列表");
   ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files");await Shot("03-停用前确认");await Click("确认停用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false&&!Directory.Exists(soloFolder),"actual disable button retains mod outside active directory");
   await Click("← 上一步");Check(modTogglePreview==null&&modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false,"back after a file operation cannot replay stale confirmation");
   ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder);await Click("预览启用");await Click("确认启用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled&&Directory.Exists(soloFolder),"actual enable button restores mod to original directory");await Shot("04-已恢复启用");
@@ -98,6 +107,31 @@ public partial class MainWindow
    VirtualizingPanel.GetVirtualizationMode(virtualList)==VirtualizationMode.Recycling&&
    Controls<Button>(virtualList).Count(b=>b.Content?.ToString()=="详情")<30,
    "160 virtualized MOD rows only materialize the visible WPF controls");
+  // Regression for actual Windows clients: long dependent names previously pushed actions off screen.
+  string longBlock="这些启用项依赖它，请先停用依赖项："+string.Join("、",
+   Enumerable.Range(0,40).Select(i=>"超长依赖模组名称"+i+"测试补丁"));
+  virtualList.ItemsSource=new[]{new ModListRow(sample with{Name="BaseLib / 一个非常非常长的中文模组名称 / test"},
+   "",longBlock)};
+  await Idle();
+  double originalWidth=Width,originalHeight=Height;
+  Width=1020;Height=720;await Idle();
+  var rowView=Controls<ModRowControl>(virtualList).Single();
+  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="详情");
+  var moreButton=rowView.MoreButton;
+  bool Fits(Button button)
+  {
+   var position=button.TransformToAncestor(virtualList).Transform(new Point(0,0));
+   return button.ActualWidth>=45&&position.X>=0&&position.X+button.ActualWidth<=virtualList.ActualWidth-4;
+  }
+  Check(Fits(detailsButton)&&Fits(moreButton)&&
+   rowView.ActualWidth<=virtualList.ActualWidth&&virtualList.ActualWidth>500,
+   "minimum supported window width visibly keeps both MOD actions inside the row");
+  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖保护"));
+  Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()==longBlock&&
+   warningLine.ActualWidth<virtualList.ActualWidth,
+   "long dependency warnings are concise but full reasons remain available via tooltip");
+  await Shot("06-窄窗口模组按钮可见");
+  Width=originalWidth;Height=originalHeight;await Idle();
  }
  public async Task CaptureLiveModsAsync(string root,string output)
  {
