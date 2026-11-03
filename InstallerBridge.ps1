@@ -38,7 +38,7 @@ function Rollback-State([string]$Root,$Chosen) {
    if(-not(Test-Path -LiteralPath $recordPath)){continue}
    $record=Read-Json $recordPath
    if($record.Status -ne 'disabled'){continue}
-   $prefix=$record.Original.TrimEnd('\\')+'\\'
+   $prefix=$record.Original.TrimEnd('\')+'\'
    foreach($f in @($Chosen.record.files)){
     if($f.relative.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){
      throw ('Rollback requires disabled MOD '+$record.ModId+' to be re-enabled in 模组管理 first.')
