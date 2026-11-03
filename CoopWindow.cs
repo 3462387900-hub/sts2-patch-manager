@@ -78,7 +78,7 @@ public partial class MainWindow
    await SetCoopComparisonAsync(plan.Peer);coopOutcome=outcome;
    coopStatus=outcome.Success?"所选操作已完成，已重新扫描。停用保留与完全缺失会作为记录差异显示，双方均未启用时无需再处理。":"处理已停止："+outcome.Error;
   }catch(Exception e){coopOutcome=outcome;coopStatus=(outcome==null?"处理未完成：":"处理已结束，但重新比较失败：")+e.Message;coopRows=null;coopComparison=null;}
-  finally{modTogglePreview=null;busy=false;transactionWriting=false;ShowCoop();}
+  finally{InvalidateLifecycle();modTogglePreview=null;busy=false;transactionWriting=false;ShowCoop();}
  }
  void AddCoopResults(Panel root)
  {
