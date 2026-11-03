@@ -23,6 +23,13 @@ internal static class PatchLifecycleChecks
   }
 
   string root=WorkspaceChecks.Fixture(home),data=Path.Combine(home,"history-data");
+  // A loose MOD manifest at mods root must not claim every other MOD's subfolder.
+  string looseRoot=Path.Combine(root,"mods");
+  File.WriteAllText(Path.Combine(looseRoot,"LooseExample.json"),JsonSerializer.Serialize(new {
+   id="LooseExample",name="Loose MOD",version="1.0.0",has_dll=true
+  }));
+  File.WriteAllText(Path.Combine(looseRoot,"LooseExample.dll"),"loose mod binary");
+  File.WriteAllText(Path.Combine(looseRoot,"Unrelated.pck"),"not owned by loose manifest");
   var inventory=ModManager.Scan(root);
   var initial=Directory.EnumerateFiles(Path.Combine(root,"mods"),"*",SearchOption.AllDirectories)
    .ToDictionary(p=>p,Catalog.Hash,StringComparer.OrdinalIgnoreCase);
@@ -35,6 +42,11 @@ internal static class PatchLifecycleChecks
   var updated=ModHistory.CompareAndStore(root,data);
   Check(updated.Changes.Any(x=>x.ModId=="HextechRunes"&&x.ChangedFiles>=1&&
     x.NewVersion==x.OldVersion),"DLL mutation is detected even with unchanged declared MOD version");
+  Check(!updated.Changes.Any(x=>x.ModId=="LooseExample"),
+    "other MOD folders cannot be attributed to a root-level loose manifest");
+  var looseFiles=updated.Current.Files.Where(f=>f.ModId=="LooseExample").ToArray();
+  Check(looseFiles.Length==2&&looseFiles.All(f=>f.RelativePath is "LooseExample.json" or "LooseExample.dll"),
+    "loose root MOD only owns its own manifest and matching DLL");
   var scan=Catalog.Scan(root);
   var empty=LifecycleEvidenceSource.Parse("{\"schema_version\":1,\"entries\":[]}");
   var withoutEvidence=PatchLifecycle.Evaluate(root,updated,empty,"test",scan,ModManager.Scan(root));
@@ -73,6 +85,12 @@ internal static class PatchLifecycleChecks
   var unconfirmed=PatchLifecycle.Evaluate(root,now,stale,"fixture",Catalog.Scan(root),ModManager.Scan(root));
   Check(unconfirmed.Patches.Single(p=>p.Patch.Id=="LargeHealDisplayFix").State!=LifecycleState.VerifiedUpstreamFix,
     "unmatched exact hash cannot prove an upstream fix");
+  File.AppendAllText(target," stale after confirmation preview");
+  Check(!PatchLifecycle.MatchesEvidence(root,ModManager.Scan(root),item.Evidence!),
+    "upstream proof becomes invalid if target DLL changes before confirmation");
+  File.WriteAllText(target,"HextechRunes fixture upstream version changed");
+  Check(PatchLifecycle.MatchesEvidence(root,ModManager.Scan(root),item.Evidence!),
+    "restored exact proof fingerprint is recognized again");
   var selected=PatchLifecycle.PreviewRetire(verified,"LargeHealDisplayFix",evidence);
   File.AppendAllText(Path.Combine(selected.Folder,"LargeHealDisplayFix.dll")," tamper");
   Reject(()=>ModManager.Apply(selected),"file changes after retirement preview block write");
