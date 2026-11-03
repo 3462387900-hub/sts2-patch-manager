@@ -39,7 +39,7 @@ public partial class MainWindow : Window
   pageScroll=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(pageScroll,1);main.Children.Add(pageScroll);
   toast.Foreground=muted;toast.FontSize=12;toast.Margin=new(0,14,0,0);Grid.SetRow(toast,2);main.Children.Add(toast);
   var controlsTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(400)};controlsTimer.Tick+=(_,_)=>UpdateGlobalControls();controlsTimer.Start();Closed+=(_,_)=>{controlsTimer.Stop();CloseModWatch();};
-  if(onlineStartup){ShowOnline();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();};}else ShowOverview();
+  if(onlineStartup){ShowOnline();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();};}else ShowOverview();
  }
  static SolidColorBrush B(string hex)=>(SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
  TextBlock T(string text,double size=14,Brush? color=null,bool bold=false)=>new(){Text=text,FontSize=size,Foreground=color??ink,FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal,TextWrapping=TextWrapping.Wrap,LineHeight=size*1.55};
