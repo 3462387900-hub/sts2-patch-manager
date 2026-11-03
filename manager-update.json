@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.11.4",
+  "tag_name": "v0.11.5",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.11.4\r\n\r\n本版改善本地 MOD 目录的实时提醒与大量 MOD 时的列表流畅度。\r\n\r\n- 当前选中游戏的 `mods` 与已停用模组存放区加入文件变化监测：新增、删除、改名或修改 MOD 文件时，将旧补丁健康结论标记为过期，防止误用之前的判断。\r\n- 短时间内大量文件操作采用防抖机制（约 850 毫秒）。当前正在查看模组列表且没有文件事务时，自动刷新模组清单；其他页面会显示提醒，用户可进入模组管理刷新。\r\n- 监测异常、通知缓冲区溢出或新建 `mods` 目录时会给出提醒，尝试重新绑定监测；遇到不确定情况仍需手动扫描。\r\n- 列表使用 WPF 虚拟化与回收复用，仅创建可见项目的 UI 控件；搜索和筛选只更新数据，不再逐个重建所有卡片。\r\n- 保留普通 MOD / 修复补丁双标签、补丁健康与查看依据、原有依赖限制及启停预览。\r\n- 补充隔离测试：验证真实文件通知、缓存失效、自动清单刷新、160 行虚拟化，以及联机检查、文件事务等现有场景。\r\n\r\n注意：文件通知是尽早提示变化的机制，不等于完整的 SHA-256 校验；仍需手动执行补丁健康检查。程序运行期间不建议整体移动或重命名正在监测的游戏安装目录，必要时请先关闭程序。本版本不包含新的第三方 MOD 或游戏补丁内容。\r\n",
-  "published_at": "2026-11-03T22:57:43Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.4",
+  "body": "# 尖塔修补站 v0.11.5\r\n\r\n本次更新修复 v0.11.4「模组管理」列表的按钮被隐藏问题，提升大量 MOD 和长中文依赖信息的可读性。\r\n\r\n- **恢复操作按钮：** 在模组卡片右侧明确预留「详情」「更多」操作区域，长名称和依赖信息不再把按钮挤到窗口外。\r\n- **卡片更容易识别：** 重点显示模组名称，次要信息显示 ID、版本和作者，启用/停用状态单独以标签表示，修复补丁使用不同的侧边标记。\r\n- **依赖文字更清晰：** 对被其他 MOD 依赖的项目显示精简保护提示和数量，完整的依赖说明仍可在提示中查看；安全限制保持不变。\r\n- **列表使用更顺畅：** MOD 列表单独滚动，顶部搜索、标签和状态筛选固定不动。搜索框新增可见提示，并显示当前符合条件的项目数量。\r\n- **保留性能优化：** 继续使用 WPF 虚拟化/控件回收，不在每次输入时创建全部模组卡片。\r\n- **回归验证：** 在 Windows 最小窗口 1020×720 下验证按钮坐标位于可视范围，测试超长依赖提醒、单滚动条、列表返回位置和模拟模组启停事务。\r\n\r\n本版**不更新 MOD 修复载荷**，不会主动关闭、移动或删除游戏 MOD。文件启停仍使用原有确认、依赖检查与恢复流程。\r\n",
+  "published_at": "2026-11-03T23:17:23Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.5",
   "assets": [
     {
-      "name": "SpirePatch-v0.11.4-win-x64.zip",
+      "name": "SpirePatch-v0.11.5-win-x64.zip",
       "state": "uploaded",
-      "size": 63531156,
-      "digest": "sha256:0415ac7ecc1f84ab858cd4b40baf1001c8d59b83db0552f0f843479f1fdb757c",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.4/SpirePatch-v0.11.4-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/707398268"
+      "size": 63534587,
+      "digest": "sha256:35a897b59ef0512d18bf2d3d2ca5c916fdd09ce171efa0633a9014f321231209",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.5/SpirePatch-v0.11.5-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/707452126"
     }
   ]
 }
