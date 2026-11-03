@@ -107,7 +107,7 @@ public partial class MainWindow
   }
   finally
   {
-   busy = false; transactionWriting = false;
+   InvalidateLifecycle();busy = false; transactionWriting = false;
    if(patchOrganizationStatus.StartsWith("整理未成功：", StringComparison.Ordinal))ShowPatchOrganization();
    else ShowMods();
   }

@@ -126,7 +126,7 @@ public partial class MainWindow
    try{var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(preview.Root,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;}
    catch(Exception e){installStatus="文件操作已完成，但刷新概览失败："+e.Message;}
   }catch(Exception e){installStatus="操作未完成："+e.Message+"\n请保留操作记录和备份；重新检查后再继续。";}
-  finally{busy=false;transactionWriting=false;ShowInstaller();}
+  finally{InvalidateLifecycle();busy=false;transactionWriting=false;ShowInstaller();}
  }
  void OpenLocalRecords(){try{Directory.CreateDirectory(installer.DataRoot);OpenUrl(installer.DataRoot);}catch(Exception e){MessageBox.Show(this,e.Message,"无法打开记录目录");}}
  public async Task CaptureInstallerAsync(string zip,string fixture,string directory)

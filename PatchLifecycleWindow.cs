@@ -7,6 +7,14 @@ namespace SpirePatch;
 public partial class MainWindow
 {
  PatchLifecycleReport? lifecycleReport;
+ void InvalidateLifecycle(string reason="游戏环境已变化，请重新扫描补丁健康状态。")
+ {
+  lifecycleReport=null;
+  lifecycleEvidence=LifecycleEvidenceSource.Empty;
+  retirePreview=null;
+  retiringItem=null;
+  lifecycleStatus=reason;
+ }
  LifecycleRegistry lifecycleEvidence=LifecycleEvidenceSource.Empty;
  string lifecycleStatus="首次扫描将建立当前环境基线；之后可识别 MOD 文件变化。";
  string lifecycleFilter="全部";
@@ -180,15 +188,15 @@ public partial class MainWindow
     ModManager.Apply(plan);
     return true;
    }));
+   string? auditWarning=null;
    try{PatchLifecycle.RecordRetirement(plan.Root,installer.DataRoot,item,plan);}
-   catch(Exception e){lifecycleStatus="补丁已停用，但退役审计记录写入失败："+e.Message;}
+   catch(Exception e){auditWarning="退役审计记录写入失败："+e.Message;}
    installPreview=null;lastInstallResult=null;ClearSelection();ClearCoop();report=null;states=[];demo=false;
    modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));
-   if(!lifecycleStatus.Contains("审计记录写入失败",StringComparison.Ordinal))
-    lifecycleStatus=item.Patch.Name+" 已安全停用，文件保留在模组停用区。";
-   lifecycleReport=null;
+   InvalidateLifecycle(item.Patch.Name+" 已安全停用，文件保留在模组停用区。请重新扫描补丁健康状态。"+
+    (auditWarning==null?"":" "+auditWarning));
   }
-  catch(Exception ex){lifecycleStatus="停用失败："+ex.Message;lifecycleReport=null;}
+  catch(Exception ex){InvalidateLifecycle("停用未完成，请重新扫描并核对当前文件："+ex.Message);}
   finally{busy=false;transactionWriting=false;ShowLifecycle();}
  }
 }
