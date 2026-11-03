@@ -58,6 +58,24 @@ internal static class PatchLifecycleChecks
     p.State==LifecycleState.NeedsReview&&!p.CanRetire),"changed related MOD is never declared fixed without proof");
   var now=ModHistory.CompareAndStore(root,data);
   Check(now.Changes.Length==0,"new scan commits the current local baseline");
+  Check(now.PendingReview.Any(x=>x.ModId=="HextechRunes"),
+   "a second scan preserves unresolved MOD updates instead of silently clearing them");
+  var carried=ModHistory.CompareAndStore(root,data);
+  Check(carried.Changes.Length==0&&carried.PendingReview.Any(x=>x.ModId=="HextechRunes"),
+   "unresolved review survives any number of identical scans");
+  var waiting=PatchLifecycle.Evaluate(root,carried,empty,"test",Catalog.Scan(root),ModManager.Scan(root));
+  Check(waiting.Patches.Any(x=>x.Patch.Id=="LargeHealDisplayFix"&&x.State==LifecycleState.NeedsReview),
+   "health evaluation continues to flag pending MOD changes");
+  File.AppendAllText(target," modified before review acknowledgement");
+  Reject(()=>ModHistory.AcknowledgeReview(root,data,"HextechRunes"),
+   "review acknowledgement refuses changed files since the latest baseline");
+  File.WriteAllText(target,"HextechRunes fixture upstream version changed");
+  ModHistory.AcknowledgeReview(root,data,"HextechRunes");
+  var acknowledged=ModHistory.CompareAndStore(root,data);
+  Check(!acknowledged.PendingReview.Any(x=>x.ModId=="HextechRunes"),
+   "explicit acknowledgement clears the matching MOD reminder without changing game files");
+  Reject(()=>ModHistory.AcknowledgeReview(root,data,"HextechRunes"),
+   "review acknowledgement refuses items that were already cleared");
 
   string patchId="local.largehealdisplayfix",hash=Catalog.Hash(target);
   string Json(string status,string decision,string targetMod="HextechRunes",string sha="")
