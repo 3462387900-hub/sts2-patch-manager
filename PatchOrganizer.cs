@@ -142,7 +142,7 @@ internal static class PatchOrganizer
   GameEnvironment.WithLock(GameEnvironment.Root(root), () => PreviewCore(root, true));
 
  public static PatchOrganizationResult Apply(PatchOrganizationPlan plan, string dataRoot) =>
-  GameEnvironment.WithLock(GameEnvironment.Root(plan.Root), () =>
+  GameEnvironment.WithLock<PatchOrganizationResult>(GameEnvironment.Root(plan.Root), () =>
   {
    var current = PreviewCore(plan.Root, plan.Fixture);
    if(current.Token != plan.Token || current.Moves.Length != plan.Moves.Length)
