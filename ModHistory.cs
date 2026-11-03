@@ -62,7 +62,7 @@ internal static class ModHistory
  internal static ModHistoryResult CompareAndStore(string root,string dataRoot)
  {
   root=GameEnvironment.Root(root);
-  return GameEnvironment.WithLock(root,()=>
+  return GameEnvironment.WithLock<ModHistoryResult>(root,()=>
   {
    var current=Capture(root);
    string path=HistoryPath(root,dataRoot);
