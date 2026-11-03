@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 
 namespace SpirePatch;
@@ -18,8 +19,9 @@ internal static class PatchOrganizerChecks
   }
   void Reject(Action action,string label)
   {
-   try { action(); }
-   catch(InvalidOperationException) { Check(true,label); return; }
+   try{action();}
+   catch(Exception ex)when(ex is InvalidOperationException or InvalidDataException)
+   {Check(true,label);return;}
    Check(false,label);
   }
   string root=WorkspaceChecks.Fixture(home);
@@ -30,48 +32,78 @@ internal static class PatchOrganizerChecks
   var before=ModManager.FileSnapshot(source);
   string data=Path.Combine(home,"整理日志");
 
-  // The current folder layout should not be changed by preview.
   var plan=PatchOrganizer.PreviewFixture(root);
   Check(plan.Moves.Length==1 && plan.Moves.Single().Id=="LargeHealDisplayFix" &&
-        Directory.Exists(source) && !Directory.Exists(destination),"preview selects only independent fix and never changes files");
+        Directory.Exists(source) && !Directory.Exists(destination),"preview is read-only and selects independent fix");
 
-  // Changes after preview invalidate the confirmation.
   string dll=Path.Combine(source,"LargeHealDisplayFix.dll");
   byte[] previous=File.ReadAllBytes(dll);
   File.AppendAllText(dll,"changed");
   Reject(()=>PatchOrganizer.Apply(plan,data),"changed DLL blocks stale preview");
   File.WriteAllBytes(dll,previous);
 
-  // Existing destination cannot be overwritten.
   Directory.CreateDirectory(destination);
-  Check(PatchOrganizer.PreviewFixture(root).Moves.Length==0,"occupied collection folder is skipped");
+  Check(PatchOrganizer.PreviewFixture(root).Moves.Length==0,"occupied destination is skipped");
   Directory.Delete(destination);
 
-  // An installed historical backup records file locations, so skip relocation.
   string legacy=Path.Combine(root,"mod_fix_backups","STS2-AllFixes-20261102-test");
   Directory.CreateDirectory(legacy);
-  File.WriteAllText(Path.Combine(legacy,"restore.json"),JsonSerializer.Serialize(new{
-   status="installed",
-   files=new[]{new{relative="mods\\"+Path.GetFileName(source)+"\\LargeHealDisplayFix.dll"}}
-  }));
-  var guarded=PatchOrganizer.PreviewFixture(root);
-  Check(guarded.Moves.Length==0 && guarded.Skipped.Any(s=>s.Contains("历史安装备份")),"active backup keeps its original paths");
-  File.WriteAllText(Path.Combine(legacy,"restore.json"),JsonSerializer.Serialize(new{
-   status="rolled-back",
-   files=new[]{new{relative="mods\\"+Path.GetFileName(source)+"\\LargeHealDisplayFix.dll"}}
-  }));
+  string journal=Path.Combine(legacy,"restore.json");
+  string oldRelative="mods\\"+Path.GetFileName(source)+"\\LargeHealDisplayFix.dll";
+  string newRelative="mods\\"+PatchOrganizer.CollectionName+"\\"+Path.GetFileName(source)+"\\LargeHealDisplayFix.dll";
+  string oldHash=Catalog.Hash(dll);
+  void WriteLegacy(string status)=>File.WriteAllText(journal,JsonSerializer.Serialize(new{
+    version="20261102.3",status,
+    files=new[]{new{relative=oldRelative,operation="write",existed=false,oldHash="",newHash=oldHash,backup=""}}
+  }),new UTF8Encoding(true));
+  WriteLegacy("installed");
+  string originalJournalHash=Catalog.Hash(journal);
 
   plan=PatchOrganizer.PreviewFixture(root);
-  Check(plan.Moves.Length==1,"rolled back backup permits independent relocation");
+  Check(plan.Moves.Length==1&&plan.Journals?.Length==1&&Catalog.Hash(journal)==originalJournalHash,
+    "active rollback history is safely planned, without modifying records");
+
+  // A mutated journal must invalidate a previously confirmed organization plan.
+  WriteLegacy("rolled-back");
+  Reject(()=>PatchOrganizer.Apply(plan,data),"journal changes between preview and confirmation reject the operation");
+  WriteLegacy("installed");
+
+  // An unfinished installer batch must block organization.
+  WriteLegacy("prepared");
+  Reject(()=>PatchOrganizer.PreviewFixture(root),"prepared installer journal blocks migration");
+  WriteLegacy("installed");
+
+  // Main user case: installed fixes with live historical rollback references can move.
+  plan=PatchOrganizer.PreviewFixture(root);
   var result=PatchOrganizer.Apply(plan,data);
-  Check(result.Moved==1 && File.Exists(result.Journal) && !Directory.Exists(source) &&
-        ModManager.FileSnapshot(destination).Count==before.Count &&
-        before.All(f=>ModManager.FileSnapshot(destination).TryGetValue(f.Key,out var hash)&&hash==f.Value),
-        "confirmed move preserves every file byte and writes journal");
+  Check(result.Moved==1&&File.Exists(result.Journal)&&!Directory.Exists(source) &&
+    PatchJournalRelocator.SameFiles(destination,before),"installed patch relocates with exact file integrity");
+  using(var migrated=JsonDocument.Parse(File.ReadAllText(journal)))
+   Check(migrated.RootElement.GetProperty("files")[0].GetProperty("relative").GetString()==newRelative,
+     "live rollback journal follows relocated DLL path");
   Check(ModManager.Scan(root).Mods.Single(m=>m.Id=="LargeHealDisplayFix").Folder==destination,
-        "existing recursive mod scanner recognizes grouped patch");
+    "recursive mod scanner recognizes grouped patch");
   Check(PatchOrganizer.PreviewFixture(root).Moves.Length==0,"repeat organization is a no-op");
-  Check(Directory.Exists(Path.Combine(mods,"基础 库")) && Directory.Exists(Path.Combine(mods,"依赖模组")),
-        "ordinary MOD directories remain unchanged");
+  Check(Directory.Exists(Path.Combine(mods,"基础 库"))&&Directory.Exists(Path.Combine(mods,"依赖模组")),
+    "ordinary mods were never moved");
+
+  // Simulate interrupted transaction using the original record saved in the organizer backup.
+  var transactionDir=Path.GetDirectoryName(result.Journal)!;
+  var committed=JsonSerializer.Deserialize<PatchOrganizationTransaction>(File.ReadAllText(result.Journal))!;
+  var pending=committed with{Status="执行中"};
+  PatchJournalRelocator.Save(transactionDir,pending);
+  Reject(()=>PatchOrganizer.PreviewFixture(root),"pending organization blocks further modifications");
+  PatchOrganizer.Recover(root);
+  Check(Directory.Exists(source)&&!Directory.Exists(destination)&&PatchJournalRelocator.SameFiles(source,before),
+    "recovery restores every moved patch byte");
+  Check(Catalog.Hash(journal)==originalJournalHash,"recovery restores original UTF-8 BOM backup journal bytes");
+  Check(PatchJournalRelocator.Pending(root).Length==0,"recovery clears pending organization state");
+
+  // Corrupt original installer backup for an installed replacement: refuse instead of discarding.
+  File.WriteAllText(journal,JsonSerializer.Serialize(new{
+   version="20261102.3",status="installed",
+   files=new[]{new{relative=oldRelative,operation="write",existed=true,oldHash="DEADBEEF",newHash=oldHash,backup="missing.bak"}}
+  }));
+  Reject(()=>PatchOrganizer.PreviewFixture(root),"missing original replacement backup blocks migration");
  }
 }
