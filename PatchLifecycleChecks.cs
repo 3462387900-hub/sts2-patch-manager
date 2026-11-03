@@ -31,6 +31,10 @@ internal static class PatchLifecycleChecks
   File.WriteAllText(Path.Combine(looseRoot,"LooseExample.dll"),"loose mod binary");
   File.WriteAllText(Path.Combine(looseRoot,"Unrelated.pck"),"not owned by loose manifest");
   var inventory=ModManager.Scan(root);
+  Check(ModManager.BlockReason(root,inventory.Mods.Single(x=>x.Id=="LooseExample"),inventory)?.Contains("mods 根目录")==true,
+    "loose root MOD itself cannot be moved as a folder");
+  Check(ModManager.BlockReason(root,inventory.Mods.Single(x=>x.Id=="LargeHealDisplayFix"),inventory)==null,
+    "loose root MOD does not block an independent patch directory");
   var initial=Directory.EnumerateFiles(Path.Combine(root,"mods"),"*",SearchOption.AllDirectories)
    .ToDictionary(p=>p,Catalog.Hash,StringComparer.OrdinalIgnoreCase);
   var first=ModHistory.CompareAndStore(root,data);
