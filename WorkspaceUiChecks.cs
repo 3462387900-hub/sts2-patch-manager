@@ -28,6 +28,19 @@ public partial class MainWindow
   Check(page=="补丁健康"&&navButtons["修复中心"].Background.ToString()==B("#E2EBDD").ToString(),
    "patch health keeps the patch-center navigation highlighted");
   ShowMods();await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="普通 MOD  (6)")&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="修复补丁  (1)"),
+   "mod management exposes regular MOD and independent patch tabs with accurate counts");
+  await Click("修复补丁  (1)");
+  Check(Controls<Button>(shell).Count(b=>b.Content?.ToString()=="详情")==1&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
+   "independent patch tab filters to known patch records");
+  var patchMore=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="更多");
+  Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()==2,
+   "compact patch rows expose enable/disable preview and folder action in the menu");
+  await Click("普通 MOD  (6)");
+  Check(Controls<Button>(shell).Count(b=>b.Content?.ToString()=="详情")==6,
+   "regular MOD tab excludes the catalogued independent patch");
   var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();await Click("详情");Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();pageScroll!.ScrollToVerticalOffset(180);await Idle();double offset=pageScroll.VerticalOffset;
   string soloFolder=modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder;ShowModDetail(soloFolder);await Idle();await Click("← 上一步");Check(offset>0&&Math.Abs(pageScroll.VerticalOffset-offset)<1,"back restores previous list scroll position");pageScroll.ScrollToTop();await Shot("02-模组管理列表");
