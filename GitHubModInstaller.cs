@@ -251,6 +251,15 @@ internal sealed class GitHubModInstaller : IDisposable
   if(backups.Length<=1)return [];
   return backups.Skip(1).ToArray();
  }
+ static void VerifyBackupTreeHasNoLinks(string path)
+ {
+  GameEnvironment.NoLinks(path);
+  foreach(var entry in Directory.EnumerateFileSystemEntries(path))
+  {
+   GameEnvironment.NoLinks(entry);
+   if(Directory.Exists(entry))VerifyBackupTreeHasNoLinks(entry);
+  }
+ }
  internal static int CleanupBackups(string gameRoot,ManagedMod mod,IReadOnlyCollection<string> selected)
  {
   string root=GameEnvironment.Root(gameRoot);
@@ -268,9 +277,7 @@ internal sealed class GitHubModInstaller : IDisposable
     string full=Path.GetFullPath(candidate);
     Require(Path.GetDirectoryName(full)?.Equals(Path.GetFullPath(parent),StringComparison.OrdinalIgnoreCase)==true &&
      allowed.Contains(full) && Directory.Exists(full),"待清理的备份不在安全范围内，或最近一次备份已改变。");
-    foreach(var path in Directory.EnumerateFileSystemEntries(full,"*",SearchOption.AllDirectories))
-     GameEnvironment.NoLinks(path);
-    GameEnvironment.NoLinks(full);
+    VerifyBackupTreeHasNoLinks(full);
    }
    int removed=0;
    foreach(var candidate in selected)
