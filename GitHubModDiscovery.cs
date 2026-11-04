@@ -209,13 +209,19 @@ internal sealed class GitHubModDiscovery : IDisposable
   IEnumerable<(GitHubSourceCandidate Candidate,string Branch)> candidates,CancellationToken ct)
  {
   var verified=new List<GitHubSourceCandidate>();
+  bool rawUnavailable=false;
   foreach(var (candidate,branch) in candidates.OrderByDescending(x=>x.Candidate.Score).Take(6))
   {
    bool? match=null;string filename="";
-   try{(match,filename)=await VerifyAsync(candidate.Repository,branch,mod.Id,ct);}
-   catch(HttpRequestException){}
-   catch(OperationCanceledException) when(!ct.IsCancellationRequested){}
-   catch(InvalidDataException){}
+   if(!rawUnavailable)
+   {
+    using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
+    timeout.CancelAfter(TimeSpan.FromSeconds(6));
+    try{(match,filename)=await VerifyAsync(candidate.Repository,branch,mod.Id,timeout.Token);}
+    catch(HttpRequestException){rawUnavailable=true;}
+    catch(OperationCanceledException) when(!ct.IsCancellationRequested){rawUnavailable=true;}
+    catch(InvalidDataException){}
+   }
    if(match==false)continue; // Explicitly different MOD: never offer this candidate.
    verified.Add(match==true?candidate with{
     Verified=true,Score=98,Reason="仓库根目录 "+filename+" 与本地 MOD ID 一致（已核验）"}:candidate);
