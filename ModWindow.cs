@@ -265,7 +265,13 @@ public partial class MainWindow
   }
   filterBar.Children.Add(filters);header.Children.Add(filterBar);
 
-  var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag);
+  var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
+   if(ModPresentation.IsIndependentPatch(mod))return "";
+   var updates=GitHubUpdates();
+   if(updates.Repository(mod.Id)==null)return "";
+   var result=updates.Cached(mod.Id);
+   return result==null?"GitHub：已关联 · 待检查":"GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:"");
+  });
   var list=ModListView.Create(row=>{
    CaptureModListOffset();ShowModDetail(row.Mod.Folder);
   },(row,button)=>{
