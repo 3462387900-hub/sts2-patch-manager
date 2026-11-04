@@ -80,7 +80,7 @@ public partial class MainWindow
   Check(offset>0&&Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
    "back restores virtualized MOD list scroll position");
   ListScroll(activeModList!)!.ScrollToTop();modListOffset=0;await Idle();await Shot("02-模组管理列表");
-  ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files");await Shot("03-停用前确认");await Click("确认停用");
+  ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files; state="+modStatus+"; preview="+(modTogglePreview!=null)+"; exists="+Directory.Exists(soloFolder));await Shot("03-停用前确认");await Click("确认停用");
   for(int retry=0;retry<100&&(modInventory?.Mods.SingleOrDefault(m=>m.Id=="TestSolo")?.Enabled!=false||Directory.Exists(soloFolder));retry++)
    {await Task.Delay(60);await Idle();}
   Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false&&!Directory.Exists(soloFolder),"actual disable button retains mod outside active directory; status="+modStatus);
