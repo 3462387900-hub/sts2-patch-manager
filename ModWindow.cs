@@ -206,7 +206,6 @@ public partial class MainWindow
     rows.Children.Add(T("约 "+(size/1048576.0).ToString("F1")+" MB · "+path,11,muted));
    }
    var scroll=new ScrollViewer{Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
-   layout.Children.Add(scroll);
    var actions=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)};
    var clear=Btn("删除选中的旧备份",()=>{
     var chosen=selection.Where(x=>x.Box.IsChecked==true).Select(x=>x.Path).ToArray();
@@ -225,6 +224,7 @@ public partial class MainWindow
    actions.Children.Add(clear);
    actions.Children.Add(Btn("取消",()=>window.DialogResult=false,"Ghost"));
    DockPanel.SetDock(actions,Dock.Bottom);layout.Children.Add(actions);
+   layout.Children.Add(scroll);
    window.Content=layout;window.ShowDialog();
    if(root==selectedInstallRoot)ShowModDetail(mod.Folder);
   }
