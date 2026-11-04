@@ -12,7 +12,7 @@ using Microsoft.Win32;
 namespace SpirePatch;
 public partial class MainWindow : Window
 {
- readonly Brush ink=B("#28352D"),muted=B("#617064"),gold=B("#52735D"),green=B("#39734F");
+ readonly Brush ink=B("#F0F5FC"),muted=B("#CBD8E9"),gold=B("#83B9F8"),green=B("#70D8AD");
  readonly Grid shell=new(); readonly StackPanel navigation=new(); readonly ContentControl content=new();
  readonly TextBlock modeLabel=new(),folderLabel=new(),toast=new();
  readonly Dictionary<string,Button> navButtons=[];
@@ -24,14 +24,14 @@ public partial class MainWindow : Window
   rememberEnvironment=onlineStartup;if(updates!=null)managerUpdates=updates;
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
   Closing+=(_,e)=>{if(transactionWriting){e.Cancel=true;MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");}else {preparationCancellation?.Cancel();managerUpdateCancellation?.Cancel();}};
-  Background=B("#F6F7F4");Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
-  shell.Background=B("#F6F7F4");UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
+  Background=B("#0D1524");Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
+  shell.Background=new LinearGradientBrush(B("#0D1524").Color,B("#192B46").Color,55);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
-  shell.ColumnDefinitions.Add(new(){Width=new(220)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
+  shell.ColumnDefinitions.Add(new(){Width=new(205)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
   Content=shell;BuildSidebar();
-  var main=new Grid{Margin=new(32,24,32,18)};Grid.SetColumn(main,1);shell.Children.Add(main);
+  var main=new Grid{Margin=new(25,18,25,15)};Grid.SetColumn(main,1);shell.Children.Add(main);
   main.RowDefinitions.Add(new(){Height=GridLength.Auto});main.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});main.RowDefinitions.Add(new(){Height=GridLength.Auto});
-  var top=new DockPanel{LastChildFill=false,Margin=new(0,0,0,20)};
+  var top=new DockPanel{LastChildFill=false,Margin=new(0,0,0,15)};
   backButton=Btn("← 上一步",GoBack,"Ghost");backButton.Margin=new(0,0,10,0);DockPanel.SetDock(backButton,Dock.Left);top.Children.Add(backButton);
   var mode=Badge("v"+ManagerUpdates.CurrentVersion,muted);DockPanel.SetDock(mode,Dock.Left);top.Children.Add(mode);
   modeLabel.Foreground=muted;modeLabel.FontSize=12;modeLabel.VerticalAlignment=VerticalAlignment.Center;modeLabel.Margin=new(12,0,0,0);top.Children.Add(modeLabel);
@@ -46,21 +46,21 @@ public partial class MainWindow : Window
  StackPanel V(params UIElement[] children){var p=new StackPanel();foreach(var c in children)p.Children.Add(c);return p;}
  StackPanel H(params UIElement[] children){var p=new StackPanel{Orientation=Orientation.Horizontal};foreach(var c in children){if(c is FrameworkElement f)f.Margin=new(0,0,10,0);p.Children.Add(c);}return p;}
  Button Btn(string text,Action action,string? style=null){var b=new Button{Content=text};if(style!=null)b.Style=(Style)FindResource(style);if(text.StartsWith("←"))b.HorizontalAlignment=HorizontalAlignment.Left;b.Click+=(_,_)=>action();return b;}
- Border Card(UIElement child,string color="#FFFFFF",int padding=24)=>new(){Background=B(color),BorderBrush=B("#DDE3D8"),BorderThickness=new(1),CornerRadius=new(12),Padding=new(padding),Child=child};
- Border Badge(string text,Brush? color=null)=>new(){HorizontalAlignment=HorizontalAlignment.Left,Background=B("#EAF0E5"),CornerRadius=new(6),Padding=new(9,4,9,4),Child=T(text,11,color??muted)};
- Border Rule()=>new(){Background=B("#E0E5DC"),Height=1,Margin=new(0,20,0,20)};
+ Border Card(UIElement child,string color="#182942",int padding=20)=>new(){Background=B(color),BorderBrush=B("#405876"),BorderThickness=new(1),CornerRadius=new(12),Padding=new(padding),Child=child};
+ Border Badge(string text,Brush? color=null)=>new(){HorizontalAlignment=HorizontalAlignment.Left,Background=B("#233F60"),CornerRadius=new(6),Padding=new(9,4,9,4),Child=T(text,11,color??muted)};
+ Border Rule()=>new(){Background=B("#344862"),Height=1,Margin=new(0,20,0,20)};
  void Space(Panel p,int height=18)=>p.Children.Add(new Border{Height=height});
  Grid Columns(UIElement left,UIElement right,double rightWidth=300)
  {var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=new(24)});g.ColumnDefinitions.Add(new(){Width=new(rightWidth)});g.Children.Add(left);Grid.SetColumn(right,2);g.Children.Add(right);return g;}
  void BuildSidebar()
  {
-  var border=new Border{Background=B("#F0F2EC"),BorderBrush=B("#DDE3D8"),BorderThickness=new(0,0,1,0),Padding=new(20,26,20,18)};shell.Children.Add(border);
+  var border=new Border{Background=B("#B0102035"),BorderBrush=B("#405876"),BorderThickness=new(0,0,1,0),Padding=new(15,22,15,15)};shell.Children.Add(border);
   var layout=new DockPanel{LastChildFill=true};border.Child=layout;
-  var brand=V(T("尖塔修补站",23,ink,true),T("MOD 与补丁管理",12,muted));brand.Margin=new(4,0,0,30);DockPanel.SetDock(brand,Dock.Top);layout.Children.Add(brand);
+  var brand=V(T("尖塔修补站",20,ink,true),T("MOD 与补丁管理",12,muted));brand.Margin=new(4,0,0,30);DockPanel.SetDock(brand,Dock.Top);layout.Children.Add(brand);
   folderLabel.TextWrapping=TextWrapping.Wrap;folderLabel.Foreground=muted;folderLabel.FontSize=11;folderLabel.LineHeight=18;folderLabel.MaxHeight=56;
   var bottom=V(T("当前游戏",11,muted));Space(bottom,8);bottom.Children.Add(folderLabel);Space(bottom,10);bottom.Children.Add(Btn("选择游戏目录  ↗",ChooseFolder,"Ghost"));bottom.Children.Add(Btn("自动定位目录",LocateGame,"Ghost"));managerUpdateButton=Btn("检查更新",()=>{if(busy)return;ShowManagerUpdates();if(!managerUpdateChecked)_=CheckManagerUpdatesAsync(true);},"Ghost");bottom.Children.Add(managerUpdateButton);bottom.Children.Add(Rule());bottom.Children.Add(T("MOD WORKSPACE  "+ManagerUpdates.CurrentVersion,10,muted));DockPanel.SetDock(bottom,Dock.Bottom);layout.Children.Add(bottom);
   navigation.Children.Add(T("工作区",11,muted));Space(navigation,12);
-  foreach(var (name,icon) in new[]{("总览","◈"),("模组管理","▤"),("修复中心","▦"),("联机检查","⇄")}){
+  foreach(var (name,icon) in new[]{("总览","⌂"),("模组管理","▦"),("修复补丁","⚒"),("更新中心","⇩"),("联机检查","⇄"),("诊断与日志","☷")}){
    var button=Btn(icon+"    "+name,()=>Navigate(name),"Ghost");button.HorizontalContentAlignment=HorizontalAlignment.Left;button.Margin=new(0,0,0,5);button.Padding=new(14,11,8,11);navButtons[name]=button;navigation.Children.Add(button);
   }
   Space(navigation,18);navigation.Children.Add(T("工具",11,muted));Space(navigation,12);
@@ -101,14 +101,14 @@ public partial class MainWindow : Window
    var group=V(PatchCenterTabs(active),element);
    content.Content=group;
   }else content.Content=element;
-  string section=IsPatchCenterPage(active)?"修复中心":active is "诊断" or "游戏目录" or "检查更新"?"工具与设置":active;
-  foreach(var kv in navButtons){kv.Value.Background=kv.Key==section?B("#E2EBDD"):Brushes.Transparent;kv.Value.Foreground=kv.Key==section?gold:muted;}
+  string section=IsPatchCenterPage(active)?"修复补丁":active is "诊断"?"诊断与日志":active is "游戏目录" or "检查更新"?"工具与设置":active;
+  foreach(var kv in navButtons){kv.Value.Background=kv.Key==section?B("#284465"):Brushes.Transparent;kv.Value.Foreground=kv.Key==section?ink:muted;}
   modeLabel.Text=active=="检查更新"?"管理器更新 · 自愿下载":active=="模组管理"?"本地模组 · 保留文件 · 可恢复启停":active=="安装与回滚"?"真实操作 · 检查后确认 · 保留备份":active=="在线补丁"?"公开仓库 · 下载校验 · 整合包安装":demo?"演示环境 · 安装流程不会修改游戏":"本地扫描 · 文件状态";
   folderLabel.Text=selectedInstallRoot??(demo?"联机小队 · 示例配置\n尚未选择游戏目录":"尚未选择游戏目录");folderLabel.ToolTip=selectedInstallRoot;
  }
- void Navigate(string name){if(busy)return;switch(name){case "检查更新":ShowManagerUpdates();break;case "模组管理":ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "修复中心":ShowLibrary();break;case "工具与设置":ShowTools();break;case "补丁健康":ShowLifecycle();if(lifecycleReport==null)RefreshLifecycle();break;case "游戏目录":ShowLocations();break;case "在线补丁":ShowOnline();if(onlineCatalog==null&&!onlineBusy)RefreshOnline();break;case "安装与回滚":ShowInstaller();break;case "总览":ShowOverview();break;case "补丁库":ShowLibrary();break;case "诊断":ShowDiagnosis();break;case "联机检查":ShowCoop();break;}}
+ void Navigate(string name){if(busy)return;switch(name){case "检查更新":ShowManagerUpdates();break;case "模组管理":ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "修复中心":case "修复补丁":ShowLibrary();break;case "更新中心":ShowModUpdatesCenter();break;case "诊断与日志":ShowDiagnosis();break;case "工具与设置":ShowTools();break;case "补丁健康":ShowLifecycle();if(lifecycleReport==null)RefreshLifecycle();break;case "游戏目录":ShowLocations();break;case "在线补丁":ShowOnline();if(onlineCatalog==null&&!onlineBusy)RefreshOnline();break;case "安装与回滚":ShowInstaller();break;case "总览":ShowOverview();break;case "补丁库":ShowLibrary();break;case "诊断":ShowDiagnosis();break;case "联机检查":ShowCoop();break;}}
  UIElement Header(string eyebrow,string title,string subtitle,UIElement? action=null)
- {var txt=V(T(title,28,ink,true),T(subtitle,13,muted));var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=GridLength.Auto});g.Children.Add(txt);if(action!=null){Grid.SetColumn(action,1);g.Children.Add(action);if(action is FrameworkElement f)f.VerticalAlignment=VerticalAlignment.Center;}return g;}
+ {var txt=V(T(title,24,ink,true),T(subtitle,13,muted));var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=GridLength.Auto});g.Children.Add(txt);if(action!=null){Grid.SetColumn(action,1);g.Children.Add(action);if(action is FrameworkElement f)f.VerticalAlignment=VerticalAlignment.Center;}return g;}
  void ShowOverview()
  {
   if(!demo&&report==null){var empty=V(Header("YOUR GAME","游戏目录已就绪","扫描当前模组后，查看适合这套环境的修复。"));Space(empty,20);empty.Children.Add(T(selectedInstallRoot??"请先选择游戏目录",14,muted));Space(empty,20);empty.Children.Add(H(Btn("扫描当前目录",()=>{if(selectedInstallRoot!=null)_=ScanFolder(selectedInstallRoot);else ChooseFolder();},"Primary"),Btn("模组管理",()=>{ShowMods();RefreshMods();},"Ghost")));SetPage("总览",empty);return;}
@@ -122,9 +122,9 @@ public partial class MainWindow : Window
   hero.Children.Add(H(Btn(pending>0?"查看修复方案  →":"查看全部补丁  →",()=>{if(pending>0)ShowReview();else ShowLibrary();},"Primary"),Btn("浏览补丁库",ShowLibrary,"Ghost")));
   var stats=V(T("这套环境",12,muted));Space(stats,13);
   stats.Children.Add(Stat(demo?"51":(report?.ModCount??0).ToString(),demo?"示例模组":"检测到的模组"));Space(stats,17);stats.Children.Add(Stat(done.ToString(),demo?"示例已安装修复":"文件一致的修复"));Space(stats,17);stats.Children.Add(T(demo?"数据模式：演示":"扫描于 "+report?.Time.ToString("HH:mm:ss"),11,muted));
-  root.Children.Add(Columns(Card(hero,"#EDF3E8",26),Card(stats),225));Space(root,18);
+  root.Children.Add(Columns(Card(hero,"#203B5C",26),Card(stats),225));Space(root,18);
   if(!demo){var counts=new WrapPanel();foreach(var label in new[]{"待修复","需联动","已安装","不适用","需核对"}){var button=Btn(label+"  "+states.Count(s=>s.Status==label),()=>{filter=label;ShowLibrary();},"Ghost");button.Margin=new(0,0,8,0);counts.Children.Add(button);}root.Children.Add(counts);Space(root,6);root.Children.Add(T("依据补丁说明核对实际文件 · 适配匹配不等于已确认发生故障",11,muted));Space(root,18);}
-  if(report?.Issues.Count>0&&!demo){root.Children.Add(Card(V(T("有 "+report.Issues.Count+" 项扫描问题需要核对",15,gold,true),T(report.Issues[0],12,muted),Btn("查看扫描报告",ExportReport,"Ghost")),"#F7F1E6",16));Space(root,20);}
+  if(report?.Issues.Count>0&&!demo){root.Children.Add(Card(V(T("有 "+report.Issues.Count+" 项扫描问题需要核对",15,gold,true),T(report.Issues[0],12,muted),Btn("查看扫描报告",ExportReport,"Ghost")),"#27364A",16));Space(root,20);}
   var section=new DockPanel();var more=Btn($"全部 {states.Count} 项  ↗",ShowLibrary,"Ghost");DockPanel.SetDock(more,Dock.Right);section.Children.Add(more);section.Children.Add(V(T(pending>0?"为你推荐":"最近修复",19,ink,true),T(demo?"根据示例模组组合匹配":"根据已收录文件版本匹配；未知依赖需进一步核对",12,muted)));root.Children.Add(section);Space(root,12);
   foreach(var s in states.Where(s=>s.Status is "待修复" or "需联动").Concat(states.Where(s=>s.Status=="需核对")).Concat(states.Where(s=>s.Status is "已安装" or "不适用")).Take(2)){root.Children.Add(PatchRow(s));Space(root,10);}
   SetPage("总览",root);toast.Text=demo?"演示数据仅供体验。真实安装请使用安装与回滚页。":"扫描完成。安装与回滚页会再次核对文件，确认后才执行操作。";
@@ -134,7 +134,7 @@ public partial class MainWindow : Window
  UIElement PatchRow(PatchState s)
  {
   var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new(46)});row.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new(100)});row.ColumnDefinitions.Add(new(){Width=new(88)});
-  var glyph=new Border{Width=34,Height=36,Background=B("#E8EFE1"),CornerRadius=new(7),Child=new TextBlock{Text=s.Patch.Id=="Act4FinalAscent"?"Ⅳ":"◇",FontSize=20,Foreground=gold,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center}};row.Children.Add(glyph);
+  var glyph=new Border{Width=34,Height=36,Background=B("#223C5D"),CornerRadius=new(7),Child=new TextBlock{Text=s.Patch.Id=="Act4FinalAscent"?"Ⅳ":"◇",FontSize=20,Foreground=gold,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center}};row.Children.Add(glyph);
   var title=V(T(s.Patch.Name,15,ink,true),T(demo?s.Patch.Summary:s.Reason,12,muted));Grid.SetColumn(title,1);row.Children.Add(title);
   var status=Badge(s.Status,s.Status=="已安装"?green:s.Status is "待修复" or "需联动"?gold:muted);status.HorizontalAlignment=HorizontalAlignment.Left;status.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(status,2);row.Children.Add(status);
   var detail=Btn("详情  →",()=>ShowDetail(s.Patch.Id),"Ghost");detail.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(detail,3);row.Children.Add(detail);
@@ -194,7 +194,7 @@ public partial class MainWindow : Window
   var progress=new ProgressBar{Minimum=0,Maximum=100,Height=5,Foreground=gold,Background=B("#EAF0E5"),BorderThickness=new(0)};
   var stage=T("校验适用版本…",15);var percent=T("0%",18,gold,true);
   var p=V(Badge("演示进行中",gold));Space(p,28);p.Children.Add(title);p.Children.Add(sub);Space(p,36);p.Children.Add(H(stage,percent));Space(p,16);p.Children.Add(progress);Space(p,28);p.Children.Add(T("校验 → 备份 → 应用 → 验证",12,muted));
-  SetPage("补丁库",Card(p,"#FFFFFF",36));toast.Text="演示期间请稍候。真实安装请使用安装与回滚页。";
+  SetPage("补丁库",Card(p,"#182942",36));toast.Text="演示期间请稍候。真实安装请使用安装与回滚页。";
   var labels=new[]{"校验适用版本…","生成备份记录（演示）…","应用关联修复（演示）…","验证文件状态（演示）…"};
   for(int i=0;i<4;i++){stage.Text=labels[i];for(int j=0;j<5;j++){progress.Value=i*25+(j+1)*5;percent.Text=progress.Value+"%";await Task.Delay(110);}}
   installed=true;states=Catalog.Demo(true);busy=false;ShowResult();
@@ -208,7 +208,7 @@ public partial class MainWindow : Window
   foreach(var name in new[]{"建筑家 BOSS 入场卡死","联机兼容校验更新"}){summary.Children.Add(H(T("✓",16,green,true),T(name,15)));Space(summary,12);}
   summary.Children.Add(Rule());summary.Children.Add(T("接下来",16,ink,true));Space(summary,8);summary.Children.Add(T("实际安装后，需要和队友一起重启游戏，再进入 BOSS 战验证首回合。",14,muted));Space(summary,24);summary.Children.Add(H(Btn("返回总览",ShowOverview,"Primary"),Btn("和队友比较",ShowCoop,"Ghost")));
   var backup=V(T("备份与撤销",17,ink,true));Space(backup,14);backup.Children.Add(T("原文件备份",12,muted));backup.Children.Add(T("演示：未创建真实备份",14,gold));Space(backup,20);backup.Children.Add(T("不符合预期时，可恢复安装前的状态。真实回滚会先检查后续更新。",13,muted));Space(backup,22);backup.Children.Add(Btn("预览回滚",()=>{installed=false;states=Catalog.Demo();ShowOverview();toast.Text="演示已恢复到安装前。没有真实文件需要回滚。";}));
-  root.Children.Add(Columns(Card(summary,"#EFF5EC",30),Card(backup),285));SetPage("补丁库",root);toast.Text="演示结束。你可以继续比较补丁状态，或预览回滚流程。";
+  root.Children.Add(Columns(Card(summary,"#203B5C",30),Card(backup),285));SetPage("补丁库",root);toast.Text="演示结束。你可以继续比较补丁状态，或预览回滚流程。";
  }
  void ResetDemo(){if(busy)return;demo=true;report=null;installed=false;states=Catalog.Demo();filter="全部";query="";ShowOverview();}
  async void ChooseFolder()
@@ -248,7 +248,7 @@ public partial class MainWindow : Window
  {
   var root=V(Header("PARTY CHECK","联机检查","导入队友清单，查看差异，按需对齐本机补丁。"));Space(root,20);
   var summary=V(T(demo?"演示配置 · 不读取游戏文件":report==null?"尚未扫描；导出或导入时会扫描当前目录":$"本机 {states.Count(s=>s.Status=="已安装")} 项修复已匹配 · 上次扫描 {report.Time:yyyy-MM-dd HH:mm:ss}",13,muted));Space(summary,10);
-  summary.Children.Add(H(Btn("导出我的清单",ExportReport,"Ghost"),Btn("导入队友清单  ↗",ImportPeer,"Primary")));Space(summary,8);summary.Children.Add(T("每次导出、比对都会重新扫描本机。队友文件有变化时，需要重新导出清单。",12,muted));root.Children.Add(Card(summary,"#FFFFFF",18));Space(root,18);
+  summary.Children.Add(H(Btn("导出我的清单",ExportReport,"Ghost"),Btn("导入队友清单  ↗",ImportPeer,"Primary")));Space(summary,8);summary.Children.Add(T("每次导出、比对都会重新扫描本机。队友文件有变化时，需要重新导出清单。",12,muted));root.Children.Add(Card(summary,"#182942",18));Space(root,18);
   AddCoopResults(root);root.IsEnabled=!busy;
   root.Children.Add(T("比较范围",15,ink,true));Space(root,8);root.Children.Add(T("此版本只比较已收录修复的状态，不包含全部原模组文件及玩法配置。状态一致不能单独证明所有联机条件完全相同。演示报告与真实报告会区分显示。",13,muted));SetPage("联机检查",root);
  }
