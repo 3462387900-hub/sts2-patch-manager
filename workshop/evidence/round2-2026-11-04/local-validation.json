@@ -1,0 +1,11 @@
+{
+  "offlineChecksPassed": 27,
+  "platform": "Windows",
+  "probeReleaseBuild": "passed, 0 warnings, 0 errors",
+  "exitCode": 0,
+  "realDownloadsByOfflineChecks": false,
+  "cliReleaseBuild": "passed, 0 warnings, 0 errors",
+  "managerChecksRunInThisCommand": false,
+  "outputDirectory": "workshop/test-output/check-3617b9f81d8b4229bec0dbebceb20c57",
+  "command": "workshop/验证.ps1"
+}

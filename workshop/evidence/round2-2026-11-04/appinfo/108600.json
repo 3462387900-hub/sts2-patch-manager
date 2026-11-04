@@ -1,0 +1,23 @@
+{
+  "appId": 108600,
+  "name": "Project Zomboid",
+  "workshopDepot": 108600,
+  "resolvedDepot": 108600,
+  "depotKeys": [
+    "228983",
+    "228984",
+    "228985",
+    "228986",
+    "228987",
+    "overridescddb",
+    "markdlcdepots",
+    "108602",
+    "108603",
+    "108604",
+    "108601",
+    "workshopdepot",
+    "branches",
+    "privatebranches"
+  ],
+  "changeNumber": 40573541
+}

@@ -1,0 +1,23 @@
+{
+  "anonymous": true,
+  "utc": "2026-11-04T07:59:54.8374292+00:00",
+  "events": [
+    "CM=cmp1-waw2.steamserver.net:443",
+    "Anonymous logon=OK",
+    "{\"appId\":2868840,\"name\":\"Slay the Spire 2\",\"workshopDepot\":2868840,\"resolvedDepot\":2868840,\"depotKeys\":[\"2868843\",\"2868842\",\"2868841\",\"workshopdepot\",\"branches\",\"privatebranches\"],\"changeNumber\":40550662}",
+    "{\"appId\":108600,\"name\":\"Project Zomboid\",\"workshopDepot\":108600,\"resolvedDepot\":108600,\"depotKeys\":[\"228983\",\"228984\",\"228985\",\"228986\",\"228987\",\"overridescddb\",\"markdlcdepots\",\"108602\",\"108603\",\"108604\",\"108601\",\"workshopdepot\",\"branches\",\"privatebranches\"],\"changeNumber\":40573541}",
+    "{\"appId\":294100,\"name\":\"RimWorld\",\"workshopDepot\":294100,\"resolvedDepot\":294100,\"depotKeys\":[\"overridescddb\",\"baselanguages\",\"workshopdepot\",\"hasdepotsindlc\",\"294101\",\"294104\",\"294102\",\"294103\",\"367682\",\"367680\",\"367681\",\"1149641\",\"1149644\",\"1149642\",\"1149643\",\"294105\",\"294106\",\"294107\",\"294108\",\"367683\",\"367684\",\"367685\",\"367686\",\"294109\",\"294110\",\"294111\",\"294112\",\"294113\",\"294114\",\"294115\",\"294116\",\"branches\",\"privatebranches\"],\"changeNumber\":40564609}",
+    "Control 2169435993: app=108600, depot=108600, manifest=6466203745895545661",
+    "Control 2169435993: request-code EResult=OK",
+    "Control 2169435993: depot-key EResult=OK",
+    "Control 2169435993: CDN=cache9-dfw2.steamcontent.com",
+    "Control 2169435993: manifest files=5, bytes=31729",
+    "Control 2169435993: downloaded and verified 5 files, 31729 bytes",
+    "Control 3459650108: app=294100, depot=294100, manifest=4317076369756577016",
+    "Control 3459650108: request-code EResult=OK",
+    "Control 3459650108: depot-key EResult=OK",
+    "Control 3459650108: CDN=cache9-dfw2.steamcontent.com",
+    "Control 3459650108: manifest files=128, bytes=2626802",
+    "Control 3459650108: downloaded and verified 128 files, 2626802 bytes"
+  ]
+}

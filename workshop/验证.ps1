@@ -11,6 +11,8 @@ dotnet restore $tests --locked-mode
 if ($LASTEXITCODE) { throw '测试依赖锁定还原失败。' }
 dotnet build $cli -c Release --no-restore
 if ($LASTEXITCODE) { throw 'CLI 构建失败。' }
+dotnet build (Join-Path $PSScriptRoot 'SpirePatch.Workshop.Probe/SpirePatch.Workshop.Probe.csproj') -c Release -p:RestoreLockedMode=true
+if ($LASTEXITCODE) { throw '第二轮固定样本诊断工具构建失败。' }
 dotnet run --project $tests -c Release --no-restore -- (Join-Path $run 'offline')
 if ($LASTEXITCODE) { throw '隔离单元测试失败。' }
 if ($IncludeManagerChecks) {

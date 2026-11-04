@@ -1,0 +1,16 @@
+{
+  "officialBootstrapUrl": "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip",
+  "bootstrapZipSha256": "7669B170DEE42DB8EE2273775ED7DFB2D173BDBA1B849F70D2C7B379290BCE13",
+  "bootstrapExeBytes": 1687464,
+  "authenticodeStatus": "Valid",
+  "signer": "CN=Valve, OU=Digital ID Class 3 - Microsoft Software Validation v2, O=Valve, S=Washington, C=US",
+  "startupStatus": "not executed: automatic approval rejected bootstrap startup",
+  "toolReason": "rejected: blocked by policy",
+  "moreSpecificReasonProvided": false,
+  "steamcmdRuntimeLogs": null,
+  "note": "No SteamCMD process or download result is claimed. This is a tool rejection record, not a Steam error.",
+  "items": [
+    { "appId": 2868840, "workshopId": "3830179251", "status": "not executed" },
+    { "appId": 2868840, "workshopId": "3830005491", "status": "not executed" }
+  ]
+}

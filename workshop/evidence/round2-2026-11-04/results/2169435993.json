@@ -1,0 +1,44 @@
+{
+  "id": 2169435993,
+  "appId": 108600,
+  "depot": 108600,
+  "manifestId": "6466203745895545661",
+  "route": "anonymous CM request-code + depot-key + HTTPS CDN + SteamKit2 chunk decode",
+  "manifestDownloaded": true,
+  "filesDownloaded": true,
+  "fileCount": 5,
+  "bytes": 31729,
+  "integrity": "chunk length/Adler32/SHA1 and manifest file length/SHA1; local SHA256",
+  "files": [
+    {
+      "Path": "mods/ModOptions/logo.png",
+      "Bytes": 2284,
+      "Sha1": "0B87330676C5526DEE21E8ACB4AB176DC8FF7972",
+      "Sha256": "E20F5F943220F59ADE9B0AB8916038111032326569AF51584E31C049E4312910"
+    },
+    {
+      "Path": "mods/ModOptions/logo_mini.png",
+      "Bytes": 213,
+      "Sha1": "7A6A538ECDBF207A8F37E672349A5C024A39B603",
+      "Sha256": "E56A44CB12509A8EEDA2CD9A1D03B56B8958A605757DCE67CBA49E2E8BE95ADC"
+    },
+    {
+      "Path": "mods/ModOptions/media/lua/client/!!CustomOptions.lua",
+      "Bytes": 14486,
+      "Sha1": "08CA8BF24CAA6FB38EF268A7D9DBD34053BAEDED",
+      "Sha256": "A87542B0CD94EE22EA7246BF61907C35460B2D7C3CBEFAAB480A453CAEE1F1F2"
+    },
+    {
+      "Path": "mods/ModOptions/media/lua/shared/!ModOptionsEngine.lua",
+      "Bytes": 14578,
+      "Sha1": "44ED2788FEB0AD133177EED40A690DCCC78355C1",
+      "Sha256": "F794BE99DABF09A88B16E51EC011E97EDD1835B20CFBA988A83015B19CEAC81A"
+    },
+    {
+      "Path": "mods/ModOptions/mod.info",
+      "Bytes": 168,
+      "Sha1": "3C99960C02C377840A8A8AB143B9678A875CF98E",
+      "Sha256": "D68FEACD30704EC496ED83B2F01375C9FD8F4F4E2C00003656509AA5F2F61CA0"
+    }
+  ]
+}
