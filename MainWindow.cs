@@ -124,6 +124,26 @@ public partial class MainWindow : Window
   var stats=V(T("这套环境",12,muted));Space(stats,13);
   stats.Children.Add(Stat(demo?"51":(report?.ModCount??0).ToString(),demo?"示例模组":"检测到的模组"));Space(stats,17);stats.Children.Add(Stat(done.ToString(),demo?"示例已安装修复":"文件一致的修复"));Space(stats,17);stats.Children.Add(T(demo?"数据模式：演示":"扫描于 "+report?.Time.ToString("HH:mm:ss"),11,muted));
   root.Children.Add(Columns(Card(hero,"#203B5C",26),Card(stats),225));Space(root,18);
+  // Keep actionable MOD updates and stale patch evidence visible on the start page.
+  if(!demo&&modInventory!=null&&selectedInstallRoot!=null)
+  {
+   var updates=GitHubUpdates();
+   int available=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    updates.Cached(m.Id)?.Status=="有更新");
+   var tasks=new WrapPanel{Margin=new Thickness(0,0,0,13)};
+   if(available>0)
+   {
+    var b=Btn("⇩ "+available+" 个 MOD 有更新 · 查看",ShowModUpdatesCenter,"Ghost");
+    b.Margin=new Thickness(0,0,10,8);tasks.Children.Add(b);
+   }
+   if(lifecycleStale)
+   {
+    var b=Btn("◇ 修复健康需要复核 · 查看",ShowLifecycle,"Ghost");
+    b.Margin=new Thickness(0,0,10,8);tasks.Children.Add(b);
+   }
+   if(tasks.Children.Count>0)root.Children.Add(Card(tasks,"#1C3048",12));
+  }
+
   if(!demo){var counts=new WrapPanel();foreach(var label in new[]{"待修复","需联动","已安装","不适用","需核对"}){var button=Btn(label+"  "+states.Count(s=>s.Status==label),()=>{filter=label;ShowLibrary();},"Ghost");button.Margin=new(0,0,8,0);counts.Children.Add(button);}root.Children.Add(counts);Space(root,6);root.Children.Add(T("依据补丁说明核对实际文件 · 适配匹配不等于已确认发生故障",11,muted));Space(root,18);}
   if(report?.Issues.Count>0&&!demo){root.Children.Add(Card(V(T("有 "+report.Issues.Count+" 项扫描问题需要核对",15,gold,true),T(report.Issues[0],12,muted),Btn("查看扫描报告",ExportReport,"Ghost")),"#27364A",16));Space(root,20);}
   var section=new DockPanel();var more=Btn($"全部 {states.Count} 项  ↗",ShowLibrary,"Ghost");DockPanel.SetDock(more,Dock.Right);section.Children.Add(more);section.Children.Add(V(T(pending>0?"为你推荐":"最近修复",19,ink,true),T(demo?"根据示例模组组合匹配":"根据已收录文件版本匹配；未知依赖需进一步核对",12,muted)));root.Children.Add(section);Space(root,12);
