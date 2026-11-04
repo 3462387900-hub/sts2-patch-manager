@@ -83,7 +83,7 @@ public sealed class ManagerUpdates : IDisposable
  {
   Validate(release);destination=Path.GetFullPath(destination);
   Require(Path.GetExtension(destination).Equals(".zip",StringComparison.OrdinalIgnoreCase),"请保存为 ZIP 更新包。");
-  using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromMinutes(10));ct=timeout.Token;
+  using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromMinutes(45));ct=timeout.Token;
   string temporary=destination+"."+Guid.NewGuid().ToString("N")+".part";
   try{
    using var response=await OpenDownloadAsync(release,ct,preferAssetApi);
