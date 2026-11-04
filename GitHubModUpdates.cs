@@ -26,7 +26,7 @@ internal sealed class GitHubModUpdates : IDisposable
  {
   var key=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(gameRoot).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant())));
   file=Path.Combine(dataRoot,"GitHub模组更新",key+".json");
-  client=handler==null?new HttpClient():new HttpClient(handler);
+  client=GitHubNetwork.CreateClient(handler);
   client.Timeout=TimeSpan.FromSeconds(15);
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
   if(File.Exists(file))
