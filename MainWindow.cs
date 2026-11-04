@@ -24,8 +24,8 @@ public partial class MainWindow : Window
   rememberEnvironment=onlineStartup;if(updates!=null)managerUpdates=updates;
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
   Closing+=(_,e)=>{if(transactionWriting){e.Cancel=true;MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");}else {preparationCancellation?.Cancel();managerUpdateCancellation?.Cancel();}};
-  Background=B("#0D1524");Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
-  shell.Background=new LinearGradientBrush(B("#0D1524").Color,B("#192B46").Color,55);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
+  Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
+  shell.Background=new LinearGradientBrush(Color.FromArgb(232,13,21,36),Color.FromArgb(237,25,43,70),55);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
   SourceInitialized+=(_,_)=>SpireGlassBackdrop.Enable(this);
   shell.ColumnDefinitions.Add(new(){Width=new(205)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
