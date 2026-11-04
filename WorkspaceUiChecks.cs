@@ -31,8 +31,17 @@ public partial class MainWindow
     ready=null;await Task.Delay(60);
    }
    if(ready==null)throw new InvalidOperationException("界面操作按钮一直不可用："+label);
-   ready.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-   for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
+   // Raise the WPF Click synchronously on the dispatcher: an asynchronous
+   // UIAutomation Invoke can arrive *after* the next test navigation and
+   // unexpectedly replace its page. The button's own Click handlers and safety
+   // guards still run unmodified.
+   ready.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,ready));
+   await Idle();
+   for(int i=0;i<150&&(busy||transactionWriting);i++)
+   {
+    await Task.Delay(60);
+    await Idle();
+   }
    if(busy||transactionWriting)throw new InvalidOperationException("UI 操作超时："+label);
    await Idle();
   }
@@ -44,6 +53,20 @@ public partial class MainWindow
   Check(SpireGlassTheme.GlassPanel() is LinearGradientBrush surface&&
    surface.GradientStops.All(stop=>stop.Color.A<235),
    "glass cards allow blurred and ambient backdrop to show through");
+  var baseButton=(Style)FindResource(typeof(Button));
+  var defaultBorder=(SolidColorBrush)((Setter)baseButton.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  Check(defaultBorder.Color.A<=85,
+   "normal buttons use soft translucent strokes rather than sharp opaque outlines");
+  var primaryStyle=(Style)FindResource("Primary");
+  var primaryBorder=(SolidColorBrush)((Setter)primaryStyle.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  Check(primaryBorder.Color.A<=100,
+   "primary action buttons avoid opaque duplicate fill outlines");
+  Check(SpireGlassTheme.Background(true) is LinearGradientBrush newTint&&
+   newTint.GradientStops.All(stop=>stop.Color.A<=120),
+   "balanced native acrylic no longer uses a nearly opaque window overlay");
+  Check(SpireGlassTheme.Background(true,true) is SolidColorBrush diagnosticTint&&
+   diagnosticTint.Color.A<=20,
+   "bare acrylic diagnostic can expose the actual desktop composition without decorative color");
   Check(Controls<Canvas>(shell).Any(c=>!c.IsHitTestVisible&&c.Children.Count>=3),
    "decorative glass fallback is rendered behind navigation without stealing pointer input");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");

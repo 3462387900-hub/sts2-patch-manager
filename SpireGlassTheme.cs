@@ -9,13 +9,14 @@ namespace SpirePatch;
 /// <summary>Visual glass layering shared by native Acrylic and an opaque fallback.</summary>
 internal static class SpireGlassTheme
 {
- internal static Brush Background(bool nativeAcrylic)
+ internal static Brush Background(bool nativeAcrylic,bool diagnostic=false)
  {
-  // On Windows 11, the tint must remain substantially translucent:
-  // 0xA0 (~63%) instead of the former 0xE8 (~91%) that hid the native blur.
+  // The previous 63%-68% full-window tint masked most Desktop Acrylic detail.
+  // Diagnostic temporarily removes nearly all tint so the OS blur can be tested against a high-contrast window behind this one.
   if(nativeAcrylic)
-   return new LinearGradientBrush(Color.FromArgb(160,11,19,34),
-    Color.FromArgb(173,21,34,55),58);
+   return diagnostic
+    ? new SolidColorBrush(Color.FromArgb(16,10,18,31))
+    : new LinearGradientBrush(Color.FromArgb(95,11,19,34),Color.FromArgb(112,21,34,55),58);
   // Without DWM Acrylic never leave a transparent WPF window exposing black pixels.
   return new LinearGradientBrush(Color.FromRgb(12,21,38),
    Color.FromRgb(27,43,69),58);
@@ -24,12 +25,12 @@ internal static class SpireGlassTheme
  internal static Brush GlassPanel(string? color=null)
  {
   if(color!=null)return (Brush)new BrushConverter().ConvertFromString(color)!;
-  return new LinearGradientBrush(Color.FromArgb(219,29,46,71),
-   Color.FromArgb(199,19,33,55),110);
+  return new LinearGradientBrush(Color.FromArgb(189,29,46,71),
+   Color.FromArgb(177,19,33,55),110);
  }
 
  internal static Brush PanelStroke()=>new LinearGradientBrush(
-  Color.FromArgb(94,196,222,255),Color.FromArgb(48,108,143,188),90);
+  Color.FromArgb(57,196,222,255),Color.FromArgb(28,108,143,188),90);
 
  static Ellipse Halo(double width,double height,Color color,double opacity)
  {
@@ -49,7 +50,7 @@ internal static class SpireGlassTheme
   };
  }
 
- internal static void AddAmbientGlow(Grid root)
+ internal static Canvas AddAmbientGlow(Grid root)
  {
   // Static, non-interactive blurred lights make translucent surfaces legible and
   // visibly layered even on Windows versions that cannot provide Desktop Acrylic.
@@ -62,5 +63,6 @@ internal static class SpireGlassTheme
   var violet=Halo(410,380,Color.FromRgb(124,85,175),.27);
   Canvas.SetRight(violet,-195);Canvas.SetBottom(violet,-145);ambient.Children.Add(violet);
   root.Children.Add(ambient); // Added first so it never covers interactive UI.
+  return ambient;
  }
 }
