@@ -58,7 +58,7 @@ public partial class MainWindow
    else
    {
     string size=(preview.Bytes/1024d/1024d).ToString("F1");
-    var approve=MessageBox.Show(this,$"预计释放 {size} MiB，包含 {preview.Jobs} 个历史更新任务和 {preview.Downloads} 个旧版 ZIP。\\n\\n最近一次成功更新的回滚记录、个人设置、MOD 和游戏文件会保留。清理后的历史更新任务不可恢复。\\n\\n确认清理吗？",
+    var approve=MessageBox.Show(this,$"预计释放 {size} MiB，包含 {preview.Jobs} 个历史更新任务和 {preview.Downloads} 个旧版 ZIP。\n\n最近一次成功更新的回滚记录、个人设置、MOD 和游戏文件会保留。清理后的历史更新任务不可恢复。\n\n确认清理吗？",
      "确认清理旧版本文件",MessageBoxButton.YesNo,MessageBoxImage.Warning);
     if(approve==MessageBoxResult.Yes)
     {
