@@ -17,6 +17,9 @@ jobs:
       - name: Build and test without touching a game
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly
+      - name: Verify release ZIP excludes runtime data
+        shell: pwsh
+        run: ./scripts/验证发布清理.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-build-and-checks
