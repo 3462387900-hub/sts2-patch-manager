@@ -170,7 +170,7 @@ public partial class MainWindow
     button.IsEnabled=!busy;
     content.Children.Add(button);
    }
-   root.Children.Add(Card(content,"#182942",16));Space(root,9);
+   root.Children.Add(Card(content,"#D9182942",16));Space(root,9);
   }
   root.Children.Add(T("说明：建议停用仅适用于已审核、精确匹配上游修复指纹的独立补丁。"+
    "涉及原 MOD 文件替换的内置修复必须另行验证；历史整合包回滚前应先重新启用被停用的补丁。",12,muted));

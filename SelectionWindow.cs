@@ -49,7 +49,7 @@ public partial class MainWindow
    var checkbox=new CheckBox{Content=state.Patch.Name,Foreground=ink,FontSize=14,IsChecked=requestedPatches.Contains(id)||automatic,IsEnabled=allowed&&!automatic,Margin=new(0,0,0,6)};
    checkbox.Checked+=(_,_)=>{requestedPatches.Add(id);ResolveSelection();ShowPatchSelection();};checkbox.Unchecked+=(_,_)=>{requestedPatches.Remove(id);ResolveSelection();ShowPatchSelection();};
    string caption=automatic?"自动关联 · 取消依赖它的选择后会自动移除":state.Status=="已安装"?"功能文件已匹配 · 可选择补齐说明":state.Status;
-   root.Children.Add(Card(V(checkbox,T(caption,12,automatic?gold:muted),T(state.Reason,12,muted)),"#182942",14));Space(root,8);
+   root.Children.Add(Card(V(checkbox,T(caption,12,automatic?gold:muted),T(state.Reason,12,muted)),"#D9182942",14));Space(root,8);
   }
   SetPage("安装与回滚",root,"selection",ShowPatchSelection);toast.Text="选择与检查不会修改游戏文件；下一步会列出实际差异，确认后才写入。";
  }

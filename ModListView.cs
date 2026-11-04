@@ -97,8 +97,8 @@ public sealed class ModRowControl : Border
 
  public ModRowControl()
  {
-  Background=Paint("#182942");
-  BorderBrush=Paint("#3C526D");
+  Background=SpireGlassTheme.GlassPanel("#D41A2D48");
+  BorderBrush=SpireGlassTheme.PanelStroke();
   BorderThickness=new Thickness(1);
   CornerRadius=new CornerRadius(10);
   Margin=new Thickness(0,3,6,4);
@@ -136,7 +136,7 @@ public sealed class ModRowControl : Border
 
   DataContextChanged+=(_,_)=>Refresh();
   MouseEnter+=(_,_)=>BorderBrush=Paint("#6C8EAF");
-  MouseLeave+=(_,_)=>BorderBrush=Paint("#3C526D");
+  MouseLeave+=(_,_)=>BorderBrush=SpireGlassTheme.PanelStroke();
  }
 
  static Button MakeButton(string name,Action action)

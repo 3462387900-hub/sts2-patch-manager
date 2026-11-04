@@ -65,7 +65,7 @@ public partial class MainWindow
   foreach(var group in groups){
    var rows=V(T(PlanPresentation.GroupName(group.Key),14,ink,true),T(group.Key,11,muted));Space(rows,8);
    foreach(var file in group){var row=T((skipped?"已匹配，跳过":PlanPresentation.Action(file))+" · "+Path.GetFileName(file.Relative.Replace('/',Path.DirectorySeparatorChar)),12,muted);row.ToolTip=file.Relative;rows.Children.Add(row);Space(rows,4);}
-   body.Children.Add(Card(rows,"#182942",14));Space(body,8);
+   body.Children.Add(Card(rows,"#D9182942",14));Space(body,8);
   }
   root.Children.Add(new Expander{Header=$"{title} · {groups.Length} 个模组目录 / {files.Length} 个文件",Content=body,IsExpanded=expanded});Space(root,12);
  }
