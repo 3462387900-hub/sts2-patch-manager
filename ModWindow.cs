@@ -625,6 +625,7 @@ public partial class MainWindow
   filterBar.Children.Add(filters);header.Children.Add(filterBar);
   var selectionBar=new WrapPanel{Margin=new Thickness(0,3,0,8)};
   var checkAll=new CheckBox{Content="全选当前结果",Margin=new Thickness(0,7,12,0)};
+  if(FindResource("ModCardCheckBox") is Style cardCheckStyle)checkAll.Style=cardCheckStyle;
   var selectionCount=T("",13,ink,true);selectionCount.Margin=new Thickness(0,7,12,0);
   selectionBar.Children.Add(checkAll);selectionBar.Children.Add(selectionCount);
   var findBatch=Btn("查找 GitHub 来源",BatchFindGitHub,"Ghost");
@@ -684,7 +685,7 @@ public partial class MainWindow
    else CheckGitHubMod(row.Mod);
   },(row,value)=>{
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
-   row.Selected=value;ModCardList.RefreshVisible(list);UpdateSelectionToolbar();
+   row.Selected=value;UpdateSelectionToolbar();
   });
   activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
   var footer=V(empty);
