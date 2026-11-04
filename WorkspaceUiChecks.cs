@@ -135,9 +135,12 @@ public partial class MainWindow
   Check(chosenModFolders.Contains(checkedFolder)&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("已选 1 项")),
    "card checkbox updates selected folders and the batch toolbar");
-  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First())&&
-   cardToSelect.BorderThickness.Left==1&&cardToSelect.SelectBox.ActualWidth>=29,
-   "checkbox selection updates in place, preserves card geometry and keeps an accessible hit area");
+  Check(cardToSelect.BorderThickness.Left==1,
+   "card border remains a constant 1px after toggling the selection");
+  Check(cardToSelect.SelectBox.ActualWidth>=29,
+   "glass checkbox hit target is at least 29px; actual "+cardToSelect.SelectBox.ActualWidth);
+  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
+   "checkbox selection does not reconstruct its original card");
   await Shot("02-模组卡片勾选状态");
   var selectionSearch=Controls<TextBox>(shell).Single();
   selectionSearch.Text="__筛选不匹配__";await Idle();
