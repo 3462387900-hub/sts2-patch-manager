@@ -97,7 +97,7 @@ public sealed class ModRowControl : Border
 
  public ModRowControl()
  {
-  Background=SpireGlassTheme.GlassPanel("#D41A2D48");
+  Background=SpireGlassTheme.GlassPanel("#BE1A2D48");
   BorderBrush=SpireGlassTheme.PanelStroke();
   BorderThickness=new Thickness(1);
   CornerRadius=new CornerRadius(10);
