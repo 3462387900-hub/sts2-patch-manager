@@ -30,7 +30,7 @@ internal static class SpireGlassTheme
  }
 
  internal static Brush PanelStroke()=>new LinearGradientBrush(
-  Color.FromArgb(94,196,222,255),Color.FromArgb(48,108,143,188),90);
+  Color.FromArgb(57,196,222,255),Color.FromArgb(28,108,143,188),90);
 
  static Ellipse Halo(double width,double height,Color color,double opacity)
  {
