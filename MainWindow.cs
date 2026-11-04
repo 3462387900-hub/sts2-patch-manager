@@ -84,6 +84,11 @@ public partial class MainWindow : Window
   root.Children.Add(Card(V(T("诊断游戏日志",17,ink,true),T("查看已收录的错误特征，不会自动修改游戏文件。",13,muted),Btn("打开诊断",ShowDiagnosis,"Primary"))));Space(root,12);
   root.Children.Add(Card(V(T("游戏目录",17,ink,true),T("选择当前游戏安装位置；切换后旧扫描与操作预览会失效。",13,muted),Btn("定位游戏目录",ShowLocations,"Ghost"))));Space(root,12);
   root.Children.Add(Card(V(T("管理器更新",17,ink,true),T("检查更新和查看历史记录，不会自动安装版本。",13,muted),Btn("查看管理器更新",ShowManagerUpdates,"Ghost"))));
+  Space(root,12);
+  var net=GitHubNetwork.Load(installer.DataRoot);
+  root.Children.Add(Card(V(T("GitHub 网络",17,ink,true),
+   T("当前："+(net.Mode=="local"?"本机 HTTP 代理 "+net.ProxyUrl:"跟随系统网络")+"；仓库连接失败或更新下载缓慢时可先诊断。",13,muted),
+   H(Btn("设置代理",ConfigureGitHubNetwork,"Ghost"),Btn("诊断 GitHub 连接",DiagnoseGitHubNetwork,"Ghost")))));
   SetPage("工具与设置",root,restore:ShowTools);
  }
  void SetPage(string active,UIElement element,string? key=null,Action? restore=null)
