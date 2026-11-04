@@ -9,7 +9,8 @@ public partial class MainWindow
  readonly ManagerUpdates managerUpdates=new();
  ManagerRelease? managerRelease;
  CancellationTokenSource? managerUpdateCancellation;
- bool managerUpdateBusy,managerUpdateChecked;
+ bool managerUpdateBusy,managerUpdateChecked,managerCleanupBusy;
+ string managerCleanupStatus="保留最新一次成功更新的回滚备份；仅清理已经确认可删除的旧任务和缓存。";
  string managerUpdateStatus="检查管理器自己的新版本，更新与否由你决定。";
  string? managerDownload;
  Button? managerUpdateButton;
@@ -34,11 +35,60 @@ public partial class MainWindow
   root.Children.Add(T("如何更新",17,ink,true));Space(root,8);
   root.Children.Add(T("选择“下载并更新”并确认后，下载、校验、备份、替换与重新打开会自动完成。安装路径、快捷方式、设置和缓存继续使用；游戏与模组文件不受影响。文件替换失败时会尝试恢复上一版。",13,muted));
   Space(root,10);root.Children.Add(Btn("查看管理器更新记录",()=>{string folder=Path.Combine(installer.DataRoot,"管理器更新");if(Directory.Exists(folder))OpenUrl(folder);else toast.Text="还没有管理器更新记录。";},"Ghost"));
+  Space(root,18);
+  var cleanup=Btn(managerCleanupBusy?"正在扫描旧版本…":"清理旧版本文件",CleanupOldManagerFiles,"Ghost");
+  cleanup.IsEnabled=CanUpdateManager&&!managerCleanupBusy;
+  root.Children.Add(Card(V(T("旧版本文件清理",17,ink,true),
+   T("仅检查管理器生成的历史更新任务和下载缓存。自动保留最近一次成功更新的回滚记录，失败及来源未知的文件不会清理。",13,muted),
+   T(managerCleanupStatus,12,gold),cleanup)));
+  Space(root,12);
   string resultPath=Path.Combine(installer.DataRoot,"管理器更新","最近结果.json");if(File.Exists(resultPath)){try{using var result=System.Text.Json.JsonDocument.Parse(File.ReadAllText(resultPath));Space(root,12);root.Children.Add(T("最近一次："+result.RootElement.GetProperty("message").GetString(),13,muted));}catch{}}
   SetPage("检查更新",root,restore:ShowManagerUpdates);toast.Text="更新由你确认；会保留程序备份和个人数据。";
  }
  void DeferManagerUpdate(){if(managerUpdateBusy)return;if(backHistory.Count>0)GoBack();else ShowOverview();}
- bool CanUpdateManager=>!managerUpdateBusy&&!busy&&!transactionWriting&&!onlineBusy;
+ bool CanUpdateManager=>!managerUpdateBusy&&!managerCleanupBusy&&!busy&&!transactionWriting&&!onlineBusy;
+ async void CleanupOldManagerFiles()
+ {
+  if(!CanUpdateManager)return;
+  managerCleanupBusy=true;ShowManagerUpdates();
+  try
+  {
+   var preview=await Task.Run(()=>ManagerUpdateCleanup.Preview(AppContext.BaseDirectory));
+   if(preview.Items.Length==0)managerCleanupStatus="未发现可安全清理的历史更新文件。";
+   else
+   {
+    string size=(preview.Bytes/1024d/1024d).ToString("F1");
+    var approve=MessageBox.Show(this,$"预计释放 {size} MiB，包含 {preview.Jobs} 个历史更新任务和 {preview.Downloads} 个旧版 ZIP。\n\n最近一次成功更新的回滚记录、个人设置、MOD 和游戏文件会保留。清理后的历史更新任务不可恢复。\n\n确认清理吗？",
+     "确认清理旧版本文件",MessageBoxButton.YesNo,MessageBoxImage.Warning);
+    if(approve==MessageBoxResult.Yes)
+    {
+     var result=await Task.Run(()=>ManagerUpdateCleanup.Clean(AppContext.BaseDirectory,preview));
+     managerCleanupStatus=$"已清理 {result.Removed} 项，释放 {result.FreedBytes/1024d/1024d:F1} MiB。"+
+      (result.Errors.Length>0?" 部分文件未能清理："+string.Join("；",result.Errors.Take(2)):"");
+    }
+    else managerCleanupStatus="已取消清理，所有文件保持不变。";
+   }
+  }
+  catch(Exception ex){managerCleanupStatus="清理未执行："+ex.Message;}
+  finally{managerCleanupBusy=false;if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
+ }
+ internal async Task CleanupOnNormalLaunchAsync()
+ {
+  try
+  {
+   await Task.Delay(1200);
+   for(int retry=0;retry<30&&(managerUpdateBusy||busy||transactionWriting||onlineBusy);retry++)
+    await Task.Delay(500);
+   if(!CanUpdateManager)return;
+   managerCleanupBusy=true;
+   var preview=await Task.Run(()=>ManagerUpdateCleanup.Preview(AppContext.BaseDirectory));
+   if(preview.Items.Length==0)return;
+   var result=await Task.Run(()=>ManagerUpdateCleanup.Clean(AppContext.BaseDirectory,preview));
+   if(result.Removed>0)managerCleanupStatus=$"自动清理了 {result.Removed} 项历史文件，释放 {result.FreedBytes/1024d/1024d:F1} MiB；最近一次回滚备份已保留。";
+  }
+  catch(Exception){/* Startup cleanup is best effort and must never block the manager. */}
+  finally{managerCleanupBusy=false;if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
+ }
  bool ConfirmManagerUpdate()=>MessageBox.Show(this,"将下载并校验新版，自动保存当前程序备份，然后关闭此窗口、替换程序并重新打开。\n\n设置、缓存、原快捷方式与游戏模组会保留。现在更新吗？","更新管理器",MessageBoxButton.YesNo,MessageBoxImage.Question)==MessageBoxResult.Yes;
  async void DownloadAndApplyManagerUpdate()
  {
@@ -63,7 +113,7 @@ public partial class MainWindow
  }
  async Task CheckManagerUpdatesAsync(bool showPage)
  {
-  if(managerUpdateBusy)return;managerUpdateBusy=true;managerUpdateChecked=true;managerRelease=null;managerDownload=null;managerUpdateStatus="正在检查正式发布…";managerUpdateCancellation=new();
+  if(managerUpdateBusy||managerCleanupBusy)return;managerUpdateBusy=true;managerUpdateChecked=true;managerRelease=null;managerDownload=null;managerUpdateStatus="正在检查正式发布…";managerUpdateCancellation=new();
   if(showPage)ShowManagerUpdates();
   try{
    managerRelease=await managerUpdates.CheckAsync(managerUpdateCancellation.Token);
