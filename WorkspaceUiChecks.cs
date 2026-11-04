@@ -37,6 +37,15 @@ public partial class MainWindow
    await Idle();
   }
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
+  // Regression: a visually opaque overlay hid the native acrylic throughout v0.12.0.
+  Check(SpireGlassTheme.Background(true) is LinearGradientBrush acrylicTint&&
+   acrylicTint.GradientStops.All(stop=>stop.Color.A<190),
+   "native acrylic tint remains substantially transparent instead of hiding DWM blur");
+  Check(SpireGlassTheme.GlassPanel() is LinearGradientBrush surface&&
+   surface.GradientStops.All(stop=>stop.Color.A<235),
+   "glass cards allow blurred and ambient backdrop to show through");
+  Check(Controls<Canvas>(shell).Any(c=>!c.IsHitTestVisible&&c.Children.Count>=3),
+   "decorative glass fallback is rendered behind navigation without stealing pointer input");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");
   await Click("使用此目录",true);Check(selectedInstallRoot==first&&modInventory?.Mods.Count==7&&folderLabel.Text==first,"directory choice is shared by mod management and global controls");Check(launchButton?.IsEnabled==true,"launch game button becomes available after directory selection");
   await Click("← 上一步");Check(currentVisit?.Key=="游戏目录"&&selectedInstallRoot==first,"back returns to directory results without undoing chosen game directory");await Click("使用此目录",true);
@@ -46,7 +55,7 @@ public partial class MainWindow
   Check(page=="补丁库"&&Controls<Button>(content).Count(b=>new[]{"补丁库","在线补丁","补丁健康","安装与回滚"}.Contains(b.Content?.ToString()))==4,
    "patch center exposes all four existing patch views");
   ShowLifecycle();await Idle();
-  Check(page=="补丁健康"&&navButtons["修复补丁"].Background.ToString()==B("#284465").ToString(),
+  Check(page=="补丁健康"&&navButtons["修复补丁"].Background.ToString()==B("#6983B9F8").ToString(),
    "patch health keeps the patch-center navigation highlighted");
   ShowMods();await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="普通 MOD  (6)")&&
