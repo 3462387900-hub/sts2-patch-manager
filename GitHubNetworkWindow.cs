@@ -61,10 +61,10 @@ public partial class MainWindow
   {
    var entries=await GitHubNetwork.DiagnoseAsync(root:installer.DataRoot);
    var message="当前模式："+(GitHubNetwork.Load(installer.DataRoot).Mode=="local"?
-    "本机 HTTP 代理":"Windows 系统网络")+"\\n\\n"+
-    string.Join("\\n\\n",entries.Select(e=>e.Name+" ("+e.Host+")："+e.Status+
+    "本机 HTTP 代理":"Windows 系统网络")+"\n\n"+
+    string.Join("\n\n",entries.Select(e=>e.Name+" ("+e.Host+")："+e.Status+
      " · "+e.ElapsedMilliseconds+" 毫秒"))+
-    "\\n\\n如果只有下载速度慢，这个测试不能代表附件下载速度。可以尝试管理器更新页的官方备用通道。";
+    "\n\n如果只有下载速度慢，这个测试不能代表附件下载速度。可以尝试管理器更新页的官方备用通道。";
    MessageBox.Show(this,message,"GitHub 网络诊断",MessageBoxButton.OK,
     entries.All(e=>e.Success)?MessageBoxImage.Information:MessageBoxImage.Warning);
   }
