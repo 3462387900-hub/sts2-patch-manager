@@ -360,14 +360,14 @@ public partial class MainWindow
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   var header=V(Header("LOCAL MODS","模组管理","普通 MOD 和独立修复补丁分开管理；启停操作始终需要预览。"));
-  root.Children.Add(header);Space(header,13);
+  root.Children.Add(header);Space(header,9);
   if(selectedInstallRoot==null)
   {
    header.Children.Add(Card(V(T("请先定位游戏目录",17,ink,true),
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
    SetPage("模组管理",root,restore:ShowMods);return;
   }
-  var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;
+  var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
   var discoverAll=Btn("批量查找 GitHub 来源",DiscoverGitHubMods,"Ghost");
   discoverAll.IsEnabled=!busy&&modInventory!=null&&!modInventoryDirty;
   discoverAll.Visibility=modSection=="普通 MOD"?Visibility.Visible:Visibility.Collapsed;
@@ -375,8 +375,8 @@ public partial class MainWindow
    string directory=Path.Combine(selectedInstallRoot,"mods");
    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
   },"Ghost"),discoverAll));
-  Space(header,6);
-  header.Children.Add(T(modStatus,12,muted));Space(header,11);
+  Space(header,4);
+  header.Children.Add(T(modStatus,12,muted));Space(header,7);
   if(modInventoryDirty)
   {
    header.Children.Add(Card(V(T("检测到 MOD 文件变化 · 正在核对列表",13,gold,true),
@@ -390,13 +390,13 @@ public partial class MainWindow
   }
   var mods=modInventory?.Mods??[];
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
-  var groups=new WrapPanel{Margin=new Thickness(0,0,0,9)};
+  var groups=new WrapPanel{Margin=new Thickness(0,0,0,6)};
   foreach(var (name,count) in new[]{("普通 MOD",normalCount),("修复补丁",fixCount)})
   {
    string selected=name;
    var tab=Btn($"{name}  ({count})",()=>{
     CaptureModListOffset();modListOffset=0;modSection=selected;ShowMods();
-   },modSection==name?"Primary":"Ghost");
+   },modSection==name?"SelectedTab":"Ghost");
    tab.Margin=new Thickness(0,0,9,0);
    groups.Children.Add(tab);
   }
@@ -404,7 +404,7 @@ public partial class MainWindow
   header.Children.Add(T(modSection=="修复补丁"
    ?"已收录的独立补丁集中在此；分类不代表通过文件指纹校验。"
    :"普通 MOD（包括原 MOD 内置修复）显示在此。",12,muted));
-  Space(header,9);
+  Space(header,6);
   if(modSection=="修复补丁")
   {
    header.Children.Add(T(HasValidLifecycleReport
@@ -436,7 +436,7 @@ public partial class MainWindow
    Space(header,8);
   }
 
-  var searchArea=new Grid{Margin=new Thickness(0,0,0,8)};
+  var searchArea=new Grid{Margin=new Thickness(0,0,0,6)};
   var search=new TextBox{Text=modQuery,ToolTip="按 MOD 名称、ID、作者搜索"};
   search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索模组");
   searchArea.Children.Add(search);
@@ -447,7 +447,7 @@ public partial class MainWindow
   placeholder.Visibility=string.IsNullOrEmpty(modQuery)?Visibility.Visible:Visibility.Collapsed;
   searchArea.Children.Add(placeholder);
   header.Children.Add(searchArea);
-  var filterBar=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,7)};
+  var filterBar=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,5)};
   var shownCount=T("",12,muted);shownCount.VerticalAlignment=VerticalAlignment.Center;
   DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
   var filters=new WrapPanel();
@@ -455,7 +455,7 @@ public partial class MainWindow
   {
    string selected=name;
    var button=Btn(name,()=>{CaptureModListOffset();modListOffset=0;modFilter=selected;ShowMods();},
-    modFilter==name?"Primary":"Ghost");
+    modFilter==name?"SelectedTab":"Ghost");
    button.Margin=new Thickness(0,0,7,0);filters.Children.Add(button);
   }
   filterBar.Children.Add(filters);header.Children.Add(filterBar);
