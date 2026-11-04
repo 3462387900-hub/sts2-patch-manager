@@ -29,6 +29,7 @@ public sealed class ModCardControl : Border
  static readonly Brush SelectedCardStroke=Paint("#7B85B8E8");
  static readonly Brush NormalCardFill=Paint("#B21A2D48");
  static readonly Brush SelectedCardFill=Paint("#C129405C");
+ static readonly Brush SoftRule=Paint("#2F8CAACA");
  public ModCardControl()
  {
   Background=NormalCardFill;BorderBrush=NormalCardStroke;
@@ -50,11 +51,11 @@ public sealed class ModCardControl : Border
   detail.Click+=(_,_)=>{if(DataContext is ModListRow row)DetailsRequested?.Invoke(row);};
   head.Children.Add(detail);top.Children.Add(head);root.Children.Add(top);
   var fields=new StackPanel{Margin=new(0,12,0,10)};
-  fields.Children.Add(new Border{Height=1,Background=Brushes.SlateGray,Margin=new(0,0,0,9)});
+  fields.Children.Add(new Border{Height=1,Background=SoftRule,Margin=new(0,0,0,9)});
   AddField(fields,"模组 ID",id);AddField(fields,"版本号",version);AddField(fields,"作者",author);
   updateLabel=AddField(fields,"更新状态",github);AddField(fields,"依赖情况",depends);
   Grid.SetRow(fields,1);root.Children.Add(fields);
-  var foot=new StackPanel();foot.Children.Add(new Border{Height=1,Background=Brushes.SlateGray,Margin=new(0,0,0,8)});
+  var foot=new StackPanel();foot.Children.Add(new Border{Height=1,Background=SoftRule,Margin=new(0,0,0,8)});
   var actions=new Grid();
   actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
   actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
@@ -105,7 +106,7 @@ public sealed class ModCardControl : Border
   if(DataContext is not ModListRow row)return;
   title.Text=row.Name;title.ToolTip=row.Name;
   status.Text=row.State;status.Foreground=row.Mod.Enabled?Brushes.LightGreen:Brushes.LightGray;
-  stateBadge.Background=new SolidColorBrush(row.Mod.Enabled?Color.FromRgb(31,75,66):Color.FromRgb(54,67,86));
+  stateBadge.Background=new SolidColorBrush(row.Mod.Enabled?Color.FromArgb(118,31,75,66):Color.FromArgb(114,54,67,86));
   id.Text=row.Mod.Id;id.ToolTip=id.Text;
   version.Text=row.Mod.Version;version.ToolTip=version.Text;
   author.Text=row.Mod.Author;author.ToolTip=author.Text;
