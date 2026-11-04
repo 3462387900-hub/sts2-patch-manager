@@ -7,9 +7,10 @@ namespace SpirePatch;
 // Immutable, UI-only data. Safe enable/disable still goes through ModManager.Preview/Apply.
 internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason,string GitHubText="")
 {
+ public bool Selected{get;set;}
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
  public string Name=>Mod.Name;
- public string Details=>Mod.Id+"  ·  "+Mod.Version+"  ·  "+Mod.Author;
+ public string Details=>"模组 ID："+Mod.Id+"    版本号："+Mod.Version+"    作者："+Mod.Author;
  public string State=>Mod.Enabled?"已启用":"已停用";
  public string HealthText=>IsFix?"补丁健康："+Health:"";
  public string WarningText=>BlockReason==null?"":ModListView.BriefBlockReason(BlockReason);
@@ -26,10 +27,13 @@ internal static class ModListView
 
  internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query)=>
   rows.Where(row=>row.IsFix==(section=="修复补丁")&&
-   (state=="全部"||(state=="启用")==row.Mod.Enabled)&&
+   (state=="全部"||(state=="启用"&&row.Mod.Enabled)||(state=="停用"&&!row.Mod.Enabled)||
+   (state=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
+   (state=="有问题"&&row.BlockReason!=null))&&
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
   .ToArray();
 
+ internal static int ColumnCount(double width)=>width>=1080?3:width>=700?2:1;
  internal static string BriefBlockReason(string reason)
  {
   const string deps="这些启用项依赖它，请先停用依赖项：";
@@ -84,8 +88,8 @@ public sealed class ModRowControl : Border
  internal static readonly RoutedEvent MoreRequestedEvent=EventManager.RegisterRoutedEvent(
   "MoreRequested",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModRowControl));
 
- readonly TextBlock title=new(){FontSize=14,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock subtitle=new(){FontSize=12,Foreground=Paint("#B3C5DB"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock title=new(){FontSize=16,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock subtitle=new(){FontSize=14,Foreground=Paint("#B3C5DB"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#9AD7BC"),TextTrimming=TextTrimming.CharacterEllipsis};
  // One compact, ellipsized context line keeps GitHub and dependency details visible
  // without forcing the entire row to grow to four or five lines.
