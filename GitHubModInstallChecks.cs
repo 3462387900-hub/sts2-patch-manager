@@ -134,6 +134,23 @@ public static class GitHubModInstallChecks
   try{await installer.PackagesAsync(Local(root),"not/a/valid/repository");throw new Exception("bad repo accepted");}
   catch(InvalidDataException){}
   Check(true,"invalid GitHub repository identifiers are rejected");
+  // Cleanup may only affect explicitly selected, older manager-created backup slots.
+  var backupParent=Path.GetDirectoryName(moved)!;
+  string oldBackup=Path.Combine(backupParent,"20200101-000000000-test-old");
+  WriteMod(oldBackup,"0.5.0","older dll");
+  var candidates=GitHubModInstaller.CleanupCandidates(root,Local(root));
+  Check(candidates.Length==1&&candidates[0]==oldBackup,
+   "old backup cleanup never includes the most recent recovery slot");
+  try{GitHubModInstaller.CleanupBackups(root,Local(root),new[]{moved});throw new Exception("latest backup deleted");}
+  catch(InvalidDataException){}
+  Check(Directory.Exists(moved)&&Directory.Exists(oldBackup),
+   "cleanup refuses deleting the newest backup without touching old versions");
+  try{GitHubModInstaller.CleanupBackups(root,Local(root),new[]{modPath});throw new Exception("active MOD deleted");}
+  catch(InvalidDataException){}
+  Check(Directory.Exists(modPath),"cleanup cannot escape the manager-owned backup directory");
+  int deleted=GitHubModInstaller.CleanupBackups(root,Local(root),new[]{oldBackup});
+  Check(deleted==1&&!Directory.Exists(oldBackup)&&Directory.Exists(moved)&&Directory.Exists(modPath),
+   "explicit cleanup deletes only selected old versions and preserves current MOD and latest backup");
   Directory.Delete(root,true);
  }
 }
