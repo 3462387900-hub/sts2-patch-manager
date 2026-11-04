@@ -5,7 +5,7 @@ using System.Windows.Media;
 namespace SpirePatch;
 
 // Immutable, UI-only data. Safe enable/disable still goes through ModManager.Preview/Apply.
-internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason)
+internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason,string GitHubText="")
 {
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
  public string Name=>Mod.Name;
@@ -17,10 +17,10 @@ internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReas
 
 internal static class ModListView
 {
- internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health)=>
+ internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,Func<ManagedMod,string>? github=null)=>
   inventory.Mods.Select(mod=>new ModListRow(mod,
    ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
-   ModManager.BlockReason(root,mod,inventory)))
+   ModManager.BlockReason(root,mod,inventory),github?.Invoke(mod)??""))
   .OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
 
  internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query)=>
@@ -86,6 +86,7 @@ public sealed class ModRowControl : Border
  readonly TextBlock title=new(){FontSize=15,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock subtitle=new(){FontSize=11,Foreground=Paint("#6B796F"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#44795B"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock github=new(){FontSize=11,Foreground=Paint("#53705F"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock warning=new(){FontSize=11,Foreground=Paint("#93642F"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock status=new(){FontSize=11,FontWeight=FontWeights.SemiBold};
  readonly Border statusPill;
@@ -117,6 +118,7 @@ public sealed class ModRowControl : Border
   info.Children.Add(title);
   subtitle.Margin=new Thickness(0,2,0,0);info.Children.Add(subtitle);
   health.Margin=new Thickness(0,4,0,0);info.Children.Add(health);
+  github.Margin=new Thickness(0,4,0,0);info.Children.Add(github);
   warning.Margin=new Thickness(0,4,0,0);info.Children.Add(warning);
   Grid.SetColumn(info,1);grid.Children.Add(info);
 
@@ -158,6 +160,9 @@ public sealed class ModRowControl : Border
   health.Text=item.HealthText;
   health.Visibility=item.IsFix?Visibility.Visible:Visibility.Collapsed;
   health.ToolTip=item.HealthText;
+  github.Text=item.GitHubText;
+  github.ToolTip=item.GitHubText;
+  github.Visibility=string.IsNullOrEmpty(item.GitHubText)?Visibility.Collapsed:Visibility.Visible;
   warning.Text=item.WarningText;
   warning.ToolTip=item.BlockReason;
   warning.Visibility=item.BlockReason==null?Visibility.Collapsed:Visibility.Visible;

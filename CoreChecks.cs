@@ -17,6 +17,24 @@ public static class CoreChecks
   var changed=Catalog.Scan(root);Check(changed.Patches.Single(p=>p.Patch.Id=="Act4FinalAscent").Status=="需核对","unknown DLL is not marked compatible");
   var duplicate=Path.Combine(root,"mods","duplicate");Directory.CreateDirectory(duplicate);File.Copy(Path.Combine(mod,"manifest.json"),Path.Combine(duplicate,"manifest.json"));Check(Catalog.Scan(root).Issues.Any(i=>i.Contains("重复")),"duplicate mod IDs are reported");
   Check(File.ReadAllText(Path.Combine(mod,"Act4FinalAscent.dll"))=="unknown build","scanner leaves game files unchanged");
+  var settings=Path.Combine(root,"manager-data");
+  using(var github=new GitHubModUpdates(settings,root))
+  {
+   Check(GitHubModUpdates.TryNormalize("https://github.com/example/mod/releases",out var normalized)&&normalized=="example/mod","GitHub repository URL normalization");
+   Check(!GitHubModUpdates.TryNormalize("http://github.com/example/mod",out _),"GitHub rejects insecure repository URLs");
+   Check(!GitHubModUpdates.TryNormalize("https://example.com/example/mod",out _),"GitHub rejects unrelated hosts");
+   github.Bind("example.mod","https://github.com/example/mod");
+   Check(github.Repository("example.mod")=="example/mod","GitHub repository binding saved");
+  }
+  using(var reloaded=new GitHubModUpdates(settings,root))
+  {
+   Check(reloaded.Repository("example.mod")=="example/mod","GitHub binding survives restart");
+   reloaded.Unbind("example.mod");
+   Check(reloaded.Repository("example.mod")==null,"GitHub binding can be removed");
+  }
+  var sourced=GitHubModDiscovery.ManifestCandidates("""{"id":"example.mod","github_url":"https://github.com/example/mod"}""");
+  Check(sourced.Length==1&&sourced[0].Repository=="example/mod"&&sourced[0].Verified,"GitHub MOD discovery reads explicit manifest source");
+  Check(GitHubModDiscovery.ManifestCandidates("""{"id":"example.mod","homepage":"https://example.org"}""").Length==0,"GitHub discovery ignores non-GitHub sites");
   File.WriteAllLines(output,lines);
  }
 }
