@@ -80,7 +80,10 @@ public partial class MainWindow
   Check(offset>0&&Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
    "back restores virtualized MOD list scroll position");
   ListScroll(activeModList!)!.ScrollToTop();modListOffset=0;await Idle();await Shot("02-模组管理列表");
-  ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files");await Shot("03-停用前确认");await Click("确认停用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false&&!Directory.Exists(soloFolder),"actual disable button retains mod outside active directory");
+  ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files");await Shot("03-停用前确认");await Click("确认停用");
+  for(int retry=0;retry<100&&(modInventory?.Mods.SingleOrDefault(m=>m.Id=="TestSolo")?.Enabled!=false||Directory.Exists(soloFolder));retry++)
+   {await Task.Delay(60);await Idle();}
+  Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false&&!Directory.Exists(soloFolder),"actual disable button retains mod outside active directory; status="+modStatus);
   await Click("← 上一步");Check(modTogglePreview==null&&modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false,"back after a file operation cannot replay stale confirmation");
   ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder);await Click("预览启用");await Click("确认启用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled&&Directory.Exists(soloFolder),"actual enable button restores mod to original directory");await Shot("04-已恢复启用");
   ShowModDetail(modInventory.Mods.Single(m=>m.Id=="TestBase").Folder);await Idle();Check(!Controls<Button>(shell).Single(b=>b.Content?.ToString()=="预览停用").IsEnabled,"UI disables unsafe base-mod toggle and shows dependency reason");await Shot("05-前置依赖保护");
