@@ -87,7 +87,8 @@
   <Style TargetType="MenuItem"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#22344D"/></Style>
   <!-- Card-local glass controls: rounded hit area, translucent low-contrast strokes.
        Do not change checkboxes in installation or patch-selection workflows. -->
-  <Style x:Key="ModCardCheckBox" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+  <Style x:Key="ModCardCheckBox" TargetType="CheckBox">
+   <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="14"/>
    <Setter Property="Margin" Value="0"/><Setter Property="Cursor" Value="Hand"/>
    <Setter Property="FocusVisualStyle" Value="{StaticResource SoftFocusVisual}"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
