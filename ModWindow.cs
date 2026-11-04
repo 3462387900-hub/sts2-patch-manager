@@ -98,7 +98,7 @@ public partial class MainWindow
   var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
   body.Children.Add(H(save,remove,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
   dialog.Content=body;input.Focus();
-  if(dialog.ShowDialog()==true)ShowModDetail(mod.Folder);
+  if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  async void CheckGitHubMod(ManagedMod mod)
  {
@@ -178,7 +178,7 @@ public partial class MainWindow
   {
    busy=false;
    if(changed)RefreshMods();
-   else if(gameRoot==selectedInstallRoot)ShowModDetail(mod.Folder);
+   else if(gameRoot==selectedInstallRoot){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
   }
  }
  void CleanOldModBackups(ManagedMod mod)
