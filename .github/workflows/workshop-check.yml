@@ -1,0 +1,28 @@
+name: Workshop isolated checks
+on:
+  push:
+    branches: [dev/workshop-anonymous-phase1]
+    paths: ['workshop/**', 'SpirePatch.csproj', '.github/workflows/workshop-check.yml']
+  pull_request:
+    paths: ['workshop/**', 'SpirePatch.csproj', '.github/workflows/workshop-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Build and isolated tests (no live Steam download)
+        shell: pwsh
+        run: ./workshop/验证.ps1 -IncludeManagerChecks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workshop-offline-results
+          path: |
+            workshop/test-output/**/test-results.json
+            workshop/test-output/check-*/*.txt

@@ -22,3 +22,8 @@
 **/数据/
 **/*.part
 **/startup-error.txt
+!/workshop/
+!/workshop/**
+**/bin/
+**/obj/
+/workshop/test-output/
