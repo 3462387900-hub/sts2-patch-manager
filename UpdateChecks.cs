@@ -43,6 +43,16 @@ public static class UpdateChecks
   string directory=Path.Combine(Path.GetDirectoryName(output)!,"更新隔离测试-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);string destination=Path.Combine(directory,"更新包.zip");
   using(var source=new ManagerUpdates(new Handler(r=>{anonymous&=r.Headers.Authorization==null;return new(HttpStatusCode.OK){Content=new ByteArrayContent(Payload)};}))){await source.DownloadAsync(sample,destination);Check(File.ReadAllBytes(destination).SequenceEqual(Payload)&&anonymous,"explicit download saves exact bytes after checksum verification without login");}
   int downloadRequests=0;using(var source=new ManagerUpdates(new Handler(r=>{downloadRequests++;return r.RequestUri!.Host=="github.com"?new(HttpStatusCode.Forbidden):new(HttpStatusCode.OK){Content=new ByteArrayContent(Payload)};}))){await source.DownloadAsync(sample,destination);Check(downloadRequests==2&&File.ReadAllBytes(destination).SequenceEqual(Payload),"unavailable direct download falls back to asset API and verifies bytes");}
+  var downloadHosts=new List<string>();
+  using(var alternate=new ManagerUpdates(new Handler(r=>{
+   downloadHosts.Add(r.RequestUri!.Host);
+   return new(HttpStatusCode.OK){Content=new ByteArrayContent(Payload)};
+  })))
+  {
+   await alternate.DownloadAsync(sample,destination,ct:default,preferAssetApi:true);
+   Check(downloadHosts.SequenceEqual(["api.github.com"])&&File.ReadAllBytes(destination).SequenceEqual(Payload),
+    "manual alternate channel starts with official asset API and verifies the same SHA256");
+  }
   File.WriteAllText(destination,"keep existing file");var corrupt=(byte[])Payload.Clone();corrupt[0]^=1;
   foreach(var bytes in new[]{corrupt,Payload[..^1],Payload.Concat(new byte[]{0}).ToArray()}){using var source=new ManagerUpdates(new Handler(_=>new(HttpStatusCode.OK){Content=new ByteArrayContent(bytes)}));try{await source.DownloadAsync(sample,destination);throw new Exception("bad download accepted");}catch(InvalidDataException){}Check(File.ReadAllText(destination)=="keep existing file"&&!Directory.EnumerateFiles(directory,"*.part").Any(),"corrupt or wrong-length download preserves existing destination and removes partial data");}
   using(var source=new ManagerUpdates(new Handler(_=>new(HttpStatusCode.OK){Content=new ByteArrayContent(Payload)}))){using var cancellation=new CancellationTokenSource();cancellation.Cancel();try{await source.DownloadAsync(sample,destination,ct:cancellation.Token);throw new Exception("cancel ignored");}catch(OperationCanceledException){}Check(File.ReadAllText(destination)=="keep existing file"&&!Directory.EnumerateFiles(directory,"*.part").Any(),"cancellation preserves existing file and removes temporary download");}
