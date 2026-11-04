@@ -32,9 +32,9 @@ public static class CoreChecks
    reloaded.Unbind("example.mod");
    Check(reloaded.Repository("example.mod")==null,"GitHub binding can be removed");
   }
-  var sourced=GitHubModDiscovery.ManifestCandidates("{\\"id\\":\\"example.mod\\",\\"github_url\\":\\"https://github.com/example/mod\\"}");
+  var sourced=GitHubModDiscovery.ManifestCandidates("""{"id":"example.mod","github_url":"https://github.com/example/mod"}""");
   Check(sourced.Length==1&&sourced[0].Repository=="example/mod"&&sourced[0].Verified,"GitHub MOD discovery reads explicit manifest source");
-  Check(GitHubModDiscovery.ManifestCandidates("{\\"id\\":\\"example.mod\\",\\"homepage\\":\\"https://example.org\\"}").Length==0,"GitHub discovery ignores non-GitHub sites");
+  Check(GitHubModDiscovery.ManifestCandidates("""{"id":"example.mod","homepage":"https://example.org"}""").Length==0,"GitHub discovery ignores non-GitHub sites");
   File.WriteAllLines(output,lines);
  }
 }
