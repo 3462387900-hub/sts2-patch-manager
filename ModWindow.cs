@@ -594,6 +594,27 @@ public partial class MainWindow
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   var footer=V(empty);
   Grid.SetRow(footer,2);root.Children.Add(footer);
+  int cardColumns=2;
+  void UpdateSelectionToolbar()
+  {
+   int count=ChosenMods().Length;
+   selectionCount.Text=count>0?"已选 "+count+" 项":"";
+   foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch})
+    button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
+   findBatch.IsEnabled=checkBatch.IsEnabled=enableBatch.IsEnabled=disableBatch.IsEnabled=
+    count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
+   checkAll.Checked-=OnCheckAll;checkAll.Unchecked-=OnCheckAll;
+   checkAll.IsChecked=visible.Length>0&&visible.All(r=>chosenModFolders.Contains(r.Mod.Folder));
+   checkAll.Checked+=OnCheckAll;checkAll.Unchecked+=OnCheckAll;
+  }
+  void OnCheckAll(object sender,RoutedEventArgs e)
+  {
+   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery))
+    if(checkAll.IsChecked==true)chosenModFolders.Add(row.Mod.Folder);
+    else chosenModFolders.Remove(row.Mod.Folder);
+   FilterRows();
+  }
   void FilterRows()
   {
    var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
@@ -612,6 +633,10 @@ public partial class MainWindow
    RememberPage("模组管理",()=>{modQuery=q;modFilter=f;modSection=g;ShowMods();});
   };
   FilterRows();
+  list.SizeChanged+=(_,_)=>{
+   int next=ModListView.ColumnCount(list.ActualWidth);
+   if(next!=cardColumns){cardColumns=next;FilterRows();}
+  };
   list.Loaded+=(_,_)=>Dispatcher.BeginInvoke(new Action(()=>{
    if(activeModList==list&&ListScroll(list) is { } scroll)scroll.ScrollToVerticalOffset(modListOffset);
   }),System.Windows.Threading.DispatcherPriority.Loaded);
