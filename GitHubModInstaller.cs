@@ -95,8 +95,8 @@ internal sealed class GitHubModInstaller : IDisposable
   response.EnsureSuccessStatusCode();
   using var doc=JsonDocument.Parse(await ReadBoundedAsync(response,1024*1024,timeout.Token));
   var data=doc.RootElement;
-  Require(data.ValueKind==JsonValueKind.Object&&data.TryGetProperty("assets",out var assets)&&
-   assets.ValueKind==JsonValueKind.Array,"GitHub Release 数据格式无效。");
+  if(data.ValueKind!=JsonValueKind.Object||!data.TryGetProperty("assets",out var assets)||
+   assets.ValueKind!=JsonValueKind.Array)throw new InvalidDataException("GitHub Release 数据格式无效。");
   Require(!data.GetProperty("draft").GetBoolean()&&!data.GetProperty("prerelease").GetBoolean(),
    "不自动安装草稿或预发布版本。");
   var tag=data.GetProperty("tag_name").GetString()??"";
