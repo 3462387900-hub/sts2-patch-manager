@@ -588,7 +588,7 @@ public partial class MainWindow
    else CheckGitHubMod(row.Mod);
   },(row,value)=>{
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
-   row.Selected=value;UpdateSelectionToolbar();
+   row.Selected=value;ModCardList.RefreshVisible(list);UpdateSelectionToolbar();
   });
   activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
