@@ -30,7 +30,7 @@ internal sealed class GitHubModInstaller : IDisposable
  readonly HttpClient client;
  public GitHubModInstaller(HttpMessageHandler? handler=null)
  {
-  client=handler==null?new HttpClient():new HttpClient(handler);
+  client=GitHubNetwork.CreateClient(handler);
   client.Timeout=Timeout.InfiniteTimeSpan;
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
  }
