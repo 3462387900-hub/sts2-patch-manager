@@ -17,7 +17,7 @@ public sealed class OnlineSource : IDisposable
  readonly HttpClient client;
  public OnlineSource(HttpMessageHandler? handler=null)
  {
-  client=handler==null?new HttpClient():new HttpClient(handler);
+  client=GitHubNetwork.CreateClient(handler);
   client.Timeout=TimeSpan.FromSeconds(30);
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
   // Public repository: no embedded or locally harvested access token.
