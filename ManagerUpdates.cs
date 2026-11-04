@@ -20,7 +20,7 @@ public sealed class ManagerUpdates : IDisposable
  readonly HttpClient client;
  public ManagerUpdates(HttpMessageHandler? handler=null)
  {
-  client=handler==null?new HttpClient():new HttpClient(handler);client.Timeout=Timeout.InfiniteTimeSpan;
+  client=GitHubNetwork.CreateClient(handler);client.Timeout=Timeout.InfiniteTimeSpan;
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+CurrentVersion);
  }
  public void Dispose()=>client.Dispose();
