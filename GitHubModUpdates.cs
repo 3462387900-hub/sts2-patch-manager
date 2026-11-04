@@ -143,6 +143,10 @@ internal sealed class GitHubModUpdates : IDisposable
    {result=new(repo,mod.Version,"","","无法检测","GitHub 返回了无法解析的数据。",now);}
    catch(InvalidDataException ex)
    {result=new(repo,mod.Version,"","","无法检测",ex.Message,now);}
+   catch(KeyNotFoundException)
+   {result=new(repo,mod.Version,"","","无法检测","GitHub Release 数据缺少必要字段。",now);}
+   catch(InvalidOperationException)
+   {result=new(repo,mod.Version,"","","无法检测","GitHub Release 数据结构异常。",now);}
    checks[mod.Id]=result;return result;
   }
   finally{gate.Release();}

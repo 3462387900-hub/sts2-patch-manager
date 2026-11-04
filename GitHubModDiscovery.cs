@@ -14,6 +14,9 @@ internal sealed class GitHubModDiscovery : IDisposable
 {
  readonly HttpClient client;
  readonly Dictionary<string,GitHubSourceDiscoveryResult> cache=new(StringComparer.OrdinalIgnoreCase);
+ DateTimeOffset nextSearch=DateTimeOffset.MinValue;
+ static string CacheKey(ManagedMod mod)=>Path.GetFullPath(mod.Manifest)+"|"+mod.Id+"|"+mod.Version;
+ public void ClearCache()=>cache.Clear();
  public GitHubModDiscovery(HttpMessageHandler? handler=null)
  {
   client=handler==null?new HttpClient():new HttpClient(handler);
@@ -21,7 +24,7 @@ internal sealed class GitHubModDiscovery : IDisposable
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
  }
  public void Dispose()=>client.Dispose();
- public GitHubSourceDiscoveryResult? Cached(string id)=>cache.GetValueOrDefault(id);
+ public GitHubSourceDiscoveryResult? Cached(ManagedMod mod)=>cache.GetValueOrDefault(CacheKey(mod));
  static string? Field(JsonElement value,string field)=>
   value.TryGetProperty(field,out var property)&&property.ValueKind==JsonValueKind.String?property.GetString():null;
  static bool Relevant(string name,string id)=>
@@ -84,9 +87,10 @@ internal sealed class GitHubModDiscovery : IDisposable
  }
  public async Task<GitHubSourceDiscoveryResult> DiscoverAsync(ManagedMod mod,bool force=false,CancellationToken ct=default)
  {
-  if(!force&&cache.TryGetValue(mod.Id,out var saved))return saved;
+  string cacheKey=CacheKey(mod);
+  if(!force&&cache.TryGetValue(cacheKey,out var saved))return saved;
   var candidates=new Dictionary<string,GitHubSourceCandidate>(StringComparer.OrdinalIgnoreCase);
-  string note="";
+  string note="";bool transientFailure=false;
   try
   {
    // Only a known, local manifest: no recursive file scanning or execution.
@@ -99,6 +103,9 @@ internal sealed class GitHubModDiscovery : IDisposable
     string query=mod.Id.Trim();
     if(query.Length>=3&&query.Length<=90)
     {
+     var delay=nextSearch-DateTimeOffset.UtcNow;
+     if(delay>TimeSpan.Zero)await Task.Delay(delay,ct);
+     nextSearch=DateTimeOffset.UtcNow.AddSeconds(7); // Respect anonymous search limits across batches.
      using var search=await GetJsonAsync("https://api.github.com/search/repositories?q="+
       Uri.EscapeDataString(query+" in:name,description")+"&per_page=5",ct);
      if(search!=null&&search.RootElement.TryGetProperty("items",out var items))
@@ -122,8 +129,8 @@ internal sealed class GitHubModDiscovery : IDisposable
     else note="MOD ID 太短或过长，无法安全搜索。";
    }
   }
-  catch(OperationCanceledException) when(!ct.IsCancellationRequested){note="GitHub 搜索超时。";}
-  catch(HttpRequestException ex){note=ex.Message;}
+  catch(OperationCanceledException) when(!ct.IsCancellationRequested){note="GitHub 搜索超时。";transientFailure=true;}
+  catch(HttpRequestException ex){note=ex.Message;transientFailure=true;}
   catch(IOException ex){note="读取 MOD 清单失败："+ex.Message;}
   catch(UnauthorizedAccessException){note="无法读取 MOD 清单。";}
   catch(JsonException){note="MOD 清单或 GitHub 搜索数据无法解析。";}
@@ -131,6 +138,7 @@ internal sealed class GitHubModDiscovery : IDisposable
   var list=candidates.Values.OrderByDescending(x=>x.Score).ThenBy(x=>x.Repository,StringComparer.OrdinalIgnoreCase).Take(5).ToArray();
   if(list.Length==0&&note=="")note="未找到可信候选；该 MOD 可能没有公开的 GitHub 仓库。";
   var result=new GitHubSourceDiscoveryResult(mod.Id,list,note);
-  cache[mod.Id]=result;return result;
+  if(!transientFailure)cache[cacheKey]=result;
+  return result;
  }
 }

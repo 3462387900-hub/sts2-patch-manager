@@ -34,7 +34,7 @@ public partial class MainWindow
   {
    var mods=modInventory.Mods.Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null)
     .GroupBy(m=>m.Id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First())
-    .Where(m=>Discovery().Cached(m.Id)==null).Take(8).ToArray();
+    .Where(m=>Discovery().Cached(m)==null).Take(8).ToArray();
    foreach(var mod in mods)
    {
     var result=await Discovery().DiscoverAsync(mod);
@@ -114,6 +114,7 @@ public partial class MainWindow
     modWatchDebounce?.Stop();modWatchDebounce?.Start();
     return;
    }
+   if(modInventoryDirty)githubDiscovery?.ClearCache();
    modInventory=inventory;modInventoryDirty=false;
    modStatus=$"共 {inventory.Mods.Count} 项 · {inventory.Mods.Count(m=>m.Enabled)} 项启用 · {inventory.Mods.Count(m=>!m.Enabled)} 项停用";
    // Only a complete, stable inventory is eligible for orphan-patch automation.
@@ -301,7 +302,7 @@ public partial class MainWindow
    var updates=GitHubUpdates();
    if(updates.Repository(mod.Id)==null)
    {
-    var candidates=Discovery().Cached(mod.Id);
+    var candidates=Discovery().Cached(mod);
     return candidates==null?"":candidates.Candidates.Length>0?"GitHub：找到 "+candidates.Candidates.Length+" 个候选 · 待确认":"GitHub：未找到来源";
    }
    var result=updates.Cached(mod.Id);
