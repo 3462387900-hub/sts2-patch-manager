@@ -95,7 +95,14 @@ public partial class MainWindow
  {
   if(managerUpdateBusy)return;managerUpdateBusy=true;managerDownload=null;managerUpdateCancellation=new();managerUpdateStatus=preferAssetApi?"正在通过 GitHub 官方附件 API 下载并校验…":"正在下载，完成后自动校验…";ShowManagerUpdates();
   try{
-   await managerUpdates.DownloadAsync(release,destination,new Progress<long>(n=>{if(managerUpdateBusy&&currentVisit?.Key=="检查更新"&&managerProgress!=null)managerProgress.Text=$"已下载 {n/1024d/1024:F1} / {release.Size/1024d/1024:F1} MB";}),managerUpdateCancellation.Token,preferAssetApi);
+   var started=DateTimeOffset.UtcNow;
+   await managerUpdates.DownloadAsync(release,destination,new Progress<long>(n=>{
+    if(managerUpdateBusy&&currentVisit?.Key=="检查更新"&&managerProgress!=null)
+    {
+     double seconds=Math.Max(1,(DateTimeOffset.UtcNow-started).TotalSeconds);
+     managerProgress.Text=$"已下载 {n/1024d/1024:F1} / {release.Size/1024d/1024:F1} MB · 平均 {(n/1024d/1024)/seconds:F2} MB/s";
+    }
+   }),managerUpdateCancellation.Token,preferAssetApi);
    managerDownload=destination;managerUpdateStatus="下载完成且校验一致，可安装此更新并重启，也可保留 ZIP 稍后处理。";
   }catch(OperationCanceledException){managerUpdateStatus="下载已取消或超时，未改动当前程序。";}
   catch(Exception e){managerUpdateStatus="下载未完成："+e.Message;}
