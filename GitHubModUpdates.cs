@@ -97,6 +97,26 @@ internal sealed class GitHubModUpdates : IDisposable
    cmp==0?new(repository,local,tag,url,"已是最新","本地版本与最新正式版一致。",now):
    new(repository,local,tag,url,"待核对","本地版本高于 GitHub 最新正式版，可能是测试版。",now);
  }
+ async Task<GitHubModResult?> TryWebLatestAsync(string repo,string local,DateTimeOffset now,CancellationToken ct)
+ {
+  try
+  {
+   // GitHub public release page redirects to the latest stable tag without REST API quota.
+   using var request=new HttpRequestMessage(HttpMethod.Get,"https://github.com/"+repo+"/releases/latest");
+   using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);
+   if(!response.IsSuccessStatusCode)return null;
+   var uri=response.RequestMessage?.RequestUri;
+   if(uri==null||uri.Scheme!="https"||!uri.Host.Equals("github.com",StringComparison.OrdinalIgnoreCase)||
+    uri.Port!=443||uri.Query.Length>0||uri.Fragment.Length>0)return null;
+   string prefix="/"+repo+"/releases/tag/";
+   if(!uri.AbsolutePath.StartsWith(prefix,StringComparison.OrdinalIgnoreCase))return null;
+   string tag=Uri.UnescapeDataString(uri.AbsolutePath[prefix.Length..]);
+   if(tag.Length==0||tag.Contains('/')||tag.Contains((char)92))return null;
+   return Interpret(repo,local,tag,uri.GetLeftPart(UriPartial.Path),now);
+  }
+  catch(HttpRequestException){return null;}
+  catch(OperationCanceledException) when(!ct.IsCancellationRequested){return null;}
+ }
  public async Task<GitHubModResult> CheckAsync(ManagedMod mod,bool force=false,CancellationToken ct=default)
  {
   var repo=Repository(mod.Id)??throw new InvalidOperationException("尚未绑定 GitHub 仓库。");
@@ -115,7 +135,12 @@ internal sealed class GitHubModUpdates : IDisposable
     if(response.StatusCode==HttpStatusCode.NotFound)
      result=new(repo,mod.Version,"","","无法检测","未找到最新正式 Release；仓库可能没有发布正式版本。",now);
     else if((int)response.StatusCode is 403 or 429)
-     result=new(repo,mod.Version,"","","无法检测","GitHub API 请求受限，请稍后重试。",now);
+    {
+     var viaWeb=await TryWebLatestAsync(repo,mod.Version,now,ct);
+     string cause=response.Headers.TryGetValues("x-ratelimit-remaining",out var remaining)&&remaining.FirstOrDefault()=="0"
+      ?"GitHub API 请求额度已用尽":"GitHub API 返回 HTTP "+(int)response.StatusCode;
+     result=viaWeb??new(repo,mod.Version,"","","无法检测",cause+"；公开发布页备用检测也未成功，请检查网络后重试。",now);
+    }
     else
     {
      response.EnsureSuccessStatusCode();
