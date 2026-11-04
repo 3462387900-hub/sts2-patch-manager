@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.12.0",
+  "tag_name": "v0.12.1",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.12.0\r\n\r\n本版将 Spire Glass 深蓝灰毛玻璃界面与 GitHub MOD 更新后的旧版本备份清理合并发布。\r\n\r\n## Spire Glass 界面\r\n\r\n- 主窗口更换深蓝灰配色，深色背景使用浅色文字，浅蓝实心按钮使用深色文字。\r\n- 采用分层半透明侧边栏与卡片；Windows 11 22H2 及以上尝试启用系统 Mica 背景，其他环境保留渐变背景。\r\n- 导航明确划分总览、模组管理、修复补丁、更新中心、联机检查、诊断与日志、工具与设置。\r\n- 「更新中心」集中显示本地 MOD、GitHub 来源与更新状态，左侧列表、右侧详情，不改变已有来源核验及更新安装流程。\r\n- 总览增加可更新 MOD、需要复核的修复补丁提示。MOD 列表行优化深色对比度与紧凑间距。\r\n\r\n## 旧版本文件清理\r\n\r\n- 普通 MOD 详情新增「清理旧版本备份」。\r\n- 仅列出该 MOD 的较旧 GitHub 更新备份，不包含当前 MOD，最近一次备份始终保留。\r\n- 用户手动勾选需要删除的备份并二次确认；不会自动删除，删除后该备份不可恢复。\r\n- 清理前检查游戏已退出、真实目录在管理器专用备份区内、路径及符号链接安全。不符合条件则拒绝删除。\r\n- 一次清理可能部分成功，界面会明确提示发生的错误；不会将部分成功误认为全部成功。\r\n\r\n## 构建验证\r\n\r\n- Windows 界面回归测试确认按钮处于可操作状态后再模拟点击，避免在忙碌状态下误判启停流程。\r\n\r\n## 安全与兼容性\r\n\r\n原有的 SHA-256 校验、MOD ID/版本核对、文件变动防护、联机对齐限制、补丁健康失效、安装备份与恢复机制均保留。不会因 MOD 更新而自动判定旧修复已经失效。\r\n\r\n这是 Windows WPF/.NET 9 版本。透明材质具体效果会随 Windows 版本及透明效果设置变化；不支持时仍以深色背景保证可读性。\r\n",
-  "published_at": "2026-11-04T13:59:04Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.12.0",
+  "body": "# 尖塔修补站 v0.12.1 · Spire Glass 毛玻璃修正\r\n\r\nv0.12.0 虽然启用了深蓝灰主题，但 Windows 系统材质被高不透明度的 WPF 背景遮挡，实际效果看起来仍是普通纯色窗口。本次修正真实渲染路径，并保留原有所有功能。\r\n\r\n## 材质修正\r\n- Windows 11 22H2（build 22621）及以上：改为向 DWM 请求 Desktop Acrylic（真实桌面模糊），而非仅请求较弱的 Mica。设置 WPF 合成目标为透明、扩展 DWM 玻璃帧，修正此前背景覆盖系统材质的问题。\r\n- 降低窗口覆层的深蓝灰色遮挡强度，在系统支持下让真实模糊透出；列表和内容卡片保留较高不透明度，确保浅色文字清晰。\r\n- 为侧边栏、主要面板及 MOD 列表加入细微高光边框、透明层级和低强度环境光晕，增强玻璃层次。\r\n- 支持时设置深色标题栏以避免系统蓝色强调色破坏视觉统一。\r\n- 「工具与设置」增加材质状态说明：区分系统 Acrylic 请求成功与回退背景，不会把回退伪称真实桌面模糊。\r\n\r\n## 兼容说明\r\n- Windows 10、Windows 11 22H2 之前或系统透明效果不可用的环境：使用应用内渐变玻璃视觉回退，**不会呈现真正的桌面实时模糊**。\r\n- Windows 11 即使请求成功，Windows 透明效果关闭、高对比度、远程桌面或图形环境限制等条件仍可能导致系统不实际显示 Acrylic。\r\n- 实际毛玻璃表现需要在用户的 Windows 桌面上检查；GitHub Actions 的 Windows 构建与截图不能证明真实 GPU/DWM 毛玻璃视觉效果。\r\n\r\n## 其他\r\n- v0.12.0 的 MOD 安装更新、旧版本备份勾选清理、安全校验、停用依赖保护、联机检查和补丁健康逻辑均未变更。\r\n",
+  "published_at": "2026-11-04T15:08:46Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.12.1",
   "assets": [
     {
-      "name": "SpirePatch-v0.12.0-win-x64.zip",
+      "name": "SpirePatch-v0.12.1-win-x64.zip",
       "state": "uploaded",
-      "size": 63599565,
-      "digest": "sha256:55ace9b3ef0a72f2b492ef83df867c3c944928e2fa46bc6d01fdc35e5c962562",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.12.0/SpirePatch-v0.12.0-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709709925"
+      "size": 63602601,
+      "digest": "sha256:0cb67cb86e7c0fb43bc521eb92cc7af644f65f3c65550100ff03357cd1e6b6f6",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.12.1/SpirePatch-v0.12.1-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709921227"
     }
   ]
 }
