@@ -65,7 +65,7 @@ public static class WorkshopZipImport
    string path=CheckedPath(entry.FullName);
    bool directory=entry.FullName.EndsWith('/');
    int unixType=(entry.ExternalAttributes>>16)&0xF000;
-   if(unixType==0xA000||entry.ExternalAttributes.HasFlag((int)FileAttributes.ReparsePoint))
+   if(unixType==0xA000||(entry.ExternalAttributes&(int)FileAttributes.ReparsePoint)!=0)
     throw new InvalidDataException("ZIP 包含链接文件，拒绝导入。");
    if(!allPaths.Add(path))throw new InvalidDataException("ZIP 含大小写重复的路径："+path);
    if(directory)continue;
