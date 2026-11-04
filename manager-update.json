@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.11.10",
+  "tag_name": "v0.11.11",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.11.10\r\n\r\n本版重点改进普通 MOD 的 **GitHub 来源自动发现**，不改变现有 MOD 一键更新、备份或恢复行为。\r\n\r\n## 新增与改进\r\n\r\n- 「模组管理 → 普通 MOD」新增 **批量查找 GitHub 来源**，每次处理最多 8 个未关联且没有近期结果的 MOD。重复点击会继续下一批。\r\n- 自动发现综合 MOD ID、显示名称、作者及 GitHub 仓库简介进行搜索；查找前优先读取本地模组清单（包括 links / metadata）以及 README 中的相关 GitHub 链接。\r\n- 找到仓库后，从 GitHub 公共原始文件地址检查默认分支的 `mod_manifest.json` / `manifest.json`，比对 MOD ID。确认不匹配的仓库会被排除。\r\n- 列表和详情显示候选数量、证据等级与可能的搜索限制。所有来源都需要用户点击「确认关联」，不会未经确认自动绑定。\r\n- GitHub 匿名搜索增加请求间隔及限流退避；成功候选短期缓存 6 小时，确实没有找到来源的结果缓存 30 分钟，避免反复请求。\r\n\r\n## 使用方法\r\n\r\n1. 先升级管理器至 v0.11.10。\r\n2. 打开「模组管理 → 普通 MOD」，点击「批量查找 GitHub 来源」。\r\n3. 进入提示有候选的 MOD 详情，核对候选仓库及核验说明后点击「确认关联」。\r\n4. 如仓库存在更高版本的正式 GitHub Release，可继续使用 v0.11.9 已有的「检查更新 → 下载并更新」功能。\r\n\r\n## 安全说明\r\n\r\n- 只读取本地文本线索及公开 GitHub 搜索/清单，不读取或上传 MOD 的 DLL、存档或个人数据。\r\n- 名称相似只提供候选，不等于已确定为同一 MOD。没有公开 GitHub 仓库或没有可核验清单的 MOD 仍可能查找不到。\r\n- GitHub 搜索接口可能限流；在限制期间会显示可重试状态，不会将限流误判成“没有来源”。\r\n- 不提供第三方创意工坊匿名下载功能，不改变原 MOD 文件，也不会自动下载 GitHub 候选仓库内容。\r\n\r\n## 验证\r\n\r\n- Windows/.NET 9 编译、现有隔离检查以及新增 GitHub 来源发现单元模拟测试覆盖查找逻辑；不代表已验证所有第三方 MOD 的真实来源和在线网络状态。\r\n",
-  "published_at": "2026-11-04T12:54:44Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.10",
+  "body": "# 尖塔修补站 v0.11.11\r\n\r\n本版针对部分用户无法连接 GitHub 仓库、管理器更新 ZIP 下载缓慢或中途超时的问题，增加可控的网络配置和诊断工具。\r\n\r\n## 新增功能\r\n\r\n- 「工具与设置 → GitHub 网络」可选择「跟随 Windows 系统代理」或「本机 HTTP 代理」；手动模式示例：`http://127.0.0.1:7890`。仅支持本机端口，不保存账号密码或 GitHub Token；保存后需重启管理器。\r\n- 「诊断 GitHub 连接」分别测试 `api.github.com`、`raw.githubusercontent.com`、`github.com`，输出响应状态和耗时，帮助区分来源搜索、版本索引与发布页连接问题。\r\n- GitHub MOD 来源查找、MOD Release 检测与下载安装、在线补丁源、管理器自身更新统一使用所选网络模式。\r\n- 「检查更新」页增加「备用官方通道更新」，可通过 GitHub 官方 Release Asset API 发起下载；仍按已有发布签名约束和 SHA-256 校验。\r\n- 下载时显示平均速率，管理器更新包总下载超时由 10 分钟放宽至 45 分钟。仍可手动取消。\r\n\r\n## 使用方法\r\n\r\n1. 如朋友的浏览器能使用本机代理访问 GitHub，而管理器不能，在「工具与设置」打开「设置代理」并选择本机 HTTP 代理，按实际代理软件端口填写，例如 `http://127.0.0.1:7890`。\r\n2. 保存后彻底关闭并重新启动管理器，运行「诊断 GitHub 连接」。\r\n3. 如果 GitHub 发布页正常但 ZIP 下载异常缓慢，在「检查更新」尝试「备用官方通道更新」。\r\n4. 如果没有可用的 GitHub 网络环境，可让可信朋友从官方 Release 下载 ZIP，通过 QQ/微信等方式离线传输，再关闭程序手动解压覆盖旧程序文件（保留 `数据` 目录）。\r\n\r\n## 安全与适用边界\r\n\r\n- 仅配置用户明确指定的本机 HTTP 代理，不添加不明第三方镜像、不跳过 TLS/HTTPS 校验、不自动读取任何代理账号和 Token。\r\n- 官方备用线路不保证提速；同一网络的多个 GitHub 官方域名可能同时受阻。若需要真正稳定的国内高速分发，还需要由项目维护者配置可信的国内对象存储/CDN 和校验发布机制。\r\n- 原有管理器更新 SHA-256、文件清单、备份及回滚限制未变；不会修改游戏文件或已安装的第三方 MOD。\r\n- Windows CI 覆盖网络设置校验、域名诊断和官方备用下载路由的模拟测试，不代表对每一个朋友的网络环境已经验证。\r\n",
+  "published_at": "2026-11-04T13:28:34Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.11",
   "assets": [
     {
-      "name": "SpirePatch-v0.11.10-win-x64.zip",
+      "name": "SpirePatch-v0.11.11-win-x64.zip",
       "state": "uploaded",
-      "size": 63584062,
-      "digest": "sha256:5a04db4eea557ae817f5e908b69bfc74ae5bd512845d251bac64ddf385d58ba3",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.10/SpirePatch-v0.11.10-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709505662"
+      "size": 63593497,
+      "digest": "sha256:ffaf1d6b68840749f607cff72a53c29f2880957948e2e432781a1a237964816d",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.11/SpirePatch-v0.11.11-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709613906"
     }
   ]
 }
