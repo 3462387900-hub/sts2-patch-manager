@@ -40,7 +40,7 @@ public partial class MainWindow : Window
   pageScroll=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(pageScroll,1);main.Children.Add(pageScroll);
   toast.Foreground=muted;toast.FontSize=12;toast.Margin=new(0,14,0,0);Grid.SetRow(toast,2);main.Children.Add(toast);
   var controlsTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(400)};controlsTimer.Tick+=(_,_)=>UpdateGlobalControls();controlsTimer.Start();Closed+=(_,_)=>{controlsTimer.Stop();CloseModWatch();githubModUpdates?.Dispose();githubDiscovery?.Dispose();};
-  if(onlineStartup){ShowOnline();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();};}else ShowOverview();
+  if(onlineStartup){ShowOverview();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();if(page=="总览")ShowOverview();};}else ShowOverview();
  }
  static SolidColorBrush B(string hex)=>(SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
  TextBlock T(string text,double size=14,Brush? color=null,bool bold=false)=>new(){Text=text,FontSize=size,Foreground=color??ink,FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal,TextWrapping=TextWrapping.Wrap,LineHeight=size*1.55};
@@ -112,7 +112,38 @@ public partial class MainWindow : Window
  {var txt=V(T(title,24,ink,true),T(subtitle,13,muted));var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=GridLength.Auto});g.Children.Add(txt);if(action!=null){Grid.SetColumn(action,1);g.Children.Add(action);if(action is FrameworkElement f)f.VerticalAlignment=VerticalAlignment.Center;}return g;}
  void ShowOverview()
  {
-  if(!demo&&report==null){var empty=V(Header("YOUR GAME","游戏目录已就绪","扫描当前模组后，查看适合这套环境的修复。"));Space(empty,20);empty.Children.Add(T(selectedInstallRoot??"请先选择游戏目录",14,muted));Space(empty,20);empty.Children.Add(H(Btn("扫描当前目录",()=>{if(selectedInstallRoot!=null)_=ScanFolder(selectedInstallRoot);else ChooseFolder();},"Primary"),Btn("模组管理",()=>{ShowMods();RefreshMods();},"Ghost")));SetPage("总览",empty);return;}
+  if(!demo&&report==null)
+  {
+   var home=V(Header("YOUR GAME","环境总览","MOD、更新与修复状态，从这里开始。"));Space(home,15);
+   var intro=V(T(selectedInstallRoot==null?"尚未选择游戏目录":"已定位游戏目录",20,ink,true),
+    T(selectedInstallRoot??"选择游戏目录以开始本地检查。",12,muted));
+   Space(intro,15);
+   intro.Children.Add(H(Btn("扫描游戏修复",()=>{
+    if(selectedInstallRoot!=null)_=ScanFolder(selectedInstallRoot);else ChooseFolder();
+   },"Primary"),Btn("MOD 管理",()=>{ShowMods();RefreshMods();},"Ghost")));
+   home.Children.Add(Card(intro,"#203B5C",21));Space(home,15);
+   if(modInventory!=null&&selectedInstallRoot!=null)
+   {
+    var updates=GitHubUpdates();
+    int normal=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m));
+    int newer=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&updates.Cached(m.Id)?.Status=="有更新");
+    var chips=new WrapPanel{Margin=new Thickness(0,0,0,14)};
+    foreach(var (count,label,open) in new (int,string,Action)[]
+    {(normal,"普通 MOD",ShowMods),(newer,"可更新 MOD",ShowModUpdatesCenter),
+      (modInventory.Issues.Count,"清单待核对",ShowMods)})
+    {
+     var card=V(T(count.ToString(),25,ink,true),T(label,12,muted));
+     var b=Btn("查看 "+label+" →",open,"Ghost");
+     card.Children.Add(b);
+     var item=Card(card,"#182942",13);item.Width=188;item.Margin=new Thickness(0,10,10,0);chips.Children.Add(item);
+    }
+    home.Children.Add(chips);
+   }
+   home.Children.Add(Card(V(T("下一步",16,ink,true),
+    T("先检查 MOD 更新或修复补丁；扫描结果不代表游戏没有未知问题。",12,muted),
+    H(Btn("查看更新中心",ShowModUpdatesCenter,"Ghost"),Btn("浏览修复补丁",ShowLibrary,"Ghost")))));
+   SetPage("总览",home);return;
+  }
 
   int pending=states.Count(s=>s.Status is "待修复" or "需联动"),done=states.Count(s=>s.Status=="已安装");
   var root=V(Header("YOUR NEXT RUN","下一局，安心出发。",demo?"修复已经定位，剩下的交给修补站。":"已读取本地文件。先核对推荐，再决定如何处理。",Btn("↻  检查修复",()=>Rescan())));Space(root,26);
