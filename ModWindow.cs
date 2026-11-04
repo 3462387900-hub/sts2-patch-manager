@@ -342,36 +342,77 @@ public partial class MainWindow
   ModPresentation.IsIndependentPatch(m)==(modSection=="修复补丁")).ToArray()??[];
  async void BatchFindGitHub()
  {
-  if(busy||modInventoryDirty||selectedInstallRoot==null)return;
-  var candidates=ChosenMods().Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null).Where(m=>Discovery().Cached(m)==null).Take(8).ToArray();
-  if(candidates.Length==0){modStatus="选中的模组都已关联、已有查找结果，或不适用来源搜索。可进入详情检查和重试。";ShowMods();return;}
-  busy=true;int found=0,failed=0,processed=0;
-  try{
-   foreach(var mod in candidates){
-    toast.Text="正在查找 GitHub 来源："+mod.Name;
-    processed++;
-    try{
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  var selected=ChosenMods();
+  var candidates=selected.Where(m=>!ModPresentation.IsIndependentPatch(m)&&
+   GitHubUpdates().Repository(m.Id)==null&&Discovery().Cached(m)==null).Take(8).ToArray();
+  var candidatesSet=candidates.Select(m=>m.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  var reviews=selected.Select(m=>new ModBatchReview(m.Name,candidatesSet.Contains(m.Folder)?"可处理":"跳过",
+   candidatesSet.Contains(m.Folder)?"只查找候选仓库，仍需手动核对后绑定。":"已有来源或搜索缓存；或者超出每轮 8 项上限。")).ToArray();
+  if(!ModBatchDialogs.Confirm(this,"批量查找 GitHub 来源",
+   "每轮最多检查 8 项。不会自动关联仓库，也不会下载或修改游戏文件；结果可在模组详情中核对。",reviews))return;
+  if(busy||modInventoryDirty)return;
+  busy=true;int found=0,failed=0,done=0;
+  var progress=new ModBatchProgressWindow(this,"批量查找 GitHub 来源",selected.Length);progress.Show();
+  try
+  {
+   foreach(var mod in candidates)
+   {
+    if(progress.CancelRequested)break;
+    progress.Current(mod.Name,done+1,selected.Length);
+    try
+    {
      var result=await Discovery().DiscoverAsync(mod);
      if(result.Candidates.Length>0)found++;
-     if(result.Retryable){failed++;break;}
-    }catch{failed++;}
+     if(result.Retryable)failed++;
+     string state=result.Retryable?"受限":result.Candidates.Length>0?"候选待确认":"未找到";
+     done++;progress.Record(mod.Name,state,result.Note,done);
+     if(result.Retryable)break;
+    }
+    catch(Exception e){failed++;done++;progress.Record(mod.Name,"失败",e.Message,done);}
    }
-   modStatus=$"批量查找完成：本轮检查 {processed} 项，找到 {found} 项候选，失败或受限 {failed} 项。请在各模组详情确认来源；每轮最多 8 项。";
-  }finally{busy=false;ShowMods();}
+   foreach(var mod in selected.Where(m=>!candidatesSet.Contains(m.Folder)))
+   {done++;progress.Record(mod.Name,"跳过","已关联、已有缓存，或超出本轮处理上限。",done);}
+   if(done<selected.Length)foreach(var mod in candidates.Skip(done-selected.Length+candidates.Length))
+   {done++;progress.Record(mod.Name,"未执行","用户取消或网络受限；可重新查找。",done);}
+   modStatus=$"来源查找：发现候选 {found} 项，失败或受限 {failed} 项。需在详情逐个确认。";
+  }
+  finally{busy=false;progress.Finish(modStatus);ShowMods();}
  }
  async void BatchCheckGitHub()
  {
-  if(busy||modInventoryDirty||selectedInstallRoot==null)return;
-  var mods=ChosenMods().Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)!=null).ToArray();
-  if(mods.Length==0){modStatus="选中的模组没有已关联的 GitHub 来源。";ShowMods();return;}
-  busy=true;int success=0;int failure=0;
-  try{
-   foreach(var mod in mods){
-    toast.Text="正在检查 GitHub 更新："+mod.Name;
-    try{await GitHubUpdates().CheckAsync(mod,true);success++;}catch{failure++;}
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  var selected=ChosenMods();
+  var mods=selected.Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)!=null).ToArray();
+  var set=mods.Select(m=>m.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  var reviews=selected.Select(m=>new ModBatchReview(m.Name,set.Contains(m.Folder)?"可处理":"跳过",
+   set.Contains(m.Folder)?"检测已确认仓库的正式 Release，不修改模组文件。":"尚未关联 GitHub 来源，或属于修复补丁。")).ToArray();
+  if(!ModBatchDialogs.Confirm(this,"批量检查 GitHub 更新",
+   "仅读取已关联 GitHub 的 MOD 发布信息，无法检测的项目会显示原因，不会自动下载。",reviews))return;
+  if(busy||modInventoryDirty)return;
+  busy=true;int success=0,failed=0,done=0;
+  var progress=new ModBatchProgressWindow(this,"批量检查 GitHub 更新",selected.Length);progress.Show();
+  try
+  {
+   foreach(var mod in mods)
+   {
+    if(progress.CancelRequested)break;
+    progress.Current(mod.Name,done+1,selected.Length);
+    try
+    {
+     var result=await GitHubUpdates().CheckAsync(mod,true);
+     bool ok=result.Status!="无法检测";
+     if(ok)success++;else failed++;
+     done++;progress.Record(mod.Name,result.Status,result.Message,done);
+    }catch(Exception e){failed++;done++;progress.Record(mod.Name,"失败",e.Message,done);}
    }
-   modStatus=$"批量检查完成：成功 {success} 项，失败 {failure} 项。";
-  }finally{busy=false;ShowMods();}
+   foreach(var mod in selected.Where(m=>!set.Contains(m.Folder)))
+   {done++;progress.Record(mod.Name,"跳过","未关联 GitHub 仓库或不适用。",done);}
+   if(done<selected.Length)foreach(var mod in mods.Skip(done-selected.Length+mods.Length))
+   {done++;progress.Record(mod.Name,"未执行","用户已停止后续任务。",done);}
+   modStatus=$"更新检测：完成 {success} 项，失败或受限 {failed} 项；未安装或修改模组。";
+  }
+  finally{busy=false;progress.Finish(modStatus);ShowMods();}
  }
  async void BatchToggleMods(bool enable)
  {
