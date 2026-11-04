@@ -1,7 +1,5 @@
 using System.IO;
 using System.Windows;
-using System.Windows.Automation.Peers;
-using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -33,15 +31,11 @@ public partial class MainWindow
     ready=null;await Task.Delay(60);
    }
    if(ready==null)throw new InvalidOperationException("界面操作按钮一直不可用："+label);
-   // Invoke the real WPF button automation pattern rather than synthesizing
-   // RoutedEventArgs. Synthetic Click events were intermittently lost in CI.
-   var peer=new ButtonAutomationPeer(ready);
-   if(peer.GetPattern(PatternInterface.Invoke) is IInvokeProvider invoke)
-    invoke.Invoke();
-   else throw new InvalidOperationException("无法以 WPF UIAutomation 调用按钮："+label);
-   // UIAutomation may schedule the click on the dispatcher. Drain the dispatcher
-   // before checking busy or observing the resulting navigation/file state.
-   await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+   // Raise the WPF Click synchronously on the dispatcher: an asynchronous
+   // UIAutomation Invoke can arrive *after* the next test navigation and
+   // unexpectedly replace its page. The button's own Click handlers and safety
+   // guards still run unmodified.
+   ready.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,ready));
    await Idle();
    for(int i=0;i<150&&(busy||transactionWriting);i++)
    {
