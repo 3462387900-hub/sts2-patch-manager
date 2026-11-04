@@ -1,0 +1,23 @@
+name: Build and check
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Build and test without touching a game
+        shell: pwsh
+        run: ./scripts/打包.ps1 -BuildOnly
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-build-and-checks
+          path: artifacts/

@@ -1,0 +1,24 @@
+# Only reviewed source and documentation belong in the public repository.
+/*
+!/*.cs
+!/*.xaml
+!/*.csproj
+!/*.manifest
+!/*.ps1
+!/catalog-plan.json
+!/patch-catalog.json
+!/manager-update.json
+!/README.md
+!/更新日志.md
+!/发布指南.md
+!/补丁发布指南.md
+!/.gitignore
+!/scripts/
+!/scripts/**
+!/.github/
+!/.github/**
+!/releases/
+!/releases/**
+**/数据/
+**/*.part
+**/startup-error.txt
