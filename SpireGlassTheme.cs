@@ -50,7 +50,7 @@ internal static class SpireGlassTheme
   };
  }
 
- internal static void AddAmbientGlow(Grid root)
+ internal static Canvas AddAmbientGlow(Grid root)
  {
   // Static, non-interactive blurred lights make translucent surfaces legible and
   // visibly layered even on Windows versions that cannot provide Desktop Acrylic.
@@ -63,5 +63,6 @@ internal static class SpireGlassTheme
   var violet=Halo(410,380,Color.FromRgb(124,85,175),.27);
   Canvas.SetRight(violet,-195);Canvas.SetBottom(violet,-145);ambient.Children.Add(violet);
   root.Children.Add(ambient); // Added first so it never covers interactive UI.
+  return ambient;
  }
 }
