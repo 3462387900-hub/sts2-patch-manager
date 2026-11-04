@@ -376,38 +376,91 @@ public partial class MainWindow
  async void BatchToggleMods(bool enable)
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
-  var mods=ChosenMods().Where(m=>m.Enabled!=enable).ToArray();
-  if(mods.Length==0){modStatus="选中模组中没有需要"+(enable?"启用":"停用")+"的项目。";ShowMods();return;}
-  var answer=MessageBox.Show(this,$"将逐项预览和重新检查 {mods.Length} 个模组，然后{(enable?"启用":"停用")}。\n"+
-   "存在依赖或文件异常的项目会跳过。已成功的项目不会因为后续失败而自动回滚。\n\n确认继续？",
-   "批量"+(enable?"启用":"停用"),MessageBoxButton.YesNo,MessageBoxImage.Warning);
-  if(answer!=MessageBoxResult.Yes)return;
-  busy=true;transactionWriting=true;
-  int success=0;var errors=new Dictionary<string,string>();var pending=mods.ToList();
-  try{
-   // Retry blocked dependencies after their prerequisites have been processed.
-   while(pending.Count>0){
-    int before=success;var retry=new List<ManagedMod>();
-    foreach(var mod in pending){
-     toast.Text="正在处理："+mod.Name;
-     try{
+  var selected=ChosenMods();if(selected.Length==0)return;
+  string root=selectedInstallRoot;
+  var name=enable?"启用":"停用";
+  busy=true;
+  ModBatchReview[] reviews;
+  try
+  {
+   reviews=await Task.Run(()=>selected.Select(mod=>{
+    if(mod.Enabled==enable)return new ModBatchReview(mod.Name,"跳过","模组已经"+(enable?"启用":"停用")+"。");
+    string? reason=ModManager.BlockReason(root,mod,modInventory!);
+    if(reason!=null)
+    {
+     bool dependency=reason.StartsWith("这些启用项依赖它，请先停用依赖项：",StringComparison.Ordinal)
+      ||reason.StartsWith("请先启用前置模组：",StringComparison.Ordinal);
+     return new ModBatchReview(mod.Name,dependency?"需复核":"跳过",
+      dependency?"依赖关系尚未满足，只有前置操作完成并重新校验后才能处理："+reason:reason);
+    }
+    try{ModManager.Preview(root,mod.Folder,!mod.Enabled);
+     return new ModBatchReview(mod.Name,"可处理","初步校验通过；执行时仍将重新检查文件及依赖。");
+    }catch(Exception e){return new ModBatchReview(mod.Name,"跳过",e.Message);}
+   }).ToArray());
+  }catch(Exception e){modStatus="批量预览失败："+e.Message;return;}
+  finally{busy=false;}
+  if(modInventoryDirty||selectedInstallRoot!=root){modStatus="模组环境发生变化，已取消旧预览。请刷新后重试。";ShowMods();return;}
+  if(!ModBatchDialogs.Confirm(this,"批量"+name+" · 执行前预览",
+   "预览不移动文件。依赖待复核项可能在其他模组处理后才能通过；每一项执行前仍会调用安全预检。操作成功的项不会因为后续失败自动回滚。",
+   reviews))return;
+  if(modInventoryDirty||busy||transactionWriting||selectedInstallRoot!=root){modStatus="执行前环境发生变化，请重新预览。";ShowMods();return;}
+  var eligible=selected.Where((m,i)=>reviews[i].State!="跳过").ToArray();
+  var result=new Dictionary<string,(string State,string Detail)>(StringComparer.OrdinalIgnoreCase);
+  var errors=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+  var progress=new ModBatchProgressWindow(this,"正在批量"+name,selected.Length);
+  int success=0,completed=0;
+  busy=true;transactionWriting=true;progress.Show();
+  try
+  {
+   var pending=eligible.ToList();
+   while(pending.Count>0&&!progress.CancelRequested)
+   {
+    int successesThisPass=0;
+    var retry=new List<ManagedMod>();
+    foreach(var mod in pending)
+    {
+     if(progress.CancelRequested)break;
+     progress.Current(mod.Name,completed+1,selected.Length);
+     try
+     {
       await Task.Run(()=>{
-       var plan=ModManager.Preview(selectedInstallRoot!,mod.Folder,enable);
+       var plan=ModManager.Preview(root,mod.Folder,enable);
        ModManager.Apply(plan);
       });
-      success++;chosenModFolders.Remove(mod.Folder);errors.Remove(mod.Name);
-     }catch(Exception e){retry.Add(mod);errors[mod.Name]=e.Message;}
+      result[mod.Folder]=("成功","已"+name+"，文件由管理器安全移动和记录。");
+      chosenModFolders.Remove(mod.Folder);errors.Remove(mod.Folder);
+      success++;successesThisPass++;completed++;
+      progress.Record(mod.Name,"成功","已"+name,completed);
+     }
+     catch(Exception e){retry.Add(mod);errors[mod.Folder]=e.Message;}
     }
-    if(success==before)break;
+    if(successesThisPass==0||progress.CancelRequested)break;
     pending=retry;
    }
-   modInventory=await Task.Run(()=>ModManager.Scan(selectedInstallRoot!));
+   foreach(var mod in selected)
+   {
+    if(result.ContainsKey(mod.Folder))continue;
+    int index=Array.IndexOf(selected,mod);
+    string reason=reviews[index].State=="跳过"?reviews[index].Explanation:
+     progress.CancelRequested?"用户停止了剩余任务。":
+     errors.TryGetValue(mod.Folder,out var e)?e:"操作未完成，请重新检查环境。";
+    string state=progress.CancelRequested&&reviews[index].State!="跳过"&&!errors.ContainsKey(mod.Folder)
+     ?"已取消":"跳过";
+    result[mod.Folder]=(state,reason);completed++;
+    progress.Record(mod.Name,state,reason,completed);
+   }
+   modInventory=await Task.Run(()=>ModManager.Scan(root));
    modInventoryDirty=false;InvalidateLifecycle();ClearSelection();ClearCoop();
    report=null;states=[];installPreview=null;lastInstallResult=null;
-   modStatus=$"批量{(enable?"启用":"停用")}：成功 {success} 项，跳过 {errors.Count} 项。"+
-    (errors.Count>0?" "+string.Join("；",errors.Take(3).Select(e=>e.Key+"："+e.Value)):"");
-  }catch(Exception e){modStatus="批量操作中断："+e.Message;}
-  finally{transactionWriting=false;busy=false;ShowMods();}
+   modStatus=$"批量{name}结束：成功 {success} 项，跳过 {selected.Length-success} 项。可在结果窗口查看每个模组的处理情况。";
+  }
+  catch(Exception e){modStatus="批量操作中断："+e.Message;}
+  finally
+  {
+   transactionWriting=false;busy=false;
+   progress.Finish(modStatus);
+   ShowMods();
+  }
  }
  double modListOffset;
  static ScrollViewer? ListScroll(DependencyObject element)
