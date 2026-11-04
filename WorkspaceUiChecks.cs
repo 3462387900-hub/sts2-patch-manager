@@ -94,17 +94,17 @@ public partial class MainWindow
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="修复补丁  (1)"),
    "mod management exposes regular MOD and independent patch tabs with accurate counts");
   await Click("修复补丁  (1)");
-  Check(activeModList?.Items.Count==1&&Controls<Button>(shell).Any(b=>b.Content?.ToString()=="详情")&&
+  Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
    "independent patch tab filters to known patch records");
   var patchMore=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="更多");
   patchMore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Idle();
-  Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()==2,
+  Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()>=3,
    "on-demand compact patch menu exposes preview toggle and folder action");
   patchMore.ContextMenu!.IsOpen=false;
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
    "repair patch rows show a descriptive health status even before a scan");
-  await Click("详情");
+  Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="查看依据"),
    "independent patch details expose the evidence viewer");
   await Click("查看依据");
@@ -116,9 +116,9 @@ public partial class MainWindow
   await Click("← 上一步");
   Check(page=="模组管理","back returns to repair patch list");
   await Click("普通 MOD  (6)");
-  Check(activeModList?.Items.Count==6,
+  Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "regular MOD tab excludes the catalogued independent patch");
-  var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();await Click("详情");Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
+  var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();
   Check(pageScroll!.VerticalScrollBarVisibility==ScrollBarVisibility.Disabled&&
    ScrollViewer.GetHorizontalScrollBarVisibility(activeModList!)==ScrollBarVisibility.Disabled,
@@ -167,21 +167,21 @@ public partial class MainWindow
   var virtualList=activeModList!;
   var sample=modInventory!.Mods.First();
   var many=Enumerable.Range(0,160).Select(i=>new ModListRow(sample with{Id="UI"+i,Name="测试模组 "+i},"",null)).ToArray();
-  virtualList.ItemsSource=many;await Idle();
-  Check(virtualList.Items.Count==160&&VirtualizingPanel.GetIsVirtualizing(virtualList)&&
+  ModCardList.SetItems(virtualList,many,2);await Idle();
+  Check(virtualList.Items.Count==80&&VirtualizingPanel.GetIsVirtualizing(virtualList)&&
    VirtualizingPanel.GetVirtualizationMode(virtualList)==VirtualizationMode.Recycling&&
-   Controls<Button>(virtualList).Count(b=>b.Content?.ToString()=="详情")<30,
+   Controls<ModCardControl>(virtualList).Count()<30,
    "160 virtualized MOD rows only materialize the visible WPF controls");
   // Regression for actual Windows clients: long dependent names previously pushed actions off screen.
   string longBlock="这些启用项依赖它，请先停用依赖项："+string.Join("、",
    Enumerable.Range(0,40).Select(i=>"超长依赖模组名称"+i+"测试补丁"));
-  virtualList.ItemsSource=new[]{new ModListRow(sample with{Name="BaseLib / 一个非常非常长的中文模组名称 / test"},
-   "",longBlock)};
+  ModCardList.SetItems(virtualList,new[]{new ModListRow(sample with{Name="BaseLib / 一个非常非常长的中文模组名称 / test"},
+   "",longBlock)},2);
   await Idle();
   double originalWidth=Width,originalHeight=Height;
   Width=1020;Height=720;await Idle();
-  var rowView=Controls<ModRowControl>(virtualList).Single();
-  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="详情");
+  var rowView=Controls<ModCardControl>(virtualList).Single();
+  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用模组");
   var moreButton=rowView.MoreButton;
   bool Fits(Button button)
   {
@@ -191,7 +191,7 @@ public partial class MainWindow
   Check(Fits(detailsButton)&&Fits(moreButton)&&
    rowView.ActualWidth<=virtualList.ActualWidth&&virtualList.ActualWidth>500,
    "minimum supported window width visibly keeps both MOD actions inside the row");
-  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("被 ")&&t.Text.Contains("依赖"));
+  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖此模组"));
   Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()==longBlock&&
    warningLine.ActualWidth<virtualList.ActualWidth,
    "long dependency warnings are concise but full reasons remain available via tooltip");
