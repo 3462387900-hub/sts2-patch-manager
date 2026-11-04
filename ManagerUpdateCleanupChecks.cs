@@ -53,14 +53,14 @@ internal static class ManagerUpdateCleanupChecks
    string game=Path.Combine(parent,"Slay the Spire 2","mods");Directory.CreateDirectory(game);
    string mod=Path.Combine(game,"ImportantMod.dll");File.WriteAllText(mod,"player mod");
    var preview=ManagerUpdateCleanup.Preview(app,now,"0.11.9");
-   Check(preview.Jobs==1&&preview.Downloads==2,"preview includes only stale completed task and known ZIP caches");
+   Check(preview.Jobs==2&&preview.Downloads==2,"preview includes only stale completed task and known ZIP caches");
    Check(preview.Items.Any(i=>i.Path==old)&&preview.Items.Any(i=>i.Path==zip)&&preview.Items.Any(i=>i.Path==currentZip),"preview identifies precise eligible paths");
-   Check(!preview.Items.Any(i=>i.Path==latest||i.Path==youngest||i.Path==unfinished||i.Path==uncertain),"latest, recent, failed and unproven jobs stay protected");
+   Check(!preview.Items.Any(i=>i.Path==youngest||i.Path==unfinished||i.Path==uncertain||i.Path==recent),"latest, recent, failed and unproven jobs stay protected");
    long bytes=preview.Bytes;
    var result=ManagerUpdateCleanup.Clean(app,preview,now,"0.11.9");
-   Check(result.Removed==3&&result.Errors.Length==0&&result.FreedBytes==bytes,"approved cleanup removes only three eligible items");
+   Check(result.Removed==4&&result.Errors.Length==0&&result.FreedBytes==bytes,"approved cleanup removes only four eligible items");
    Check(!Directory.Exists(old)&&!File.Exists(zip)&&!File.Exists(currentZip)&&Directory.Exists(youngest),"cleanup removes stale artifacts but keeps newest rollback");
-   Check(Directory.Exists(latest)&&Directory.Exists(recent)&&Directory.Exists(unfinished)&&Directory.Exists(uncertain)&&
+   Check(!Directory.Exists(latest)&&Directory.Exists(recent)&&Directory.Exists(unfinished)&&Directory.Exists(uncertain)&&
     File.Exists(unknownZip)&&File.Exists(part)&&File.ReadAllText(personal)=="user preferences"&&File.ReadAllText(mod)=="player mod",
     "user files, MOD files, unsupported records and unfinished downloads survive cleanup");
    Check(ManagerUpdateCleanup.Preview(app,now,"0.11.9").Items.Length==0,"cleanup is idempotent");
