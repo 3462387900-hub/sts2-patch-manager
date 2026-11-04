@@ -33,14 +33,15 @@ public partial class MainWindow
   try
   {
    var mods=modInventory.Mods.Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null)
-    .GroupBy(m=>m.Id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).Take(8).ToArray();
+    .GroupBy(m=>m.Id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First())
+    .Where(m=>Discovery().Cached(m.Id)==null).Take(8).ToArray();
    foreach(var mod in mods)
    {
     var result=await Discovery().DiscoverAsync(mod);
     if(result.Candidates.Length>0)found++;
     examined++;
    }
-   modStatus=$"自动查找完成：检查 {examined} 个未关联 MOD，{found} 个有候选。进入 MOD 详情确认来源；每次最多搜索 8 个以避免 API 限流。";
+   modStatus=$"自动查找完成：检查 {examined} 个未关联 MOD，{found} 个有候选。进入 MOD 详情确认来源；每次最多搜索 8 个新 MOD 以避免 API 限流。";
   }
   catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
   finally{busy=false;ShowMods();}
@@ -298,7 +299,11 @@ public partial class MainWindow
   var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
    if(ModPresentation.IsIndependentPatch(mod))return "";
    var updates=GitHubUpdates();
-   if(updates.Repository(mod.Id)==null)return "";
+   if(updates.Repository(mod.Id)==null)
+   {
+    var candidates=Discovery().Cached(mod.Id);
+    return candidates==null?"":candidates.Candidates.Length>0?"GitHub：找到 "+candidates.Candidates.Length+" 个候选 · 待确认":"GitHub：未找到来源";
+   }
    var result=updates.Cached(mod.Id);
    return result==null?"GitHub：已关联 · 待检查":"GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:"");
   });
