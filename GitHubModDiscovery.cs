@@ -30,7 +30,7 @@ internal sealed class GitHubModDiscovery : IDisposable
  public void ClearCache()=>cache.Clear();
  public GitHubModDiscovery(HttpMessageHandler? handler=null,TimeSpan? searchInterval=null)
  {
-  client=handler==null?new HttpClient():new HttpClient(handler);
+  client=GitHubNetwork.CreateClient(handler);
   client.Timeout=TimeSpan.FromSeconds(15);
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
   searchDelay=searchInterval??TimeSpan.FromSeconds(7);
