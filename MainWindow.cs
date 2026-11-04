@@ -159,7 +159,7 @@ public partial class MainWindow : Window
   var title=V(T(s.Patch.Name,15,ink,true),T(demo?s.Patch.Summary:s.Reason,12,muted));Grid.SetColumn(title,1);row.Children.Add(title);
   var status=Badge(s.Status,s.Status=="已安装"?green:s.Status is "待修复" or "需联动"?gold:muted);status.HorizontalAlignment=HorizontalAlignment.Left;status.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(status,2);row.Children.Add(status);
   var detail=Btn("详情  →",()=>ShowDetail(s.Patch.Id),"Ghost");detail.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(detail,3);row.Children.Add(detail);
-  return Card(row,"#FFFFFF",18);
+  return Card(row,"#182942",18);
  }
  void ShowDetail(string id)
  {
