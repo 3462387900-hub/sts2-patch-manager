@@ -18,11 +18,20 @@ public partial class MainWindow
   {
    // FileSystemWatcher refreshes can begin between UI assertions. Wait for a usable
    // control before clicking; testing a click while the app is busy is not user input.
-   for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
-   if(busy||transactionWriting)throw new InvalidOperationException("后台检查一直占用界面："+label);
-   await Idle();
-   var buttons=Controls<Button>(shell).Where(b=>b.Content?.ToString()==label);
-   (firstMatch?buttons.First():buttons.Single()).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   // A control may be visually present while its parent is temporarily disabled.
+   // Wait for the actual enabled state, not only the background busy flag.
+   Button? ready=null;
+   for(int i=0;i<150;i++)
+   {
+    await Idle();
+    var candidates=Controls<Button>(shell).Where(b=>b.Content?.ToString()==label).ToArray();
+    ready=firstMatch?candidates.FirstOrDefault(b=>b.IsEnabled):
+     candidates.Length==1&&candidates[0].IsEnabled?candidates[0]:null;
+    if(!busy&&!transactionWriting&&ready!=null)break;
+    ready=null;await Task.Delay(60);
+   }
+   if(ready==null)throw new InvalidOperationException("界面操作按钮一直不可用："+label);
+   ready.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
    for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
    if(busy||transactionWriting)throw new InvalidOperationException("UI 操作超时："+label);
    await Idle();
