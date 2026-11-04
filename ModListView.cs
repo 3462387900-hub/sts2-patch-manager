@@ -27,11 +27,13 @@ internal static class ModListView
 
  internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query)=>
   rows.Where(row=>row.IsFix==(section=="修复补丁")&&
-   (state=="全部"||(state=="启用")==row.Mod.Enabled)&&
+   (state=="全部"||(state=="启用"&&row.Mod.Enabled)||(state=="停用"&&!row.Mod.Enabled)||
+   (state=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
+   (state=="有问题"&&row.BlockReason!=null))&&
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
   .ToArray();
 
- internal static int ColumnCount(double width)=>width>=1120?3:2;
+ internal static int ColumnCount(double width)=>width>=1080?3:width>=700?2:1;
  internal static string BriefBlockReason(string reason)
  {
   const string deps="这些启用项依赖它，请先停用依赖项：";
