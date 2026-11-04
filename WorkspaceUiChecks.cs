@@ -39,7 +39,15 @@ public partial class MainWindow
    if(peer.GetPattern(PatternInterface.Invoke) is IInvokeProvider invoke)
     invoke.Invoke();
    else throw new InvalidOperationException("无法以 WPF UIAutomation 调用按钮："+label);
-   for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
+   // UIAutomation may schedule the click on the dispatcher. Drain the dispatcher
+   // before checking busy or observing the resulting navigation/file state.
+   await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+   await Idle();
+   for(int i=0;i<150&&(busy||transactionWriting);i++)
+   {
+    await Task.Delay(60);
+    await Idle();
+   }
    if(busy||transactionWriting)throw new InvalidOperationException("UI 操作超时："+label);
    await Idle();
   }
@@ -51,6 +59,14 @@ public partial class MainWindow
   Check(SpireGlassTheme.GlassPanel() is LinearGradientBrush surface&&
    surface.GradientStops.All(stop=>stop.Color.A<235),
    "glass cards allow blurred and ambient backdrop to show through");
+  var baseButton=(Style)FindResource(typeof(Button));
+  var defaultBorder=(SolidColorBrush)((Setter)baseButton.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  Check(defaultBorder.Color.A<=85,
+   "normal buttons use soft translucent strokes rather than sharp opaque outlines");
+  var primaryStyle=(Style)FindResource("Primary");
+  var primaryBorder=(SolidColorBrush)((Setter)primaryStyle.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  Check(primaryBorder.Color.A<=100,
+   "primary action buttons avoid opaque duplicate fill outlines");
   Check(SpireGlassTheme.Background(true) is LinearGradientBrush newTint&&
    newTint.GradientStops.All(stop=>stop.Color.A<=120),
    "balanced native acrylic no longer uses a nearly opaque window overlay");
