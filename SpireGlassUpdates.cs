@@ -33,7 +33,7 @@ public partial class MainWindow
   if(modInventoryDirty)
   {
    root.Children.Add(Card(V(T("本地 MOD 文件发生变化",14,gold,true),
-    T("请先刷新，避免使用过期版本与补丁健康结论。",12,muted)),"#27364A",12));
+    T("请先刷新，避免使用过期版本与补丁健康结论。",12,muted)),"#DD27364A",12));
    Space(root,11);
   }
   if(modInventory==null)
@@ -51,7 +51,7 @@ public partial class MainWindow
    (normal.Length.ToString(),"普通 MOD"),(available.ToString(),"可更新"),(unbound.ToString(),"待关联来源")})
   {
    var stat=V(T(value,25,ink,true),T(label,12,muted));
-   var tile=Card(stat,"#20344E",14);tile.Width=165;tile.Margin=new Thickness(0,0,11,8);
+   var tile=Card(stat,"#D520344E",14);tile.Width=165;tile.Margin=new Thickness(0,0,11,8);
    stats.Children.Add(tile);
   }
   root.Children.Add(stats);
@@ -91,7 +91,7 @@ public partial class MainWindow
    install.IsEnabled=mod.Enabled&&!busy&&!modInventoryDirty&&info?.Status=="有更新";
    install.Margin=new Thickness(0,0,0,7);detail.Children.Add(install);
    detail.Children.Add(Btn("查看完整详情与备份",()=>ShowModDetail(mod.Folder),"Ghost"));
-   right.Children.Add(Card(detail,"#20344E",15));
+   right.Children.Add(Card(detail,"#D520344E",15));
   }
   void Render()
   {
