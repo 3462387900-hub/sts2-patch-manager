@@ -3,6 +3,7 @@
   <SolidColorBrush x:Key="Bg" Color="#0D1524"/><SolidColorBrush x:Key="Panel" Color="#DF182942"/>
   <SolidColorBrush x:Key="Line" Color="#344862"/><SolidColorBrush x:Key="Ink" Color="#F0F5FC"/>
   <SolidColorBrush x:Key="Muted" Color="#CBD8E9"/><SolidColorBrush x:Key="Gold" Color="#83B9F8"/>
+  <Style TargetType="Window"><Setter Property="Background" Value="#152238"/><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI"/></Style>
   <Style TargetType="TextBlock"><Setter Property="FontSize" Value="14"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
   <Style TargetType="Button">
    <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#22344D"/><Setter Property="BorderBrush" Value="#405876"/>
@@ -22,6 +23,7 @@
   <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="#20314A"/><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="BorderBrush" Value="#405876"/></Style>
   <Style TargetType="TextBox"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#182942"/><Setter Property="BorderBrush" Value="#5B789B"/><Setter Property="CaretBrush" Value="#83B9F8"/><Setter Property="Padding" Value="12,10"/><Setter Property="FontSize" Value="14"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="Field" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8"><ScrollViewer x:Name="PART_ContentHost"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Field" Property="BorderBrush" Value="#83B9F8"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
   <Style TargetType="ComboBox"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#22344D"/><Setter Property="FontSize" Value="14"/></Style>
+  <Style TargetType="ComboBoxItem"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#22344D"/></Style>
   <Style TargetType="ListBox"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#182942"/></Style>
   <Style TargetType="ContextMenu"><Setter Property="Background" Value="#22344D"/><Setter Property="Foreground" Value="#F0F5FC"/></Style>
   <Style TargetType="MenuItem"><Setter Property="Foreground" Value="#F0F5FC"/></Style>
