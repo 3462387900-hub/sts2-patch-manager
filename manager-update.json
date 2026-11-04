@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.12.2",
+  "tag_name": "v0.12.3",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.12.2 · Spire Glass 边缘优化与真实毛玻璃诊断\r\n\r\n基于 v0.12.1 的用户反馈：系统虽然报告接受 Desktop Acrylic，但实际模糊不明显，且按钮描边与圆角看起来过硬。本次版本聚焦视觉质量、材质诊断和 UI 测试可靠性，不改动 MOD、补丁或备份清理的文件操作规则。\r\n\r\n## 更柔和的按钮与列表\r\n\r\n- 通用按钮圆角从 8 调整为 10，降低边框不透明度，避免实心蓝色边框和填充色叠加造成双重硬边。\r\n- 圆角 Border 禁用像素强制吸附，维持 WPF 的抗锯齿边缘渲染；按钮文字仍按像素对齐，适应 100%、125%、150% 缩放。\r\n- 统一主要按钮、普通按钮、悬停和键盘焦点边框；保持深色背景上的浅色文字，浅蓝主按钮使用深色文字。\r\n- MOD 行的高光边缘、悬停描边同步减弱，保留可分辨的列表层级与安全操作标识。\r\n\r\n## 毛玻璃可见性验证\r\n\r\n- Windows 11 Build 26100+ 尝试启用 DWM 重定向位图 Alpha 合成，并分别报告 Alpha 属性是否接受。\r\n- 读回 Desktop Acrylic 背景属性，避免仅凭一次 API 调用就宣称已实际显示桌面模糊。\r\n- 降低窗口、侧栏和内容卡片叠加的不透明度；「工具与设置」增加可逆的临时裸玻璃测试，隐藏装饰光晕并弱化窗口色调，离开设置后恢复。\r\n- Windows 10、较旧 Windows 11 或图形环境不支持的情况下，继续提供深蓝灰回退，**不承诺真实桌面模糊**。\r\n\r\n## 兼容与安全\r\n\r\n- 不修改现有 GitHub MOD 更新、MOD 启停依赖保护、补丁健康、历史版本清理和回滚操作。\r\n- Windows CI 与截图验证只能确认构建和 UI 行为，不能完全代替实际 Windows 桌面的 DWM/GPU 效果测试。\r\n- 若使用该版本后仍看不到背景模糊，请在「工具与设置 → 材质诊断」查看 Alpha 状态，再执行「临时裸玻璃测试」。\r\n",
-  "published_at": "2026-11-04T17:19:46Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.12.2",
+  "body": "# 尖塔修补站 v0.12.3 · Spire Glass 视觉精修\r\n\r\n在 v0.12.2 深蓝灰毛玻璃版的基础上集中优化视觉层级与 MOD 管理效率。此次更新不改变 MOD 文件操作、安全检查、GitHub 更新、备份与恢复规则。\r\n\r\n## 五项视觉与可用性改进\r\n\r\n1. **消除灰雾感：** 主内容背景恢复更深的冷蓝灰，适度增强深蓝色透明覆层（仍保留 DWM Acrylic 的通透空间），减弱蓝紫装饰光晕，避免大面积发白。\r\n2. **柔和键盘焦点：** 将 WPF 默认点状焦点轮廓替换为圆角、浅蓝色键盘焦点装饰。键盘 Tab 导航仍具有明显可见焦点，不牺牲无障碍体验。\r\n3. **明确按钮主次：** 「启动游戏」等核心动作保留实心浅蓝；MOD 刷新改为次级操作；普通 MOD / 修复补丁分组、全部/启用/停用筛选采用浅蓝半透明选中态，不再与主操作竞争。\r\n4. **MOD 列表紧凑化：** 缩小顶部区域的空隙和每行内边距，合并 GitHub 与依赖提示为单行，保留悬停提示和详情中的完整信息；依赖关系采用中性「被 N 个已启用 MOD 依赖」，真正受限的操作依旧由安全逻辑阻止。\r\n5. **减少导航边框：** 非选中项没有矩形边框，悬停时出现微弱背景，选中项使用深蓝半透明底色与 3px 左侧高亮条。\r\n\r\n## 兼容与安全\r\n\r\n- 沿用 Windows 11 DWM Desktop Acrylic 与 Alpha 合成诊断，不支持时自动回退为深色可读背景。真实模糊的视觉表现依赖操作系统及图形环境。\r\n- 文字保持高对比度；深色按钮使用浅色文字，浅蓝实心按钮使用深色文字。\r\n- 保留全部 MOD 更新、补丁健康、联机检查、依赖保护、旧版本备份清理与回滚机制。\r\n- Windows 构建、隔离 UI 回归与 ZIP 运行数据排除检查是发布门槛；CI 无法完全替代用户机器的显示效果检查。\r\n",
+  "published_at": "2026-11-04T17:45:16Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.12.3",
   "assets": [
     {
-      "name": "SpirePatch-v0.12.2-win-x64.zip",
+      "name": "SpirePatch-v0.12.3-win-x64.zip",
       "state": "uploaded",
-      "size": 63604277,
-      "digest": "sha256:013b1f820d83662a0a1fc9824ed86922d299afc3819abcf3cb70ad9ce810ad58",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.12.2/SpirePatch-v0.12.2-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/710293669"
+      "size": 63605410,
+      "digest": "sha256:43dc6676cc5fdffc3299e2db1c6baea3bc86e79c765f63efe0fb48dd23525ea7",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.12.3/SpirePatch-v0.12.3-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/710361765"
     }
   ]
 }
