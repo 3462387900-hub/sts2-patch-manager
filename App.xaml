@@ -85,6 +85,58 @@
   <Style TargetType="ListBox"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#E01B2E4A"/></Style>
   <Style TargetType="ContextMenu"><Setter Property="Background" Value="#22344D"/><Setter Property="Foreground" Value="#F0F5FC"/></Style>
   <Style TargetType="MenuItem"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#22344D"/></Style>
+  <!-- Card-local glass controls: rounded hit area, translucent low-contrast strokes.
+       Do not change checkboxes in installation or patch-selection workflows. -->
+  <Style x:Key="ModCardCheckBox" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+   <Setter Property="Margin" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="FocusVisualStyle" Value="{StaticResource SoftFocusVisual}"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+    <Grid MinHeight="30" SnapsToDevicePixels="False">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <Border x:Name="TickSurface" Width="19" Height="19" HorizontalAlignment="Left" VerticalAlignment="Center"
+       CornerRadius="6" Background="#7040526E" BorderBrush="#548EADD1" BorderThickness="1"
+       SnapsToDevicePixels="False" UseLayoutRounding="False"/>
+     <Path x:Name="TickMark" HorizontalAlignment="Left" VerticalAlignment="Center"
+       Data="M 4,10 L 8,14 L 15,6" Stroke="#F0F7FF" StrokeThickness="2.1"
+       StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+       Visibility="Collapsed" IsHitTestVisible="False"/>
+     <ContentPresenter Grid.Column="1" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+    </Grid>
+    <ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True">
+      <Setter TargetName="TickSurface" Property="Background" Value="#87506B8B"/>
+      <Setter TargetName="TickSurface" Property="BorderBrush" Value="#7789B9E5"/>
+     </Trigger>
+     <Trigger Property="IsChecked" Value="True">
+      <Setter TargetName="TickSurface" Property="Background" Value="#BC47769C"/>
+      <Setter TargetName="TickSurface" Property="BorderBrush" Value="#9EA6D5F2"/>
+      <Setter TargetName="TickMark" Property="Visibility" Value="Visible"/>
+     </Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="TickSurface" Property="Opacity" Value=".5"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="ModCardAction" TargetType="Button" BasedOn="{StaticResource Ghost}">
+   <Setter Property="Background" Value="#6B344C67"/><Setter Property="BorderBrush" Value="#2E85A4C7"/>
+   <Setter Property="BorderThickness" Value="1"/><Setter Property="FocusVisualStyle" Value="{StaticResource SoftFocusVisual}"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+      BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="11"
+      Padding="{TemplateBinding Padding}" SnapsToDevicePixels="False" UseLayoutRounding="False"
+      RenderOptions.EdgeMode="Unspecified">
+      <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+        VerticalAlignment="Center" RecognizesAccessKey="True"/>
+    </Border>
+    <ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True">
+      <Setter TargetName="Surface" Property="Background" Value="#8B466480"/>
+      <Setter TargetName="Surface" Property="BorderBrush" Value="#558BB8DD"/>
+     </Trigger>
+     <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="#B7446788"/></Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value=".55"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="CheckBox"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontSize" Value="14"/><Setter Property="Margin" Value="0,8"/></Style>
   <Style TargetType="Expander"><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Padding" Value="0,8"/></Style>
   <Style TargetType="ScrollBar">
