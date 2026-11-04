@@ -31,6 +31,7 @@ internal static class ModListView
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
   .ToArray();
 
+ internal static int ColumnCount(double width)=>width>=1120?3:2;
  internal static string BriefBlockReason(string reason)
  {
   const string deps="这些启用项依赖它，请先停用依赖项：";
