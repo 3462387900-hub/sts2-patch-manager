@@ -56,7 +56,7 @@ internal sealed record ModCardActions(Action<ModListRow> Detail,
 
 public sealed class ModCardGroupControl : Grid
 {
- public ModCardGroupControl()=>DataContextChanged+=(_,_)=>Refresh();
+ public ModCardGroupControl(){DataContextChanged+=(_,_)=>Refresh();Loaded+=(_,_)=>Refresh();}
  void Refresh()
  {
   Children.Clear();ColumnDefinitions.Clear();
