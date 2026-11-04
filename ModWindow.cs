@@ -343,19 +343,20 @@ public partial class MainWindow
  async void BatchFindGitHub()
  {
   if(busy||modInventoryDirty||selectedInstallRoot==null)return;
-  var candidates=ChosenMods().Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null).Take(8).ToArray();
-  if(candidates.Length==0){modStatus="选中的模组已经关联 GitHub，或不适用来源搜索。";ShowMods();return;}
-  busy=true;int found=0,failed=0;
+  var candidates=ChosenMods().Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null).Where(m=>Discovery().Cached(m)==null).Take(8).ToArray();
+  if(candidates.Length==0){modStatus="选中的模组都已关联、已有查找结果，或不适用来源搜索。可进入详情检查和重试。";ShowMods();return;}
+  busy=true;int found=0,failed=0,processed=0;
   try{
    foreach(var mod in candidates){
     toast.Text="正在查找 GitHub 来源："+mod.Name;
+    processed++;
     try{
      var result=await Discovery().DiscoverAsync(mod);
      if(result.Candidates.Length>0)found++;
      if(result.Retryable){failed++;break;}
     }catch{failed++;}
    }
-   modStatus=$"批量查找完成：本轮检查 {candidates.Length} 项，找到 {found} 项候选，失败或受限 {failed} 项。请在各模组详情确认来源；每轮最多 8 项。";
+   modStatus=$"批量查找完成：本轮检查 {processed} 项，找到 {found} 项候选，失败或受限 {failed} 项。请在各模组详情确认来源；每轮最多 8 项。";
   }finally{busy=false;ShowMods();}
  }
  async void BatchCheckGitHub()
