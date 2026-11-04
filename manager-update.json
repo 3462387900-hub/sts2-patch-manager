@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.11.6",
+  "tag_name": "v0.11.7",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.11.6\r\n\r\n新增手动删除 MOD 后，自动处理失去对应目标的**已收录独立修复补丁**。\r\n\r\n- **自动停用孤立补丁：** 检测到之前确实存在的目标 MOD 被手动移除后，在文件写入结束、再次扫描确认目标仍缺失时，自动将与其关联的独立修复补丁移到管理器现有的「已停用模组」保留区，不删除文件。\r\n- **停用后提醒：** 界面下方及「模组管理」展示已停用补丁和数量；如有需要，可以在「修复补丁」标签中重新启用。\r\n- **多目标补丁保护：** 如果补丁可能同时服务多个 MOD，只要任一目标仍然存在，就不会自动停用。不会把普通前置库或联机伴随 MOD 的缺失误认成失去全部目标。\r\n- **安全限制不变：** 只处理本工具已审核、DLL/清单文件指纹通过校验的独立补丁；游戏运行中、清单不完整、存在共享目录、缺少明确关联或文件已被修改时不自动移动，并提示原因。真正移动仍由原有 `ModManager.Preview/Apply` 事务完成并再次验证。\r\n- **支持跨次启动：** 第一次在某个游戏目录完整扫描时建立当前 MOD 清单，之后即便关闭程序手动删除 MOD，下次打开也能识别目标 MOD 已被移除。首次扫描之前不存在已确认的删除记录时，不自动移动补丁。\r\n- **可关闭：** 「模组管理」→「修复补丁」中的「删除目标 MOD 后自动停用补丁」开关默认开启，可以手动关闭。\r\n- 自动停用不等于确认 MOD 作者修复了 Bug；健康判断仍需单独扫描。未知第三方补丁、原 MOD 内置补丁以及无法明确识别目标关系的补丁不会被自动操作。\r\n\r\n本版不新增或修改第三方 MOD、游戏补丁载荷、玩家存档，不涉及新运行时权限。请保持游戏关闭，且在手动复制/更新 MOD 文件时避免中途退出拷贝。\r\n",
-  "published_at": "2026-11-03T23:41:32Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.6",
+  "body": "# 尖塔修补站 v0.11.7\r\n\r\n本版为普通 MOD 增加 **GitHub 更新检测和来源自动查找**，不依赖 Steam 创意工坊或第三方 MOD 下载站。\r\n\r\n## 使用方法\r\n\r\n1. 打开「模组管理」→「普通 MOD」，点击「自动查找 GitHub 来源」。每次扫描最多 8 个尚未检查的 MOD，重复点击可继续处理后续 MOD。\r\n2. 在发现候选的 MOD 卡片中点击「详情」，查看来源、匹配依据和候选仓库。可以先打开仓库核对，再点击「确认关联」。\r\n3. 如果没有找到候选，可在 MOD 详情页选择「关联 GitHub 仓库」，手动输入公开仓库地址，例如 `https://github.com/作者/仓库`。\r\n4. 点击单个 MOD 的「检查更新」或模组列表上方的「检查 GitHub 更新」，查看「有更新」「已是最新」「待核对」「无法检测」状态。\r\n5. 发现更新后可以打开 GitHub Release 发布页，但当前版本不会自动下载、替换或安装 MOD。\r\n\r\n## 核心约束\r\n\r\n- 本版 **不自动关联候选仓库**。同名项目或分支可能不是实际来源，只有用户确认后才会写入关联。\r\n- 仅检查公开 GitHub 仓库的最新**正式 Release**。只提供源码、Tag、预发布或私有仓库的项目可能无法检查更新。\r\n- 本地 MOD 的版本格式若与 Release 标签不兼容，显示「待核对」，不会声称一定有更新。\r\n- MOD 的 GitHub 关联存储于管理器数据目录，按游戏安装目录隔离，MOD 原文件和游戏存档保持不变。\r\n- GitHub 匿名 API 有请求限制，批量搜索会做节流；接口故障不会阻止模组管理器的其他功能。\r\n- 独立修复补丁继续使用原有补丁健康、指纹和退役判断，不以 GitHub 版本号代替修复依据。\r\n\r\n已在隔离环境中执行 Windows 构建及自动化检查；真实游戏与不同作者仓库的实际识别覆盖率仍需用户验证。\r\n",
+  "published_at": "2026-11-04T11:43:56Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.7",
   "assets": [
     {
-      "name": "SpirePatch-v0.11.6-win-x64.zip",
+      "name": "SpirePatch-v0.11.7-win-x64.zip",
       "state": "uploaded",
-      "size": 63545111,
-      "digest": "sha256:24fe8204d85da64b78259d816463b075bf7d2a803326f713323eeb2d680fe51d",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.6/SpirePatch-v0.11.6-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/707510207"
+      "size": 63559066,
+      "digest": "sha256:5a11de5fe3effaf4fbe6acd5e124507453ac278cdbf156d7ec43facd71a86a48",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.7/SpirePatch-v0.11.7-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709290920"
     }
   ]
 }
