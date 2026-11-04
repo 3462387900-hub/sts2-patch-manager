@@ -27,6 +27,7 @@ public partial class MainWindow : Window
   Background=B("#0D1524");Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
   shell.Background=new LinearGradientBrush(B("#0D1524").Color,B("#192B46").Color,55);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
+  SourceInitialized+=(_,_)=>SpireGlassBackdrop.Enable(this);
   shell.ColumnDefinitions.Add(new(){Width=new(205)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
   Content=shell;BuildSidebar();
   var main=new Grid{Margin=new(25,18,25,15)};Grid.SetColumn(main,1);shell.Children.Add(main);
