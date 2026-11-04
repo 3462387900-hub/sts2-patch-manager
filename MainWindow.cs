@@ -27,9 +27,9 @@ public partial class MainWindow : Window
   Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
   shell.Background=SpireGlassTheme.Background(false);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
-  SourceInitialized+=(_,_)=>shell.Background=SpireGlassTheme.Background(SpireGlassBackdrop.Enable(this));
+  SourceInitialized+=(_,_)=>{nativeAcrylicActive=SpireGlassBackdrop.Enable(this);SetBareGlassTest(false,false);};
   shell.ColumnDefinitions.Add(new(){Width=new(205)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
-  Content=shell;SpireGlassTheme.AddAmbientGlow(shell);BuildSidebar();
+  Content=shell;glassAmbientSurface=SpireGlassTheme.AddAmbientGlow(shell);BuildSidebar();
   var main=new Grid{Margin=new(25,18,25,15)};Grid.SetColumn(main,1);shell.Children.Add(main);
   main.RowDefinitions.Add(new(){Height=GridLength.Auto});main.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});main.RowDefinitions.Add(new(){Height=GridLength.Auto});
   var top=new DockPanel{LastChildFill=false,Margin=new(0,0,0,15)};
@@ -47,7 +47,7 @@ public partial class MainWindow : Window
  StackPanel V(params UIElement[] children){var p=new StackPanel();foreach(var c in children)p.Children.Add(c);return p;}
  StackPanel H(params UIElement[] children){var p=new StackPanel{Orientation=Orientation.Horizontal};foreach(var c in children){if(c is FrameworkElement f)f.Margin=new(0,0,10,0);p.Children.Add(c);}return p;}
  Button Btn(string text,Action action,string? style=null){var b=new Button{Content=text};if(style!=null)b.Style=(Style)FindResource(style);if(text.StartsWith("←"))b.HorizontalAlignment=HorizontalAlignment.Left;b.Click+=(_,_)=>action();return b;}
- Border Card(UIElement child,string color="#D5182942",int padding=20)=>new(){Background=SpireGlassTheme.GlassPanel(color=="#D5182942"?null:color),BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new(1),CornerRadius=new(12),Padding=new(padding),Child=child};
+ Border Card(UIElement child,string color="#C0182942",int padding=20)=>new(){Background=SpireGlassTheme.GlassPanel(color=="#C0182942"?null:color),BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new(1),CornerRadius=new(12),Padding=new(padding),Child=child};
  Border Badge(string text,Brush? color=null)=>new(){HorizontalAlignment=HorizontalAlignment.Left,Background=B("#233F60"),CornerRadius=new(6),Padding=new(9,4,9,4),Child=T(text,11,color??muted)};
  Border Rule()=>new(){Background=B("#344862"),Height=1,Margin=new(0,20,0,20)};
  void Space(Panel p,int height=18)=>p.Children.Add(new Border{Height=height});
@@ -55,7 +55,7 @@ public partial class MainWindow : Window
  {var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=new(24)});g.ColumnDefinitions.Add(new(){Width=new(rightWidth)});g.Children.Add(left);Grid.SetColumn(right,2);g.Children.Add(right);return g;}
  void BuildSidebar()
  {
-  var border=new Border{Background=B("#B0162A45"),BorderBrush=B("#587397"),BorderThickness=new(0,0,1,0),Padding=new(15,22,15,15)};shell.Children.Add(border);
+  var border=new Border{Background=B("#70162A45"),BorderBrush=B("#587397"),BorderThickness=new(0,0,1,0),Padding=new(15,22,15,15)};shell.Children.Add(border);glassSidebarSurface=border;
   var layout=new DockPanel{LastChildFill=true};border.Child=layout;
   var brand=V(T("尖塔修补站",20,ink,true),T("MOD 与补丁管理",12,muted));brand.Margin=new(4,0,0,30);DockPanel.SetDock(brand,Dock.Top);layout.Children.Add(brand);
   folderLabel.TextWrapping=TextWrapping.Wrap;folderLabel.Foreground=muted;folderLabel.FontSize=11;folderLabel.LineHeight=18;folderLabel.MaxHeight=56;
@@ -88,7 +88,9 @@ public partial class MainWindow : Window
   Space(root,12);
   root.Children.Add(Card(V(T("Spire Glass · 材质诊断",17,ink,true),
    T(SpireGlassBackdrop.Status,12,muted),
-   T("Windows 11 22H2+ 可尝试真正的桌面 Acrylic；Windows 10、关闭系统透明效果或远程桌面环境会显示应用内渐变玻璃回退。",12,muted))));
+   T(SpireGlassBackdrop.AlphaStatus,12,muted),
+   T("将文字或对比强烈的图片窗口放在管理器后面。裸玻璃测试中检查空白区是否出现随背景变化的模糊纹理。仅有接口成功提示不能证明效果。",12,muted),
+   Btn(bareGlassTestActive?"恢复均衡毛玻璃":"临时裸玻璃测试（离开设置自动恢复）",()=>SetBareGlassTest(!bareGlassTestActive),"Ghost"))));
   Space(root,12);
   var net=GitHubNetwork.Load(installer.DataRoot);
   root.Children.Add(Card(V(T("GitHub 网络",17,ink,true),
@@ -98,6 +100,7 @@ public partial class MainWindow : Window
  }
  void SetPage(string active,UIElement element,string? key=null,Action? restore=null)
  {
+  if(active!="工具与设置"&&bareGlassTestActive)SetBareGlassTest(false,false);
   TrackPage(key??active,restore??(()=>Navigate(active)));page=active;
   // The virtualized MOD list owns scrolling; other pages keep the normal page scrollbar.
   pageScroll!.VerticalScrollBarVisibility=active=="模组管理"&&(key??active)=="模组管理"
