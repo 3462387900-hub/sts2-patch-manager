@@ -559,7 +559,10 @@ public partial class MainWindow
    var result=updates.Cached(mod.Id);
    return result==null?"GitHub：已关联 · 待检查":"GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:"");
   });
-  var list=ModCardList.Create(row=>{
+  ListBox list=null!;
+  var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
+  int cardColumns=2;
+  list=ModCardList.Create(row=>{
    CaptureModListOffset();ShowModDetail(row.Mod.Folder);
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
@@ -591,10 +594,8 @@ public partial class MainWindow
    row.Selected=value;ModCardList.RefreshVisible(list);UpdateSelectionToolbar();
   });
   activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
-  var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   var footer=V(empty);
   Grid.SetRow(footer,2);root.Children.Add(footer);
-  int cardColumns=2;
   void UpdateSelectionToolbar()
   {
    int count=ChosenMods().Length;
