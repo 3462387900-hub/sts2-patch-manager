@@ -6,7 +6,7 @@ $app=Join-Path $work 'app'
 try {
  $files=@{}
  foreach ($name in @('SpirePatch.exe','SpirePatch.dll','SpirePatch.deps.json','SpirePatch.runtimeconfig.json','subfolder/allowed.json')) {
-  $path=Join-Path $app ($name.Replace('/','\\'))
+  $path=Join-Path $app ($name.Replace('/','\'))
   [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path)) | Out-Null
   [IO.File]::WriteAllText($path,'test program content '+$name)
   $files[$name]=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
