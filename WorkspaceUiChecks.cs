@@ -118,6 +118,36 @@ public partial class MainWindow
   await Click("普通 MOD  (6)");
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "regular MOD tab excludes the catalogued independent patch");
+  Check(ModListView.ColumnCount(600)==1&&ModListView.ColumnCount(790)==2&&ModListView.ColumnCount(1180)==3,
+   "MOD cards choose one, two or three columns from usable content width");
+  var cardToSelect=Controls<ModCardControl>(activeModList!).First();
+  var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
+  cardToSelect.SelectBox.IsChecked=true;await Idle();
+  Check(chosenModFolders.Contains(checkedFolder)&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("已选 1 项")),
+   "card checkbox updates selected folders and the batch toolbar");
+  await Shot("02-模组卡片勾选状态");
+  var selectionSearch=Controls<TextBox>(shell).Single();
+  selectionSearch.Text="__筛选不匹配__";await Idle();
+  Check(ChosenMods().Length==1&&Controls<TextBlock>(shell).Any(t=>t.Text.Contains("筛选隐藏 1 项")),
+   "selection persists and hidden selected MODs are explicitly counted");
+  selectionSearch.Text="";await Idle();
+  await Click("取消选择");await Idle();
+  Check(ChosenMods().Length==0,"clear selection resets batch scope without moving MOD files");
+  var selectAll=Controls<CheckBox>(shell).Single(c=>c.Content?.ToString()=="全选当前结果");
+  selectAll.IsChecked=true;await Idle();
+  Check(ChosenMods().Length==6,"select all targets only six visible regular MODs");
+  selectAll.IsChecked=false;await Idle();
+  Check(ChosenMods().Length==0,"deselect all removes current filtered selections");
+  bool? reviewAccepted=null;
+  Dispatcher.BeginInvoke(new Action(()=>{
+   var modal=Application.Current.Windows.OfType<Window>().First(w=>w.Title=="模组批量预览隔离测试");
+   var cancel=Controls<Button>(modal).First(b=>b.Content?.ToString()=="取消");
+   cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,cancel));
+  }),DispatcherPriority.ApplicationIdle);
+  reviewAccepted=ModBatchDialogs.Confirm(this,"模组批量预览隔离测试",
+   "仅展示预览，不涉及文件修改。",[new ModBatchReview("TestSolo","可处理","测试预览")]);
+  Check(reviewAccepted==false,"batch review can be cancelled before any file operation");
   var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();
   Check(pageScroll!.VerticalScrollBarVisibility==ScrollBarVisibility.Disabled&&
