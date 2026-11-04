@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.11.11",
+  "tag_name": "v0.12.0",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.11.11\r\n\r\n本版针对部分用户无法连接 GitHub 仓库、管理器更新 ZIP 下载缓慢或中途超时的问题，增加可控的网络配置和诊断工具。\r\n\r\n## 新增功能\r\n\r\n- 「工具与设置 → GitHub 网络」可选择「跟随 Windows 系统代理」或「本机 HTTP 代理」；手动模式示例：`http://127.0.0.1:7890`。仅支持本机端口，不保存账号密码或 GitHub Token；保存后需重启管理器。\r\n- 「诊断 GitHub 连接」分别测试 `api.github.com`、`raw.githubusercontent.com`、`github.com`，输出响应状态和耗时，帮助区分来源搜索、版本索引与发布页连接问题。\r\n- GitHub MOD 来源查找、MOD Release 检测与下载安装、在线补丁源、管理器自身更新统一使用所选网络模式。\r\n- 「检查更新」页增加「备用官方通道更新」，可通过 GitHub 官方 Release Asset API 发起下载；仍按已有发布签名约束和 SHA-256 校验。\r\n- 下载时显示平均速率，管理器更新包总下载超时由 10 分钟放宽至 45 分钟。仍可手动取消。\r\n\r\n## 使用方法\r\n\r\n1. 如朋友的浏览器能使用本机代理访问 GitHub，而管理器不能，在「工具与设置」打开「设置代理」并选择本机 HTTP 代理，按实际代理软件端口填写，例如 `http://127.0.0.1:7890`。\r\n2. 保存后彻底关闭并重新启动管理器，运行「诊断 GitHub 连接」。\r\n3. 如果 GitHub 发布页正常但 ZIP 下载异常缓慢，在「检查更新」尝试「备用官方通道更新」。\r\n4. 如果没有可用的 GitHub 网络环境，可让可信朋友从官方 Release 下载 ZIP，通过 QQ/微信等方式离线传输，再关闭程序手动解压覆盖旧程序文件（保留 `数据` 目录）。\r\n\r\n## 安全与适用边界\r\n\r\n- 仅配置用户明确指定的本机 HTTP 代理，不添加不明第三方镜像、不跳过 TLS/HTTPS 校验、不自动读取任何代理账号和 Token。\r\n- 官方备用线路不保证提速；同一网络的多个 GitHub 官方域名可能同时受阻。若需要真正稳定的国内高速分发，还需要由项目维护者配置可信的国内对象存储/CDN 和校验发布机制。\r\n- 原有管理器更新 SHA-256、文件清单、备份及回滚限制未变；不会修改游戏文件或已安装的第三方 MOD。\r\n- Windows CI 覆盖网络设置校验、域名诊断和官方备用下载路由的模拟测试，不代表对每一个朋友的网络环境已经验证。\r\n",
-  "published_at": "2026-11-04T13:28:34Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.11",
+  "body": "# 尖塔修补站 v0.12.0\r\n\r\n本版将 Spire Glass 深蓝灰毛玻璃界面与 GitHub MOD 更新后的旧版本备份清理合并发布。\r\n\r\n## Spire Glass 界面\r\n\r\n- 主窗口更换深蓝灰配色，深色背景使用浅色文字，浅蓝实心按钮使用深色文字。\r\n- 采用分层半透明侧边栏与卡片；Windows 11 22H2 及以上尝试启用系统 Mica 背景，其他环境保留渐变背景。\r\n- 导航明确划分总览、模组管理、修复补丁、更新中心、联机检查、诊断与日志、工具与设置。\r\n- 「更新中心」集中显示本地 MOD、GitHub 来源与更新状态，左侧列表、右侧详情，不改变已有来源核验及更新安装流程。\r\n- 总览增加可更新 MOD、需要复核的修复补丁提示。MOD 列表行优化深色对比度与紧凑间距。\r\n\r\n## 旧版本文件清理\r\n\r\n- 普通 MOD 详情新增「清理旧版本备份」。\r\n- 仅列出该 MOD 的较旧 GitHub 更新备份，不包含当前 MOD，最近一次备份始终保留。\r\n- 用户手动勾选需要删除的备份并二次确认；不会自动删除，删除后该备份不可恢复。\r\n- 清理前检查游戏已退出、真实目录在管理器专用备份区内、路径及符号链接安全。不符合条件则拒绝删除。\r\n- 一次清理可能部分成功，界面会明确提示发生的错误；不会将部分成功误认为全部成功。\r\n\r\n## 构建验证\r\n\r\n- Windows 界面回归测试确认按钮处于可操作状态后再模拟点击，避免在忙碌状态下误判启停流程。\r\n\r\n## 安全与兼容性\r\n\r\n原有的 SHA-256 校验、MOD ID/版本核对、文件变动防护、联机对齐限制、补丁健康失效、安装备份与恢复机制均保留。不会因 MOD 更新而自动判定旧修复已经失效。\r\n\r\n这是 Windows WPF/.NET 9 版本。透明材质具体效果会随 Windows 版本及透明效果设置变化；不支持时仍以深色背景保证可读性。\r\n",
+  "published_at": "2026-11-04T13:59:04Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.12.0",
   "assets": [
     {
-      "name": "SpirePatch-v0.11.11-win-x64.zip",
+      "name": "SpirePatch-v0.12.0-win-x64.zip",
       "state": "uploaded",
-      "size": 63593497,
-      "digest": "sha256:ffaf1d6b68840749f607cff72a53c29f2880957948e2e432781a1a237964816d",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.11/SpirePatch-v0.11.11-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709613906"
+      "size": 63599565,
+      "digest": "sha256:55ace9b3ef0a72f2b492ef83df867c3c944928e2fa46bc6d01fdc35e5c962562",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.12.0/SpirePatch-v0.12.0-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709709925"
     }
   ]
 }
