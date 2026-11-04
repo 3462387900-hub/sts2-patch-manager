@@ -16,7 +16,7 @@ internal static class SpireGlassTheme
   if(nativeAcrylic)
    return diagnostic
     ? new SolidColorBrush(Color.FromArgb(16,10,18,31))
-    : new LinearGradientBrush(Color.FromArgb(95,11,19,34),Color.FromArgb(112,21,34,55),58);
+    : new LinearGradientBrush(Color.FromArgb(143,8,18,36),Color.FromArgb(153,13,31,53),58);
   // Without DWM Acrylic never leave a transparent WPF window exposing black pixels.
   return new LinearGradientBrush(Color.FromRgb(12,21,38),
    Color.FromRgb(27,43,69),58);
@@ -56,11 +56,11 @@ internal static class SpireGlassTheme
   // visibly layered even on Windows versions that cannot provide Desktop Acrylic.
   var ambient=new Canvas{IsHitTestVisible=false,ClipToBounds=true};
   Grid.SetColumnSpan(ambient,2);
-  var blue=Halo(650,490,Color.FromRgb(73,118,199),.58);
+  var blue=Halo(650,490,Color.FromRgb(55,103,173),.40);
   Canvas.SetRight(blue,-140);Canvas.SetTop(blue,-190);ambient.Children.Add(blue);
-  var teal=Halo(620,510,Color.FromRgb(38,115,151),.44);
+  var teal=Halo(620,510,Color.FromRgb(30,100,131),.30);
   Canvas.SetLeft(teal,55);Canvas.SetBottom(teal,-265);ambient.Children.Add(teal);
-  var violet=Halo(410,380,Color.FromRgb(124,85,175),.27);
+  var violet=Halo(410,380,Color.FromRgb(91,75,153),.18);
   Canvas.SetRight(violet,-195);Canvas.SetBottom(violet,-145);ambient.Children.Add(violet);
   root.Children.Add(ambient); // Added first so it never covers interactive UI.
   return ambient;
