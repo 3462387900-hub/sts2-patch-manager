@@ -18,9 +18,9 @@ public sealed class ModCardControl : Border
  readonly TextBlock status=new(){FontSize=12};
  readonly TextBlock id=new(),version=new(),author=new(),github=new(),depends=new();
  readonly Button toggle,update;
- public Action<ModListRow,bool>? SelectionChanged;
- public Action<ModListRow>? DetailsRequested,ToggleRequested,UpdateRequested;
- public Action<ModListRow,Button>? MoreRequested;
+ internal Action<ModListRow,bool>? SelectionChanged;
+ internal Action<ModListRow>? DetailsRequested,ToggleRequested,UpdateRequested;
+ internal Action<ModListRow,Button>? MoreRequested;
  bool setting;
  public ModCardControl()
  {
@@ -74,7 +74,7 @@ public sealed class ModCardControl : Border
   status.Text=row.State;status.Foreground=row.Mod.Enabled?Brushes.LightGreen:Brushes.LightGray;
   id.Text=row.Mod.Id;id.ToolTip=id.Text;
   version.Text=row.Mod.Version;author.Text=row.Mod.Author;
-  github.Text=string.IsNullOrEmpty(row.GitHubText)?"未检查":row.GitHubText.Replace("GitHub：","");
+  github.Text=row.IsFix?"补丁健康："+row.Health:string.IsNullOrEmpty(row.GitHubText)?"未检查":row.GitHubText.Replace("GitHub：","");
   github.ToolTip=row.GitHubText;
   const string dep="这些启用项依赖它，请先停用依赖项：";
   depends.Text=row.BlockReason?.StartsWith(dep,StringComparison.Ordinal)==true?
