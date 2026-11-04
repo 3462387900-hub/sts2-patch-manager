@@ -141,6 +141,8 @@ internal static class ManagerUpdateCleanup
    throw new InvalidOperationException("更新文件在预览后发生变化，请重新扫描后确认。");
   long freed=0;int count=0;var errors=new List<string>();
   string data=DataRoot(appRoot),updates=Path.Combine(data,"管理器更新"),downloads=Path.Combine(data,"管理器下载");
+  if((Directory.Exists(updates)&&Link(updates))||(Directory.Exists(downloads)&&Link(downloads)))
+   throw new InvalidOperationException("更新缓存目录被替换为链接，已停止清理。");
   foreach(var item in refreshed.Items)
   {
    try
