@@ -55,7 +55,7 @@ public partial class MainWindow
       "进入 MOD 详情核对并确认；每次最多查找 8 个，重复点击可继续下一批。";
   }
   catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
-  finally{busy=false;ShowMods();}
+  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
  }
  async void DiscoverGitHubMod(ManagedMod mod)
  {
@@ -81,7 +81,7 @@ public partial class MainWindow
    modStatus=$"已检查 {count} 个绑定 GitHub 的普通 MOD；检测结果仅供参考，不会修改游戏文件。";
   }
   catch(Exception e){modStatus="GitHub 检查未完成："+e.Message;}
-  finally{busy=false;ShowMods();}
+  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
  }
  void BindGitHubMod(ManagedMod mod)
  {
