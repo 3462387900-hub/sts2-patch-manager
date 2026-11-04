@@ -337,6 +337,77 @@ public partial class MainWindow
    else if(page=="总览")ShowOverview();
   }
  }
+ readonly HashSet<string> chosenModFolders=new(StringComparer.OrdinalIgnoreCase);
+ ManagedMod[] ChosenMods()=>modInventory?.Mods.Where(m=>chosenModFolders.Contains(m.Folder)&&
+  ModPresentation.IsIndependentPatch(m)==(modSection=="修复补丁")).ToArray()??[];
+ async void BatchFindGitHub()
+ {
+  if(busy||modInventoryDirty||selectedInstallRoot==null)return;
+  var candidates=ChosenMods().Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null).Take(8).ToArray();
+  if(candidates.Length==0){modStatus="选中的模组已经关联 GitHub，或不适用来源搜索。";ShowMods();return;}
+  busy=true;int found=0,failed=0;
+  try{
+   foreach(var mod in candidates){
+    toast.Text="正在查找 GitHub 来源："+mod.Name;
+    try{
+     var result=await Discovery().DiscoverAsync(mod);
+     if(result.Candidates.Length>0)found++;
+     if(result.Retryable){failed++;break;}
+    }catch{failed++;}
+   }
+   modStatus=$"批量查找完成：本轮检查 {candidates.Length} 项，找到 {found} 项候选，失败或受限 {failed} 项。请在各模组详情确认来源；每轮最多 8 项。";
+  }finally{busy=false;ShowMods();}
+ }
+ async void BatchCheckGitHub()
+ {
+  if(busy||modInventoryDirty||selectedInstallRoot==null)return;
+  var mods=ChosenMods().Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)!=null).ToArray();
+  if(mods.Length==0){modStatus="选中的模组没有已关联的 GitHub 来源。";ShowMods();return;}
+  busy=true;int success=0;int failure=0;
+  try{
+   foreach(var mod in mods){
+    toast.Text="正在检查 GitHub 更新："+mod.Name;
+    try{await GitHubUpdates().CheckAsync(mod,true);success++;}catch{failure++;}
+   }
+   modStatus=$"批量检查完成：成功 {success} 项，失败 {failure} 项。";
+  }finally{busy=false;ShowMods();}
+ }
+ async void BatchToggleMods(bool enable)
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  var mods=ChosenMods().Where(m=>m.Enabled!=enable).ToArray();
+  if(mods.Length==0){modStatus="选中模组中没有需要"+(enable?"启用":"停用")+"的项目。";ShowMods();return;}
+  var answer=MessageBox.Show(this,$"将逐项预览和重新检查 {mods.Length} 个模组，然后{(enable?"启用":"停用")}。\n"+
+   "存在依赖或文件异常的项目会跳过。已成功的项目不会因为后续失败而自动回滚。\n\n确认继续？",
+   "批量"+(enable?"启用":"停用"),MessageBoxButton.YesNo,MessageBoxImage.Warning);
+  if(answer!=MessageBoxResult.Yes)return;
+  busy=true;transactionWriting=true;
+  int success=0;var errors=new Dictionary<string,string>();var pending=mods.ToList();
+  try{
+   // Retry blocked dependencies after their prerequisites have been processed.
+   while(pending.Count>0){
+    int before=success;var retry=new List<ManagedMod>();
+    foreach(var mod in pending){
+     toast.Text="正在处理："+mod.Name;
+     try{
+      await Task.Run(()=>{
+       var plan=ModManager.Preview(selectedInstallRoot!,mod.Folder,enable);
+       ModManager.Apply(plan);
+      });
+      success++;chosenModFolders.Remove(mod.Folder);errors.Remove(mod.Name);
+     }catch(Exception e){retry.Add(mod);errors[mod.Name]=e.Message;}
+    }
+    if(success==before)break;
+    pending=retry;
+   }
+   modInventory=await Task.Run(()=>ModManager.Scan(selectedInstallRoot!));
+   modInventoryDirty=false;InvalidateLifecycle();ClearSelection();ClearCoop();
+   report=null;states=[];installPreview=null;lastInstallResult=null;
+   modStatus=$"批量{(enable?"启用":"停用")}：成功 {success} 项，跳过 {errors.Count} 项。"+
+    (errors.Count>0?" "+string.Join("；",errors.Take(3).Select(e=>e.Key+"："+e.Value)):"");
+  }catch(Exception e){modStatus="批量操作中断："+e.Message;}
+  finally{transactionWriting=false;busy=false;ShowMods();}
+ }
  double modListOffset;
  static ScrollViewer? ListScroll(DependencyObject element)
  {
