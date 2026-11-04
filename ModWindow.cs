@@ -466,7 +466,7 @@ public partial class MainWindow
   {
    string selected=name;
    var tab=Btn($"{name}  ({count})",()=>{
-    CaptureModListOffset();modListOffset=0;modSection=selected;ShowMods();
+    CaptureModListOffset();modListOffset=0;modSection=selected;chosenModFolders.Clear();ShowMods();
    },modSection==name?"SelectedTab":"Ghost");
    tab.Margin=new Thickness(0,0,9,0);
    groups.Children.Add(tab);
@@ -530,6 +530,20 @@ public partial class MainWindow
    button.Margin=new Thickness(0,0,7,0);filters.Children.Add(button);
   }
   filterBar.Children.Add(filters);header.Children.Add(filterBar);
+  var selectionBar=new WrapPanel{Margin=new Thickness(0,3,0,8)};
+  var checkAll=new CheckBox{Content="全选当前结果",Margin=new Thickness(0,7,12,0)};
+  var selectionCount=T("",13,ink,true);selectionCount.Margin=new Thickness(0,7,12,0);
+  selectionBar.Children.Add(checkAll);selectionBar.Children.Add(selectionCount);
+  var findBatch=Btn("查找 GitHub 来源",BatchFindGitHub,"Ghost");
+  var checkBatch=Btn("检查 GitHub 更新",BatchCheckGitHub,"Ghost");
+  var enableBatch=Btn("批量启用",()=>BatchToggleMods(true),"Ghost");
+  var disableBatch=Btn("批量停用",()=>BatchToggleMods(false),"Ghost");
+  var clearBatch=Btn("取消选择",()=>{chosenModFolders.Clear();ShowMods();},"Ghost");
+  foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch}){
+   button.Padding=new Thickness(9,7,9,7);button.Margin=new Thickness(0,0,6,4);
+   selectionBar.Children.Add(button);
+  }
+  header.Children.Add(selectionBar);
 
   var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
    if(ModPresentation.IsIndependentPatch(mod))return "";
@@ -545,18 +559,36 @@ public partial class MainWindow
    var result=updates.Cached(mod.Id);
    return result==null?"GitHub：已关联 · 待检查":"GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:"");
   });
-  var list=ModListView.Create(row=>{
+  var list=ModCardList.Create(row=>{
    CaptureModListOffset();ShowModDetail(row.Mod.Folder);
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
    var toggle=new MenuItem{Header=row.Mod.Enabled?"预览停用":"预览启用",
     IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty&&row.BlockReason==null,
-    ToolTip=modInventoryDirty?"MOD 环境有变动，请先刷新。":row.BlockReason};
-   toggle.Click+=(_,_)=>{CaptureModListOffset();PrepareModToggle(row.Mod);};
-   menu.Items.Add(toggle);
-   var open=new MenuItem{Header="打开文件夹"};
-   open.Click+=(_,_)=>OpenUrl(row.Mod.Folder);menu.Items.Add(open);
+    ToolTip=row.BlockReason};
+   toggle.Click+=(_,_)=>PrepareModToggle(row.Mod);menu.Items.Add(toggle);
+   var folder=new MenuItem{Header="打开文件夹"};
+   folder.Click+=(_,_)=>OpenUrl(row.Mod.Folder);menu.Items.Add(folder);
+   if(!row.IsFix){
+    var find=new MenuItem{Header="自动查找 GitHub 来源",IsEnabled=!busy};
+    find.Click+=(_,_)=>DiscoverGitHubMod(row.Mod);menu.Items.Add(find);
+    var bind=new MenuItem{Header="关联 / 修改 GitHub 来源",IsEnabled=!busy};
+    bind.Click+=(_,_)=>BindGitHubMod(row.Mod);menu.Items.Add(bind);
+   }
+   var detail=new MenuItem{Header="查看完整详情"};
+   detail.Click+=(_,_)=>ShowModDetail(row.Mod.Folder);menu.Items.Add(detail);
    button.ContextMenu=menu;menu.IsOpen=true;
+  },row=>{if(!busy&&!transactionWriting&&!modInventoryDirty)PrepareModToggle(row.Mod);},
+  row=>{
+   if(busy||transactionWriting||modInventoryDirty)return;
+   if(row.IsFix){ShowModDetail(row.Mod.Folder);return;}
+   var updates=GitHubUpdates();
+   if(updates.Repository(row.Mod.Id)==null)DiscoverGitHubMod(row.Mod);
+   else if(updates.Cached(row.Mod.Id)?.Status=="有更新")UpdateGitHubMod(row.Mod);
+   else CheckGitHubMod(row.Mod);
+  },(row,value)=>{
+   if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
+   row.Selected=value;UpdateSelectionToolbar();
   });
   activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
@@ -565,7 +597,9 @@ public partial class MainWindow
   void FilterRows()
   {
    var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
-   list.ItemsSource=visible;
+   foreach(var row in rows)row.Selected=chosenModFolders.Contains(row.Mod.Folder);
+   ModCardList.SetItems(list,visible,cardColumns);
+   UpdateSelectionToolbar();
    shownCount.Text=$"显示 {visible.Length} / {(modSection=="修复补丁"?fixCount:normalCount)} 项";
    empty.Visibility=visible.Length==0&&!busy?Visibility.Visible:Visibility.Collapsed;
   }
