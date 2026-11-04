@@ -12,6 +12,8 @@ public partial class MainWindow
  string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
  GitHubModUpdates? githubModUpdates;
+ GitHubModDiscovery? githubDiscovery;
+ GitHubModDiscovery Discovery()=>githubDiscovery??=new GitHubModDiscovery();
  string? githubRoot;
  GitHubModUpdates GitHubUpdates()
  {
@@ -22,6 +24,34 @@ public partial class MainWindow
    githubRoot=selectedInstallRoot;
   }
   return githubModUpdates;
+ }
+ async void DiscoverGitHubMods()
+ {
+  if(busy||modInventory==null||selectedInstallRoot==null)return;
+  busy=true;
+  int found=0,examined=0;
+  try
+  {
+   var mods=modInventory.Mods.Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null)
+    .GroupBy(m=>m.Id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).Take(8).ToArray();
+   foreach(var mod in mods)
+   {
+    var result=await Discovery().DiscoverAsync(mod);
+    if(result.Candidates.Length>0)found++;
+    examined++;
+   }
+   modStatus=$"自动查找完成：检查 {examined} 个未关联 MOD，{found} 个有候选。进入 MOD 详情确认来源；每次最多搜索 8 个以避免 API 限流。";
+  }
+  catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
+  finally{busy=false;ShowMods();}
+ }
+ async void DiscoverGitHubMod(ManagedMod mod)
+ {
+  if(busy)return;
+  busy=true;
+  try{await Discovery().DiscoverAsync(mod,true);}
+  catch(Exception e){toast.Text="查找失败："+e.Message;}
+  finally{busy=false;ShowModDetail(mod.Folder);}
  }
  async void CheckGitHubMods()
  {
@@ -331,7 +361,28 @@ public partial class MainWindow
     if(result.ReleaseUrl.Length>0)root.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(result.ReleaseUrl),"Ghost"));
    }
    else if(repo!=null)root.Children.Add(T("尚未检查该仓库。",12,muted));
+   var discovery=Discovery().Cached(mod.Id);
+   if(repo==null&&discovery!=null)
+   {
+    Space(root,6);
+    root.Children.Add(T(discovery.Candidates.Length>0?"找到 "+discovery.Candidates.Length+" 个候选来源（请确认）":discovery.Note,12,muted));
+    foreach(var candidate in discovery.Candidates)
+    {
+     var row=V(T(candidate.Repository,13,ink,true),T(candidate.Reason+" · "+(candidate.Verified?"已核验元数据":"尚未核验"),11,muted));
+     var confirm=Btn("确认关联",()=>{
+      try{updates.Bind(mod.Id,candidate.Repository);ShowModDetail(mod.Folder);}
+      catch(Exception e){toast.Text="关联失败："+e.Message;}
+     },"Ghost");
+     var openSource=Btn("查看仓库",()=>OpenUrl("https://github.com/"+candidate.Repository),"Ghost");
+     row.Children.Add(H(confirm,openSource));root.Children.Add(Card(row,padding:10));Space(root,6);
+    }
+   }
    Space(root,9);
+   if(repo==null)
+   {
+    var discover=Btn("自动查找来源",()=>DiscoverGitHubMod(mod),"Ghost");discover.IsEnabled=!busy;
+    root.Children.Add(H(discover));Space(root,7);
+   }
    var bind=Btn(repo==null?"关联 GitHub 仓库":"修改 GitHub 关联",()=>BindGitHubMod(mod),"Ghost");
    var check=Btn("检查更新",()=>CheckGitHubMod(mod),"Ghost");check.IsEnabled=repo!=null&&!busy;
    root.Children.Add(H(bind,check));Space(root,20);
