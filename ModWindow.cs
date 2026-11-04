@@ -333,6 +333,8 @@ public partial class MainWindow
   {
    busy=false;
    if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+   else if(page=="更新中心")ShowModUpdatesCenter();
+   else if(page=="总览")ShowOverview();
   }
  }
  double modListOffset;
