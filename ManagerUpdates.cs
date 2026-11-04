@@ -79,14 +79,14 @@ public sealed class ManagerUpdates : IDisposable
   while((n=await input.ReadAsync(buffer,ct))>0){if(output.Length+n>limit)throw new InvalidDataException("更新源响应过大。");await output.WriteAsync(buffer.AsMemory(0,n),ct);}
   return ParseRelease(System.Text.Encoding.UTF8.GetString(output.ToArray()));
  }
- public async Task DownloadAsync(ManagerRelease release,string destination,IProgress<long>? progress=null,CancellationToken ct=default)
+ public async Task DownloadAsync(ManagerRelease release,string destination,IProgress<long>? progress=null,CancellationToken ct=default,bool preferAssetApi=false)
  {
   Validate(release);destination=Path.GetFullPath(destination);
   Require(Path.GetExtension(destination).Equals(".zip",StringComparison.OrdinalIgnoreCase),"请保存为 ZIP 更新包。");
   using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromMinutes(10));ct=timeout.Token;
   string temporary=destination+"."+Guid.NewGuid().ToString("N")+".part";
   try{
-   using var response=await OpenDownloadAsync(release,ct);
+   using var response=await OpenDownloadAsync(release,ct,preferAssetApi);
    if(response.RequestMessage?.RequestUri is { Scheme: not "https" })throw new InvalidDataException("更新下载必须使用 HTTPS。");
    if(response.Content.Headers.ContentLength is long size&&size!=release.Size)throw new InvalidDataException("更新包长度与发布记录不一致。");
    await using(var input=await response.Content.ReadAsStreamAsync(ct))
@@ -98,7 +98,7 @@ public sealed class ManagerUpdates : IDisposable
    ct.ThrowIfCancellationRequested();File.Move(temporary,destination,true);
   }finally{if(File.Exists(temporary))File.Delete(temporary);}
  }
- async Task<HttpResponseMessage> OpenDownloadAsync(ManagerRelease release,CancellationToken ct)
+ async Task<HttpResponseMessage> OpenDownloadAsync(ManagerRelease release,CancellationToken ct,bool preferAssetApi)
  {
   async Task<HttpResponseMessage> Open(string url){
    using var connection=CancellationTokenSource.CreateLinkedTokenSource(ct);connection.CancelAfter(TimeSpan.FromSeconds(30));
@@ -106,8 +106,10 @@ public sealed class ManagerUpdates : IDisposable
    var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,connection.Token);
    try{CheckResponse(response);return response;}catch{response.Dispose();throw;}
   }
-  try{return await Open(release.DownloadUrl);}
-  catch(HttpRequestException){return await Open(release.AssetApiUrl);}
-  catch(OperationCanceledException)when(!ct.IsCancellationRequested){return await Open(release.AssetApiUrl);}
+  string first=preferAssetApi?release.AssetApiUrl:release.DownloadUrl;
+  string second=preferAssetApi?release.DownloadUrl:release.AssetApiUrl;
+  try{return await Open(first);}
+  catch(HttpRequestException){return await Open(second);}
+  catch(OperationCanceledException)when(!ct.IsCancellationRequested){return await Open(second);}
  }
 }
