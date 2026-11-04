@@ -77,6 +77,8 @@ public partial class MainWindow
   try
   {
    await Task.Delay(1200);
+   for(int retry=0;retry<30&&(managerUpdateBusy||busy||transactionWriting||onlineBusy);retry++)
+    await Task.Delay(500);
    if(!CanUpdateManager)return;
    managerCleanupBusy=true;
    var preview=await Task.Run(()=>ManagerUpdateCleanup.Preview(AppContext.BaseDirectory));
