@@ -201,9 +201,7 @@ public partial class MainWindow
    {
     var box=new CheckBox{Content=System.IO.Path.GetFileName(path),Margin=new Thickness(0,5,0,2)};
     selection.Add((box,path));rows.Children.Add(box);
-    var size=Directory.EnumerateFiles(path,"*",SearchOption.AllDirectories)
-     .Sum(f=>new FileInfo(f).Length);
-    rows.Children.Add(T("约 "+(size/1048576.0).ToString("F1")+" MB · "+path,11,muted));
+    rows.Children.Add(T("备份目录："+path,11,muted));
    }
    var scroll=new ScrollViewer{Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
    var actions=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)};
