@@ -4,7 +4,7 @@ param(
  [Parameter(Mandatory=$true)][string]$Version
 )
 $ErrorActionPreference='Stop'
-$application=[IO.Path]::GetFullPath($ApplicationDirectory).TrimEnd('\\')
+$application=[IO.Path]::GetFullPath($ApplicationDirectory).TrimEnd('\')
 $archive=[IO.Path]::GetFullPath($ArchivePath)
 $manifestPath=Join-Path $application 'manager-files.json'
 if (!(Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Missing manager-files.json.' }
@@ -22,15 +22,15 @@ try {
  foreach ($entry in $entries) {
   $name=[string]$entry.Name
   $first=($name -split '/')[0]
-  if ($name.Contains('\\') -or $name.StartsWith('/') -or $name.Contains(':') -or $name.Contains('//') -or
+  if ($name.Contains('\') -or $name.StartsWith('/') -or $name.Contains(':') -or $name.Contains('//') -or
       $name.Split('/') -contains '..' -or $name.Split('/') -contains '.' -or
       $first -in @('数据','mods','mod_fix_backups','SlayTheSpire2.exe') -or
       $first.StartsWith('.') -or $first.EndsWith('.part') -or
       !$names.Add($name) -or $name -eq 'manager-files.json') { throw ('Unsafe release manifest entry: '+$name) }
-  $source=[IO.Path]::GetFullPath((Join-Path $application ($name.Replace('/','\\'))))
-  $target=[IO.Path]::GetFullPath((Join-Path $payload ($name.Replace('/','\\'))))
-  if (!$source.StartsWith(($application+'\\'),[StringComparison]::OrdinalIgnoreCase) -or
-      !$target.StartsWith(($payload+'\\'),[StringComparison]::OrdinalIgnoreCase) -or
+  $source=[IO.Path]::GetFullPath((Join-Path $application ($name.Replace('/','\'))))
+  $target=[IO.Path]::GetFullPath((Join-Path $payload ($name.Replace('/','\'))))
+  if (!$source.StartsWith(($application+'\'),[StringComparison]::OrdinalIgnoreCase) -or
+      !$target.StartsWith(($payload+'\'),[StringComparison]::OrdinalIgnoreCase) -or
       !(Test-Path -LiteralPath $source -PathType Leaf)) { throw ('Missing or unsafe release file: '+$name) }
   $hash=(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
   if ($hash -ne [string]$entry.Value) { throw ('Release file changed after manifest creation: '+$name) }
@@ -50,7 +50,7 @@ try {
   $archivePrefix='尖塔修补站-v'+$Version+'/'
   $found=New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
   foreach ($item in $zip.Entries) {
-   if (!$item.FullName.StartsWith($archivePrefix,[StringComparison]::Ordinal) -or $item.FullName.Contains('\\')) { throw 'Archive root is invalid.' }
+   if (!$item.FullName.StartsWith($archivePrefix,[StringComparison]::Ordinal) -or $item.FullName.Contains('\')) { throw 'Archive root is invalid.' }
    if ($item.FullName.EndsWith('/')) { continue }
    $relative=$item.FullName.Substring($archivePrefix.Length)
    if (!$found.Add($relative) -or ($relative -ne 'manager-files.json' -and !$names.Contains($relative))) { throw ('Unexpected entry in update archive: '+$relative) }
