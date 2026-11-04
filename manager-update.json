@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.11.9",
+  "tag_name": "v0.11.10",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.11.9\r\n\r\n本版新增 GitHub MOD 一键更新与备份恢复，针对 RitsuLib 等能从 GitHub Releases 获取安装包的 MOD。\r\n\r\n## 新增功能\r\n\r\n- 在「模组管理 → 普通 MOD → MOD 详情」中绑定作者的 GitHub 仓库，点击「检查更新」；发现更高正式版本后显示「下载并更新」。\r\n- 选择需要的 ZIP 附件（标准版、不同游戏版本兼容包需要自己确认），下载、校验、检查 MOD 清单并安装。\r\n- 更新成功后，旧 MOD 文件夹完整保存在游戏根目录的 `尖塔修补站_MOD备份` 中；详情页提供「恢复上次 MOD 备份」。恢复前的版本也会保留备份。\r\n- 支持识别仓库常用 `mod_manifest.json` 来源，过期候选将重新查找；GitHub REST API 限流时，版本检测尝试公开 Release 网页备用查询。\r\n\r\n## 使用方法\r\n\r\n1. 退出《杀戮尖塔 2》，进入管理器「模组管理」，打开普通 MOD 详情。\r\n2. 关联可信 GitHub 仓库后点击「检查更新」。\r\n3. 有更新时点击「下载并更新」，手动选择与当前游戏版本匹配的安装包，确认后执行。\r\n4. 如果新版出现问题，关闭游戏，返回 MOD 详情点击「恢复上次 MOD 备份」。\r\n\r\n## 安全与支持范围\r\n\r\n- 必须是手动确认来源、已启用、位于独立 `mods/模组名` 文件夹下的 MOD；MOD 清单必须具有匹配 ID。\r\n- 仅自动安装 GitHub 正式 Release 中具备 SHA-256 校验摘要的单 MOD ZIP。无摘要、源码 ZIP、多个 MOD 混合包、兼容版本不确定或非 ZIP 附件必须手动处理。\r\n- 下载验证文件大小及 SHA-256；解压前限制路径、文件数量、解压大小、链接和不安全文件名；验证 MOD ID、版本及声明的 DLL/PCK。\r\n- 替换前再次核对原目录文件指纹；游戏未退出、文件已变化或验证失败时不安装；安装过程中发生可捕获失败时尝试恢复原文件夹。\r\n- 此版本**不提供** Steam 创意工坊匿名下载，也不保证所有 GitHub 发布包都支持自动安装。\r\n- GitHub API 持续受限时可能只能检查版本，无法获取附件校验元数据，需稍后重试。\r\n- Windows 托管 CI 已覆盖构建与隔离测试；尚未对每个第三方 MOD 实施真实游戏兼容性验证。建议首次更新前保留自己的额外备份。\r\n",
-  "published_at": "2026-11-04T12:32:10Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.9",
+  "body": "# 尖塔修补站 v0.11.10\r\n\r\n本版重点改进普通 MOD 的 **GitHub 来源自动发现**，不改变现有 MOD 一键更新、备份或恢复行为。\r\n\r\n## 新增与改进\r\n\r\n- 「模组管理 → 普通 MOD」新增 **批量查找 GitHub 来源**，每次处理最多 8 个未关联且没有近期结果的 MOD。重复点击会继续下一批。\r\n- 自动发现综合 MOD ID、显示名称、作者及 GitHub 仓库简介进行搜索；查找前优先读取本地模组清单（包括 links / metadata）以及 README 中的相关 GitHub 链接。\r\n- 找到仓库后，从 GitHub 公共原始文件地址检查默认分支的 `mod_manifest.json` / `manifest.json`，比对 MOD ID。确认不匹配的仓库会被排除。\r\n- 列表和详情显示候选数量、证据等级与可能的搜索限制。所有来源都需要用户点击「确认关联」，不会未经确认自动绑定。\r\n- GitHub 匿名搜索增加请求间隔及限流退避；成功候选短期缓存 6 小时，确实没有找到来源的结果缓存 30 分钟，避免反复请求。\r\n\r\n## 使用方法\r\n\r\n1. 先升级管理器至 v0.11.10。\r\n2. 打开「模组管理 → 普通 MOD」，点击「批量查找 GitHub 来源」。\r\n3. 进入提示有候选的 MOD 详情，核对候选仓库及核验说明后点击「确认关联」。\r\n4. 如仓库存在更高版本的正式 GitHub Release，可继续使用 v0.11.9 已有的「检查更新 → 下载并更新」功能。\r\n\r\n## 安全说明\r\n\r\n- 只读取本地文本线索及公开 GitHub 搜索/清单，不读取或上传 MOD 的 DLL、存档或个人数据。\r\n- 名称相似只提供候选，不等于已确定为同一 MOD。没有公开 GitHub 仓库或没有可核验清单的 MOD 仍可能查找不到。\r\n- GitHub 搜索接口可能限流；在限制期间会显示可重试状态，不会将限流误判成“没有来源”。\r\n- 不提供第三方创意工坊匿名下载功能，不改变原 MOD 文件，也不会自动下载 GitHub 候选仓库内容。\r\n\r\n## 验证\r\n\r\n- Windows/.NET 9 编译、现有隔离检查以及新增 GitHub 来源发现单元模拟测试覆盖查找逻辑；不代表已验证所有第三方 MOD 的真实来源和在线网络状态。\r\n",
+  "published_at": "2026-11-04T12:54:44Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.10",
   "assets": [
     {
-      "name": "SpirePatch-v0.11.9-win-x64.zip",
+      "name": "SpirePatch-v0.11.10-win-x64.zip",
       "state": "uploaded",
-      "size": 63575215,
-      "digest": "sha256:3ee6f1cf31dd7580218bd09dd2987c09ad428b29567a98c05e8d4c50fd18a2cf",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.9/SpirePatch-v0.11.9-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709437746"
+      "size": 63584062,
+      "digest": "sha256:5a04db4eea557ae817f5e908b69bfc74ae5bd512845d251bac64ddf385d58ba3",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.10/SpirePatch-v0.11.10-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709505662"
     }
   ]
 }
