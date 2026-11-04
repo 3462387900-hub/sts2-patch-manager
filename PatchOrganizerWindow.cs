@@ -46,13 +46,13 @@ public partial class MainWindow
    foreach(var move in plan.Moves)
    {
     root.Children.Add(Card(V(T(move.Name, 15, ink, true),
-     T("原位置：" + move.Source + "\n新位置：" + move.Destination + $"\n涉及 {move.Files.Count} 个文件", 12, muted)), "#FFFFFF", 14));
+     T("原位置：" + move.Source + "\n新位置：" + move.Destination + $"\n涉及 {move.Files.Count} 个文件", 12, muted)), "#182942", 14));
     Space(root, 8);
    }
    if(plan.Skipped.Length > 0)
    {
     root.Children.Add(Card(V(T("未整理的项目（安全跳过）", 15, ink, true),
-      T(string.Join("\n", plan.Skipped), 12, muted)), "#FFFFFF", 14));
+      T(string.Join("\n", plan.Skipped), 12, muted)), "#182942", 14));
     Space(root, 12);
    }
    if(plan.Moves.Length > 0)

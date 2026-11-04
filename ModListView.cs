@@ -83,11 +83,11 @@ public sealed class ModRowControl : Border
  internal static readonly RoutedEvent MoreRequestedEvent=EventManager.RegisterRoutedEvent(
   "MoreRequested",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModRowControl));
 
- readonly TextBlock title=new(){FontSize=15,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock subtitle=new(){FontSize=11,Foreground=Paint("#6B796F"),TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#44795B"),TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock github=new(){FontSize=11,Foreground=Paint("#53705F"),TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock warning=new(){FontSize=11,Foreground=Paint("#93642F"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock title=new(){FontSize=14,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock subtitle=new(){FontSize=12,Foreground=Paint("#B3C5DB"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#9AD7BC"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock github=new(){FontSize=11,Foreground=Paint("#A8C9EC"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock warning=new(){FontSize=11,Foreground=Paint("#F0C47C"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock status=new(){FontSize=11,FontWeight=FontWeights.SemiBold};
  readonly Border statusPill;
  readonly Border stripe;
@@ -97,13 +97,13 @@ public sealed class ModRowControl : Border
 
  public ModRowControl()
  {
-  Background=Brushes.White;
-  BorderBrush=Paint("#DCE4D9");
+  Background=Paint("#182942");
+  BorderBrush=Paint("#3C526D");
   BorderThickness=new Thickness(1);
   CornerRadius=new CornerRadius(10);
   Margin=new Thickness(0,3,6,4);
   Padding=new Thickness(0);
-  MinHeight=82;
+  MinHeight=64;
   HorizontalAlignment=HorizontalAlignment.Stretch;
 
   var grid=new Grid();
@@ -111,10 +111,10 @@ public sealed class ModRowControl : Border
   grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-  stripe=new Border{Background=Paint("#7C9E86"),CornerRadius=new CornerRadius(9,0,0,9)};
+  stripe=new Border{Background=Paint("#739BCB"),CornerRadius=new CornerRadius(9,0,0,9)};
   grid.Children.Add(stripe);
-  var info=new StackPanel{Margin=new Thickness(14,11,8,11),VerticalAlignment=VerticalAlignment.Center};
-  title.Foreground=Paint("#29392E");
+  var info=new StackPanel{Margin=new Thickness(14,8,8,8),VerticalAlignment=VerticalAlignment.Center};
+  title.Foreground=Paint("#F0F5FC");
   info.Children.Add(title);
   subtitle.Margin=new Thickness(0,2,0,0);info.Children.Add(subtitle);
   health.Margin=new Thickness(0,4,0,0);info.Children.Add(health);
@@ -135,8 +135,8 @@ public sealed class ModRowControl : Border
   Child=grid;
 
   DataContextChanged+=(_,_)=>Refresh();
-  MouseEnter+=(_,_)=>BorderBrush=Paint("#A3B9A7");
-  MouseLeave+=(_,_)=>BorderBrush=Paint("#DCE4D9");
+  MouseEnter+=(_,_)=>BorderBrush=Paint("#6C8EAF");
+  MouseLeave+=(_,_)=>BorderBrush=Paint("#3C526D");
  }
 
  static Button MakeButton(string name,Action action)
@@ -154,9 +154,9 @@ public sealed class ModRowControl : Border
   title.Text=item.Name;title.ToolTip=item.Name;
   subtitle.Text=item.Details;subtitle.ToolTip=item.Details;
   status.Text=item.State;
-  status.Foreground=item.Mod.Enabled?Paint("#37694A"):Paint("#6F776F");
-  statusPill.Background=item.Mod.Enabled?Paint("#E7F2E8"):Paint("#EEF0ED");
-  stripe.Background=item.IsFix?Paint("#5D96A3"):item.Mod.Enabled?Paint("#78A48A"):Paint("#A9B0A7");
+  status.Foreground=item.Mod.Enabled?Paint("#A6E4C6"):Paint("#B5C2D2");
+  statusPill.Background=item.Mod.Enabled?Paint("#204A43"):Paint("#34435A");
+  stripe.Background=item.IsFix?Paint("#5E9CBF"):item.Mod.Enabled?Paint("#599F97"):Paint("#62748C");
   health.Text=item.HealthText;
   health.Visibility=item.IsFix?Visibility.Visible:Visibility.Collapsed;
   health.ToolTip=item.HealthText;

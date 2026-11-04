@@ -103,7 +103,7 @@ public partial class MainWindow
   foreach(var row in coopRows){
    var check=new CheckBox{Content=row.Name,FontSize=15,Foreground=ink,IsChecked=coopSelected.Contains(row.Id),IsEnabled=row.Selectable,Margin=new(0,0,0,7)};
    check.Checked+=(_,_)=>{coopSelected.Add(row.Id);coopPlan=null;ShowCoop();};check.Unchecked+=(_,_)=>{coopSelected.Remove(row.Id);coopPlan=null;ShowCoop();};
-   var body=V(check,H(Badge(row.Diagnosis,row.Selectable?gold:muted),T(row.ActionLabel,12,row.Selectable?gold:muted)),T($"本机：{row.Mine}　/　队友：{row.Peer}",12,muted),T(row.Detail,12,muted));root.Children.Add(Card(body,"#FFFFFF",16));Space(root,8);
+   var body=V(check,H(Badge(row.Diagnosis,row.Selectable?gold:muted),T(row.ActionLabel,12,row.Selectable?gold:muted)),T($"本机：{row.Mine}　/　队友：{row.Peer}",12,muted),T(row.Detail,12,muted));root.Children.Add(Card(body,"#182942",16));Space(root,8);
   }
   if(coopPlan is {} plan){
    Space(root,12);var review=V(T("确认本次对齐方案",21,ink,true),T("缺失项从已审核修复包安装；多出项移到可恢复的停用区。不会修改队友电脑。",13,muted));

@@ -55,7 +55,7 @@ public partial class MainWindow
       "进入 MOD 详情核对并确认；每次最多查找 8 个，重复点击可继续下一批。";
   }
   catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
-  finally{busy=false;ShowMods();}
+  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
  }
  async void DiscoverGitHubMod(ManagedMod mod)
  {
@@ -81,7 +81,7 @@ public partial class MainWindow
    modStatus=$"已检查 {count} 个绑定 GitHub 的普通 MOD；检测结果仅供参考，不会修改游戏文件。";
   }
   catch(Exception e){modStatus="GitHub 检查未完成："+e.Message;}
-  finally{busy=false;ShowMods();}
+  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
  }
  void BindGitHubMod(ManagedMod mod)
  {
@@ -98,7 +98,7 @@ public partial class MainWindow
   var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
   body.Children.Add(H(save,remove,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
   dialog.Content=body;input.Focus();
-  if(dialog.ShowDialog()==true)ShowModDetail(mod.Folder);
+  if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  async void CheckGitHubMod(ManagedMod mod)
  {
@@ -178,8 +178,55 @@ public partial class MainWindow
   {
    busy=false;
    if(changed)RefreshMods();
-   else if(gameRoot==selectedInstallRoot)ShowModDetail(mod.Folder);
+   else if(gameRoot==selectedInstallRoot){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
   }
+ }
+ void CleanOldModBackups(ManagedMod mod)
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  string root=selectedInstallRoot;
+  try
+  {
+   var candidates=GitHubModInstaller.CleanupCandidates(root,mod);
+   if(candidates.Length==0){toast.Text="没有可清理的旧版本备份；最近一次备份始终保留。";return;}
+   var window=new Window{Title="清理旧 MOD 版本 · "+mod.Name,Owner=this,Width=690,Height=475,
+    MinWidth=540,WindowStartupLocation=WindowStartupLocation.CenterOwner};
+   var layout=new DockPanel{Margin=new Thickness(18)};
+   var title=V(T("选择要清理的旧版本备份",19,ink,true),
+    T("仅删除此 MOD 的已选旧备份，始终保留最近一次备份用于恢复。删除后无法从该备份恢复；不会删除当前 MOD。",12,muted));
+   DockPanel.SetDock(title,Dock.Top);layout.Children.Add(title);
+   var selection=new List<(CheckBox Box,string Path)>();
+   var rows=new StackPanel{Margin=new Thickness(0,16,0,12)};
+   foreach(var path in candidates)
+   {
+    var box=new CheckBox{Content=System.IO.Path.GetFileName(path),Margin=new Thickness(0,5,0,2)};
+    selection.Add((box,path));rows.Children.Add(box);
+    rows.Children.Add(T("备份目录："+path,11,muted));
+   }
+   var scroll=new ScrollViewer{Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+   var actions=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)};
+   var clear=Btn("删除选中的旧备份",()=>{
+    var chosen=selection.Where(x=>x.Box.IsChecked==true).Select(x=>x.Path).ToArray();
+    if(chosen.Length==0){MessageBox.Show(window,"请先勾选旧备份。");return;}
+    if(MessageBox.Show(window,"将永久删除 "+chosen.Length+" 个已选旧版本备份。最近一次备份仍会保留，当前 MOD 不会受影响。\\n确定删除？",
+      "最终确认",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
+    try
+    {
+     busy=true;transactionWriting=true;
+     int count=GitHubModInstaller.CleanupBackups(root,mod,chosen);
+     window.DialogResult=true;toast.Text="已清理 "+count+" 个旧版本备份，最近一次备份已保留。";
+    }
+    catch(Exception ex){MessageBox.Show(window,"清理中断："+ex.Message+"\\n已删除的备份无法恢复，其余备份保持原状。");}
+    finally{busy=false;transactionWriting=false;}
+   },"Primary");
+   actions.Children.Add(clear);
+   actions.Children.Add(Btn("取消",()=>window.DialogResult=false,"Ghost"));
+   DockPanel.SetDock(actions,Dock.Bottom);layout.Children.Add(actions);
+   layout.Children.Add(scroll);
+   window.Content=layout;window.ShowDialog();
+   if(root==selectedInstallRoot)ShowModDetail(mod.Folder);
+  }
+  catch(Exception ex){toast.Text="无法列出旧版本备份："+ex.Message;}
  }
  void RestoreGitHubMod(ManagedMod mod)
  {
@@ -286,6 +333,8 @@ public partial class MainWindow
   {
    busy=false;
    if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+   else if(page=="更新中心")ShowModUpdatesCenter();
+   else if(page=="总览")ShowOverview();
   }
  }
  double modListOffset;
@@ -518,7 +567,7 @@ public partial class MainWindow
    update.IsEnabled=repo!=null&&!busy&&!transactionWriting&&!modInventoryDirty&&mod.Enabled&&result?.Status=="有更新";
    root.Children.Add(H(bind,check,update));Space(root,7);
    if(mod.Enabled&&selectedInstallRoot!=null&&GitHubModInstaller.Backups(selectedInstallRoot,mod).Length>0)
-    root.Children.Add(H(Btn("恢复上次 MOD 备份",()=>RestoreGitHubMod(mod),"Ghost")));
+    root.Children.Add(H(Btn("恢复上次 MOD 备份",()=>RestoreGitHubMod(mod),"Ghost"),Btn("清理旧版本备份",()=>CleanOldModBackups(mod),"Ghost")));
    Space(root,20);
   }
   root.Children.Add(T("声明的前置模组",17,ink,true));Space(root,8);root.Children.Add(T(mod.Dependencies.Length==0?"清单未声明前置；这不代表一定没有其他依赖。":string.Join("\n",mod.Dependencies.Select(d=>d.Id+(d.Minimum.Length>0?" ≥ "+d.Minimum:"")+(d.Maximum.Length>0?" ≤ "+d.Maximum:""))),13,muted));Space(root,20);
