@@ -367,7 +367,7 @@ public partial class MainWindow
     if(result.ReleaseUrl.Length>0)root.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(result.ReleaseUrl),"Ghost"));
    }
    else if(repo!=null)root.Children.Add(T("尚未检查该仓库。",12,muted));
-   var discovery=Discovery().Cached(mod.Id);
+   var discovery=Discovery().Cached(mod);
    if(repo==null&&discovery!=null)
    {
     Space(root,6);
