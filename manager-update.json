@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.11.7",
+  "tag_name": "v0.11.8",
   "draft": false,
   "prerelease": false,
-  "body": "# 尖塔修补站 v0.11.7\r\n\r\n本版为普通 MOD 增加 **GitHub 更新检测和来源自动查找**，不依赖 Steam 创意工坊或第三方 MOD 下载站。\r\n\r\n## 使用方法\r\n\r\n1. 打开「模组管理」→「普通 MOD」，点击「自动查找 GitHub 来源」。每次扫描最多 8 个尚未检查的 MOD，重复点击可继续处理后续 MOD。\r\n2. 在发现候选的 MOD 卡片中点击「详情」，查看来源、匹配依据和候选仓库。可以先打开仓库核对，再点击「确认关联」。\r\n3. 如果没有找到候选，可在 MOD 详情页选择「关联 GitHub 仓库」，手动输入公开仓库地址，例如 `https://github.com/作者/仓库`。\r\n4. 点击单个 MOD 的「检查更新」或模组列表上方的「检查 GitHub 更新」，查看「有更新」「已是最新」「待核对」「无法检测」状态。\r\n5. 发现更新后可以打开 GitHub Release 发布页，但当前版本不会自动下载、替换或安装 MOD。\r\n\r\n## 核心约束\r\n\r\n- 本版 **不自动关联候选仓库**。同名项目或分支可能不是实际来源，只有用户确认后才会写入关联。\r\n- 仅检查公开 GitHub 仓库的最新**正式 Release**。只提供源码、Tag、预发布或私有仓库的项目可能无法检查更新。\r\n- 本地 MOD 的版本格式若与 Release 标签不兼容，显示「待核对」，不会声称一定有更新。\r\n- MOD 的 GitHub 关联存储于管理器数据目录，按游戏安装目录隔离，MOD 原文件和游戏存档保持不变。\r\n- GitHub 匿名 API 有请求限制，批量搜索会做节流；接口故障不会阻止模组管理器的其他功能。\r\n- 独立修复补丁继续使用原有补丁健康、指纹和退役判断，不以 GitHub 版本号代替修复依据。\r\n\r\n已在隔离环境中执行 Windows 构建及自动化检查；真实游戏与不同作者仓库的实际识别覆盖率仍需用户验证。\r\n",
-  "published_at": "2026-11-04T11:43:56Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.7",
+  "body": "# 尖塔修补站 v0.11.8\r\n\r\n修复从 v0.11.5 等旧版本点击「下载并更新」后出现“自动更新未开始：更新包不能写入个人数据或游戏目录。”、程序停留在旧版本的问题。\r\n\r\n## 修复内容\r\n\r\n- 发布包只包含 `manager-files.json` 中列出的程序文件及程序清单，逐一对照 SHA256 哈希，不再将构建和测试目录中的额外内容一起压缩发布。\r\n- 构建输出中即便存在 `数据/`、个人设置、错误日志或其他无关文件，也不会进入 ZIP。\r\n- 发布前再次检查 ZIP 只包含已登记的文件，避免生成能够下载但无法自动安装的更新包。\r\n- 新增独立发布包测试，核对排除数据文件的行为及恶意路径拦截。\r\n\r\n## 使用方法\r\n\r\n现有 v0.11.5 用户可直接在「工具与设置 → 检查更新」检查并下载 v0.11.8，无需先安装 v0.11.7。也可以从 GitHub Releases 下载 ZIP，解压到独立目录运行。\r\n\r\n## 安全说明\r\n\r\n本次修复 **不降低** 自动更新器的限制；个人数据目录、游戏目录及任何未列入程序清单的文件仍不允许通过自动更新写入。自动更新会继续做包校验、程序备份和失败恢复，不修改游戏、MOD、存档和用户设置。\r\n\r\nv0.11.7 引入的 GitHub MOD 更新检测与来源候选识别功能保持不变。\r\n",
+  "published_at": "2026-11-04T12:01:38Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.11.8",
   "assets": [
     {
-      "name": "SpirePatch-v0.11.7-win-x64.zip",
+      "name": "SpirePatch-v0.11.8-win-x64.zip",
       "state": "uploaded",
-      "size": 63559066,
-      "digest": "sha256:5a11de5fe3effaf4fbe6acd5e124507453ac278cdbf156d7ec43facd71a86a48",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.7/SpirePatch-v0.11.7-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709290920"
+      "size": 63558093,
+      "digest": "sha256:8f3bea5a69e012d4a3a5e57c3d43ecafbc6ad3ee37b80e7d3452fce5e780431b",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.11.8/SpirePatch-v0.11.8-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/709346868"
     }
   ]
 }
