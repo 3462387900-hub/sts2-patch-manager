@@ -243,6 +243,44 @@ internal sealed class GitHubModInstaller : IDisposable
   if(!Directory.Exists(parent))return [];
   return Directory.GetDirectories(parent).OrderByDescending(p=>p,StringComparer.OrdinalIgnoreCase).ToArray();
  }
+ // Explicit, conservative cleanup: only named direct children of the manager's own MOD backup folder.
+ // The most recent backup is always retained for recovery.
+ internal static string[] CleanupCandidates(string root,ManagedMod mod)
+ {
+  var backups=Backups(root,mod);
+  if(backups.Length<=1)return [];
+  return backups.Skip(1).ToArray();
+ }
+ internal static int CleanupBackups(string gameRoot,ManagedMod mod,IReadOnlyCollection<string> selected)
+ {
+  string root=GameEnvironment.Root(gameRoot);
+  return GameEnvironment.WithLock(root,()=>
+  {
+   if(GameEnvironment.Running(root))throw new InvalidOperationException("请先退出游戏，再清理旧 MOD 备份。");
+   if(selected.Count==0)return 0;
+   string parent=BackupRoot(root,mod.Id);
+   GameEnvironment.NoLinks(parent);
+   var allowed=CleanupCandidates(root,mod).ToHashSet(StringComparer.OrdinalIgnoreCase);
+   Require(selected.Count==selected.Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+    "旧版本清理清单存在重复项。");
+   foreach(var candidate in selected)
+   {
+    string full=Path.GetFullPath(candidate);
+    Require(Path.GetDirectoryName(full)?.Equals(Path.GetFullPath(parent),StringComparison.OrdinalIgnoreCase)==true &&
+     allowed.Contains(full) && Directory.Exists(full),"待清理的备份不在安全范围内，或最近一次备份已改变。");
+    foreach(var path in Directory.EnumerateFileSystemEntries(full,"*",SearchOption.AllDirectories))
+     GameEnvironment.NoLinks(path);
+    GameEnvironment.NoLinks(full);
+   }
+   int removed=0;
+   foreach(var candidate in selected)
+   {
+    Directory.Delete(candidate,true);
+    removed++;
+   }
+   return removed;
+  });
+ }
  static void CheckInstalledLocation(string root,ManagedMod mod)
  {
   Require(mod.Enabled&&mod.Storage==null,"暂只支持更新已启用的普通 MOD。");
