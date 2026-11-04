@@ -7,6 +7,7 @@ namespace SpirePatch;
 // Immutable, UI-only data. Safe enable/disable still goes through ModManager.Preview/Apply.
 internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason,string GitHubText="")
 {
+ public bool Selected{get;set;}
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
  public string Name=>Mod.Name;
  public string Details=>"模组 ID："+Mod.Id+"    版本号："+Mod.Version+"    作者："+Mod.Author;
