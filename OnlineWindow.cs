@@ -36,7 +36,7 @@ public partial class MainWindow
     if(state=="已安装")state="修复文件一致";
     var item=V(T(patch.Title,16,ink,true),T(patch.Summary,13,muted));Space(item,8);
     item.Children.Add(H(Badge(state),Btn("查看随补丁说明 →",()=>ShowOnlineDetail(patch),"Ghost")));
-    root.Children.Add(Card(item,"#D9182942",18));Space(root,9);
+    root.Children.Add(Card(item,"#BB182942",18));Space(root,9);
    }
   }
   SetPage("在线补丁",root);toast.Text="公开访问无需 GitHub 登录。下载不会执行安装；安装器会再次核对原模组文件。";
