@@ -72,6 +72,16 @@ internal static class ManagerUpdateCleanup
    foreach(var f in new[]{"UpdateWorker.ps1","恢复上一版.cmd"})
     if(!File.Exists(Path.Combine(job,f))||Link(Path.Combine(job,f)))return false;
    if(!SafeTree(Path.Combine(job,"backup"),out var backupBytes)||backupBytes==0)return false;
+   // Do not delete task folders that contain notes or other unrecognized user files.
+   var knownFiles=new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+   {"request.json","result.json","restart-proof.json","UpdateWorker.ps1","恢复上一版.cmd","ready","cancel","error.txt","rollback-proof.json","准备未完成.txt"};
+   foreach(var entry in Directory.EnumerateFileSystemEntries(job))
+   {
+    string name=Path.GetFileName(entry);
+    if(Directory.Exists(entry))
+    {if(name is not ("backup" or "payload"))return false;}
+    else if(!knownFiles.Contains(name))return false;
+   }
    if(!SafeTree(job,out _))return false; // Reject junctions and symlinks anywhere in this job.
    timestamp=File.GetLastWriteTimeUtc(result);
    return true;
@@ -98,7 +108,8 @@ internal static class ManagerUpdateCleanup
   if(Directory.Exists(updates)&&!Link(updates))
   {
    foreach(var path in Directory.EnumerateDirectories(updates))
-    if(IsConfirmedJob(path,appRoot,out var time,out var version)&&version!=null)
+    if(IsConfirmedJob(path,appRoot,out var time,out var version)&&version!=null&&
+      Version.TryParse(version,out var jobVersion)&&jobVersion<=current)
      confirmed.Add((path,time,version));
    // The newest completed rollback must never be removed, regardless of age.
    var keep=confirmed.OrderByDescending(x=>x.Time).FirstOrDefault().Path;
