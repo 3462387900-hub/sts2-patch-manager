@@ -311,7 +311,10 @@ internal sealed class GitHubModInstaller : IDisposable
   }
   finally
   {
-   if(Directory.Exists(workspace))Directory.Delete(workspace,true);
+   // A cleanup error must not mask a completed, backed-up installation.
+   try{if(Directory.Exists(workspace))Directory.Delete(workspace,true);}
+   catch(IOException){}
+   catch(UnauthorizedAccessException){}
   }
  }
  internal static string Restore(string gameRoot,ManagedMod mod,string backup)
@@ -325,6 +328,9 @@ internal sealed class GitHubModInstaller : IDisposable
    Require(Path.GetFullPath(Path.GetDirectoryName(backup)!)==Path.GetFullPath(backupRoot)&&
     Directory.Exists(backup),"备份目录无效或不属于当前 MOD。");
    GameEnvironment.NoLinks(backup);
+   // Refuse backup payloads containing links or replaced files.
+   var backupFiles=ModManager.FileSnapshot(backup);
+   Require(backupFiles.Count>0,"备份目录没有可恢复的文件。");
    var manifest=Directory.EnumerateFiles(backup,"*.json",SearchOption.TopDirectoryOnly)
     .FirstOrDefault(path=>Path.GetFileName(path) is "mod_manifest.json" or "manifest.json");
    Require(manifest!=null&&ManifestId(manifest,out _,out _,out _).Equals(mod.Id,StringComparison.OrdinalIgnoreCase),
