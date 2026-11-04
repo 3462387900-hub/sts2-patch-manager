@@ -7,10 +7,20 @@
   <Style TargetType="TextBlock"><Setter Property="FontSize" Value="14"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
   <!-- Rounded borders must be anti-aliased in fractional DPI layouts. Avoid hard opaque
        1px outlines and shadows over the text; use low-alpha strokes instead. -->
+  <!-- WPF's default dotted keyboard focus rectangle looks harsh on glass.
+       Replace it with a rounded focus adorner, visible for keyboard navigation. -->
+  <Style x:Key="SoftFocusVisual" TargetType="{x:Type Control}">
+   <Setter Property="Template"><Setter.Value>
+    <ControlTemplate TargetType="{x:Type Control}">
+     <Border Margin="-2" BorderBrush="#A8A8D2FF" BorderThickness="1.5" CornerRadius="11" SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="False"/>
+    </ControlTemplate>
+   </Setter.Value></Setter>
+  </Style>
   <Style TargetType="Button">
    <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#B42C425E"/><Setter Property="BorderBrush" Value="#397D9BC1"/>
    <Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="16,10"/><Setter Property="FontSize" Value="14"/>
    <Setter Property="Cursor" Value="Hand"/><Setter Property="HorizontalContentAlignment" Value="Center"/>
+   <Setter Property="FocusVisualStyle" Value="{StaticResource SoftFocusVisual}"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
     <Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
             CornerRadius="10" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="False" UseLayoutRounding="False" RenderOptions.EdgeMode="Unspecified">
@@ -36,6 +46,38 @@
   <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
    <Setter Property="Background" Value="#942C4363"/><Setter Property="Foreground" Value="#F0F5FC"/>
    <Setter Property="BorderBrush" Value="#327995BA"/>
+  </Style>
+  <!-- Navigation is not a stack of outlined buttons: only the active entry gets a
+       translucent fill and a narrow left accent. The shared keyboard focus remains. -->
+  <Style x:Key="NavItem" TargetType="Button" BasedOn="{StaticResource Ghost}">
+   <Setter Property="Background" Value="Transparent"/>
+   <Setter Property="BorderBrush" Value="Transparent"/>
+   <Setter Property="BorderThickness" Value="3,0,0,0"/>
+   <Setter Property="Template"><Setter.Value>
+    <ControlTemplate TargetType="Button">
+     <Border x:Name="NavSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10" Padding="{TemplateBinding Padding}"
+             SnapsToDevicePixels="False" UseLayoutRounding="False">
+      <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"
+                        SnapsToDevicePixels="True"/>
+     </Border>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+       <Setter TargetName="NavSurface" Property="Background" Value="#56344F71"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+       <Setter TargetName="NavSurface" Property="Opacity" Value=".68"/>
+      </Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate>
+   </Setter.Value></Setter>
+  </Style>
+  <!-- Tabs and filters indicate selection without competing with the one primary action. -->
+  <Style x:Key="SelectedTab" TargetType="Button" BasedOn="{StaticResource Ghost}">
+   <Setter Property="Background" Value="#76446993"/>
+   <Setter Property="BorderBrush" Value="#5A90B7E1"/>
+   <Setter Property="Foreground" Value="#EAF4FF"/>
+   <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
   <Style TargetType="TextBox"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#E01B2E4A"/><Setter Property="BorderBrush" Value="#577B9DBB"/><Setter Property="CaretBrush" Value="#83B9F8"/><Setter Property="Padding" Value="12,10"/><Setter Property="FontSize" Value="14"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="Field" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" SnapsToDevicePixels="False" UseLayoutRounding="False"><ScrollViewer x:Name="PART_ContentHost"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Field" Property="BorderBrush" Value="#83B9F8"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
   <Style TargetType="ComboBox"><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="Background" Value="#D0263A55"/><Setter Property="FontSize" Value="14"/></Style>

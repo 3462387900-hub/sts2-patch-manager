@@ -16,7 +16,7 @@ public partial class MainWindow
   bareGlassTestActive=enabled&&nativeAcrylicActive;
   shell.Background=SpireGlassTheme.Background(nativeAcrylicActive,bareGlassTestActive);
   if(glassSidebarSurface!=null)
-   glassSidebarSurface.Background=B(bareGlassTestActive?"#14162A45":"#70162A45");
+   glassSidebarSurface.Background=B(bareGlassTestActive?"#14162A45":"#A0102038");
   if(glassAmbientSurface!=null)
    glassAmbientSurface.Visibility=bareGlassTestActive?Visibility.Collapsed:Visibility.Visible;
   if(refreshPage&&page=="工具与设置")ShowTools();
