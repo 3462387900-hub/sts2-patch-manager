@@ -100,7 +100,8 @@ public sealed class ModRowControl : Border
   Background=SpireGlassTheme.GlassPanel("#BE1A2D48");
   BorderBrush=SpireGlassTheme.PanelStroke();
   BorderThickness=new Thickness(1);
-  CornerRadius=new CornerRadius(10);
+  CornerRadius=new CornerRadius(11);
+  SnapsToDevicePixels=false;
   Margin=new Thickness(0,3,6,4);
   Padding=new Thickness(0);
   MinHeight=64;
@@ -135,7 +136,7 @@ public sealed class ModRowControl : Border
   Child=grid;
 
   DataContextChanged+=(_,_)=>Refresh();
-  MouseEnter+=(_,_)=>BorderBrush=Paint("#6C8EAF");
+  MouseEnter+=(_,_)=>BorderBrush=Paint("#608EB3D6");
   MouseLeave+=(_,_)=>BorderBrush=SpireGlassTheme.PanelStroke();
  }
 
