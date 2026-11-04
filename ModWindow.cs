@@ -73,7 +73,7 @@ public partial class MainWindow
   var dialog=new Window{Title="关联 GitHub 仓库 · "+mod.Name,Owner=this,Width=550,Height=225,
    WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
   var body=new StackPanel{Margin=new Thickness(18)};
-  body.Children.Add(T("输入公开 GitHub 仓库的地址（仅检查最新正式 Release）：",13,muted));
+  body.Children.Add(T("输入公开 GitHub 仓库地址（检测正式 Release，并支持校验后安装）：",13,muted));
   var input=new TextBox{Text=updates.Repository(mod.Id)??"",Margin=new Thickness(0,12,0,12)};
   body.Children.Add(input);
   var hint=T("示例：https://github.com/作者/仓库。绑定按 MOD ID 保存，不改变模组文件。",11,muted);
@@ -95,6 +95,101 @@ public partial class MainWindow
   }
   catch(Exception e){toast.Text="检查失败："+e.Message;}
   finally{busy=false;ShowModDetail(mod.Folder);}
+ }
+
+
+ async void UpdateGitHubMod(ManagedMod mod)
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  string gameRoot=selectedInstallRoot;
+  string? repo=GitHubUpdates().Repository(mod.Id);
+  if(repo==null){toast.Text="请先关联 GitHub 来源。";return;}
+  busy=true;
+  bool changed=false;
+  try
+  {
+   using var installerSource=new GitHubModInstaller();
+   toast.Text="正在读取 GitHub 正式版附件与 SHA-256 校验信息…";
+   var packages=await installerSource.PackagesAsync(mod,repo);
+   if(packages.Length==0)
+   {
+    toast.Text="这个 Release 没有提供可安全验证的单 MOD ZIP 安装包，请从作者发布页手动更新。";
+    return;
+   }
+   var dialog=new Window{Title="选择 GitHub MOD 安装包 · "+mod.Name,Owner=this,
+    Width=660,Height=340,MinWidth=560,WindowStartupLocation=WindowStartupLocation.CenterOwner};
+   var body=new StackPanel{Margin=new Thickness(18)};
+   body.Children.Add(T("本地 "+mod.Version+" → GitHub "+packages[0].Tag+" · "+repo,14,ink,true));
+   Space(body,10);
+   body.Children.Add(T("请选择适合当前游戏版本的安装包。兼容版和标准版不能自动混用；不确定时请查看作者发布说明。",12,muted));
+   Space(body,10);
+   var picker=new ComboBox{ItemsSource=packages,SelectedIndex=packages.Length==1?0:-1,
+    MinHeight=32,MaxDropDownHeight=230};
+   body.Children.Add(picker);
+   Space(body,9);
+   body.Children.Add(T("仅支持带 GitHub SHA-256 摘要的 ZIP。下载后检查 MOD ID、版本及文件结构；旧目录完整备份，操作前需要关闭游戏。",11,muted));
+   Space(body,12);
+   var accept=Btn("确认选择",()=>{
+    if(picker.SelectedItem is not GitHubModPackage){toast.Text="请先明确选择一个安装包。";return;}
+    dialog.DialogResult=true;
+   },"Primary");
+   body.Children.Add(H(accept,Btn("取消",()=>dialog.DialogResult=false,"Ghost"),
+    Btn("查看作者发布页",()=>OpenUrl(packages[0].ReleaseUrl),"Ghost")));
+   dialog.Content=body;
+   if(dialog.ShowDialog()!=true||picker.SelectedItem is not GitHubModPackage selected)return;
+   if(MessageBox.Show(this,
+    "将从 GitHub 下载："+selected.FileName+"\n"+
+    "更新对象："+mod.Name+" ("+mod.Id+")\n"+
+    "安装前验证 SHA-256、清单 ID 和版本，旧 MOD 将备份并支持恢复。\n"+
+    "此操作会替换当前 MOD 目录，目录内的自定义文件保留在备份中。请确认游戏已经退出。",
+    "确认下载并更新 MOD",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
+   transactionWriting=true;
+   try
+   {
+    toast.Text="正在下载、验证并安装："+selected.FileName;
+    var result=await installerSource.InstallAsync(gameRoot,mod,selected);
+    changed=true;
+    orphanPatchNotice="已更新 "+mod.Name+" 至 "+result.Version+
+     "。旧版本备份："+result.BackupFolder+"；可以在 MOD 详情中恢复。";
+    toast.Text="MOD 更新成功："+mod.Name+" → "+result.Version;
+    InvalidateLifecycle("MOD 已更新，现有修复补丁健康结果需要重新检查。");
+    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+   }
+   finally{transactionWriting=false;}
+  }
+  catch(Exception ex){toast.Text="MOD 更新未完成："+ex.Message;}
+  finally
+  {
+   busy=false;
+   if(changed)RefreshMods();
+   else if(gameRoot==selectedInstallRoot)ShowModDetail(mod.Folder);
+  }
+ }
+ void RestoreGitHubMod(ManagedMod mod)
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  var root=selectedInstallRoot;
+  try
+  {
+   var backups=GitHubModInstaller.Backups(root,mod);
+   if(backups.Length==0){toast.Text="没有找到可恢复的 MOD 备份。";return;}
+   string latest=backups[0];
+   if(MessageBox.Show(this,
+    "恢复 "+mod.Name+" 最近一次备份？\n备份路径："+latest+"\n"+
+    "当前版本也会另存为备份，原有文件不会直接删除。\n请先关闭游戏。",
+    "恢复 MOD 备份",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
+   busy=true;transactionWriting=true;
+   try
+   {
+    var previous=GitHubModInstaller.Restore(root,mod,latest);
+    toast.Text="已恢复 MOD 备份；恢复前的版本保存在："+previous;
+    InvalidateLifecycle("MOD 备份已恢复，现有修复补丁健康结果需要重新检查。");
+    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+   }
+   finally{busy=false;transactionWriting=false;}
+   RefreshMods();
+  }
+  catch(Exception ex){busy=false;transactionWriting=false;toast.Text="恢复未完成："+ex.Message;ShowModDetail(mod.Folder);}
  }
 
  async void RefreshMods()
@@ -391,7 +486,12 @@ public partial class MainWindow
    }
    var bind=Btn(repo==null?"关联 GitHub 仓库":"修改 GitHub 关联",()=>BindGitHubMod(mod),"Ghost");
    var check=Btn("检查更新",()=>CheckGitHubMod(mod),"Ghost");check.IsEnabled=repo!=null&&!busy;
-   root.Children.Add(H(bind,check));Space(root,20);
+   var update=Btn("下载并更新",()=>UpdateGitHubMod(mod),"Primary");
+   update.IsEnabled=repo!=null&&!busy&&!transactionWriting&&!modInventoryDirty&&mod.Enabled&&result?.Status=="有更新";
+   root.Children.Add(H(bind,check,update));Space(root,7);
+   if(mod.Enabled&&selectedInstallRoot!=null&&GitHubModInstaller.Backups(selectedInstallRoot,mod).Length>0)
+    root.Children.Add(H(Btn("恢复上次 MOD 备份",()=>RestoreGitHubMod(mod),"Ghost")));
+   Space(root,20);
   }
   root.Children.Add(T("声明的前置模组",17,ink,true));Space(root,8);root.Children.Add(T(mod.Dependencies.Length==0?"清单未声明前置；这不代表一定没有其他依赖。":string.Join("\n",mod.Dependencies.Select(d=>d.Id+(d.Minimum.Length>0?" ≥ "+d.Minimum:"")+(d.Maximum.Length>0?" ≤ "+d.Maximum:""))),13,muted));Space(root,20);
   if(ModPresentation.IsIndependentPatch(mod))

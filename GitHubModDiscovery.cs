@@ -13,7 +13,7 @@ internal sealed record GitHubSourceDiscoveryResult(string ModId,GitHubSourceCand
 internal sealed class GitHubModDiscovery : IDisposable
 {
  readonly HttpClient client;
- readonly Dictionary<string,GitHubSourceDiscoveryResult> cache=new(StringComparer.OrdinalIgnoreCase);
+ readonly Dictionary<string,(GitHubSourceDiscoveryResult Value,DateTimeOffset Expires)> cache=new(StringComparer.OrdinalIgnoreCase);
  DateTimeOffset nextSearch=DateTimeOffset.MinValue;
  static string CacheKey(ManagedMod mod)=>Path.GetFullPath(mod.Manifest)+"|"+mod.Id+"|"+mod.Version;
  public void ClearCache()=>cache.Clear();
@@ -24,7 +24,7 @@ internal sealed class GitHubModDiscovery : IDisposable
   client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
  }
  public void Dispose()=>client.Dispose();
- public GitHubSourceDiscoveryResult? Cached(ManagedMod mod)=>cache.GetValueOrDefault(CacheKey(mod));
+ public GitHubSourceDiscoveryResult? Cached(ManagedMod mod)=>cache.TryGetValue(CacheKey(mod),out var entry)&&entry.Expires>DateTimeOffset.UtcNow?entry.Value:null;
  static string? Field(JsonElement value,string field)=>
   value.TryGetProperty(field,out var property)&&property.ValueKind==JsonValueKind.String?property.GetString():null;
  static bool Relevant(string name,string id)=>
@@ -64,7 +64,7 @@ internal sealed class GitHubModDiscovery : IDisposable
   request.Headers.Accept.ParseAdd("application/vnd.github+json");
   using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);
   if(response.StatusCode==HttpStatusCode.NotFound)return null;
-  if((int)response.StatusCode is 403 or 429)throw new HttpRequestException("GitHub 搜索受限，请稍后重试。");
+  if((int)response.StatusCode is 403 or 429)throw new HttpRequestException($"GitHub 搜索返回 HTTP {(int)response.StatusCode}；可能触发限流或网络访问限制。");
   response.EnsureSuccessStatusCode();
   if(response.Content.Headers.ContentLength>128*1024)throw new InvalidDataException("GitHub 搜索响应过大。");
   await using var input=await response.Content.ReadAsStreamAsync(ct);
@@ -88,7 +88,7 @@ internal sealed class GitHubModDiscovery : IDisposable
  public async Task<GitHubSourceDiscoveryResult> DiscoverAsync(ManagedMod mod,bool force=false,CancellationToken ct=default)
  {
   string cacheKey=CacheKey(mod);
-  if(!force&&cache.TryGetValue(cacheKey,out var saved))return saved;
+  if(!force&&Cached(mod) is { } saved)return saved;
   var candidates=new Dictionary<string,GitHubSourceCandidate>(StringComparer.OrdinalIgnoreCase);
   string note="";bool transientFailure=false;
   try
@@ -119,11 +119,15 @@ internal sealed class GitHubModDiscovery : IDisposable
      }
      foreach(var candidate in candidates.Values.ToArray().OrderByDescending(x=>x.Score).Take(3))
      {
-      // Read only the root manifest. No match means this is still a suggestion.
-      using var remote=await GetJsonAsync("https://api.github.com/repos/"+candidate.Repository+"/contents/manifest.json",ct);
-      if(remote!=null&&Field(remote.RootElement,"encoding")=="base64"&&
-       ValidManifest(Field(remote.RootElement,"content")??"",mod.Id))
-       candidates[candidate.Repository]=candidate with {Score=95,Verified=true,Reason="GitHub 仓库根目录的 manifest.json 与本地 MOD ID 一致"};
+      // STS2 repositories normally use mod_manifest.json; also support manifest.json.
+      foreach(var name in new[]{"mod_manifest.json","manifest.json"})
+      {
+       using var remote=await GetJsonAsync("https://api.github.com/repos/"+candidate.Repository+"/contents/"+name,ct);
+       if(remote==null||Field(remote.RootElement,"encoding")!="base64"||
+        !ValidManifest(Field(remote.RootElement,"content")??"",mod.Id))continue;
+       candidates[candidate.Repository]=candidate with {Score=95,Verified=true,Reason="GitHub 仓库根目录的 "+name+" 与本地 MOD ID 一致"};
+       break;
+      }
      }
     }
     else note="MOD ID 太短或过长，无法安全搜索。";
@@ -138,7 +142,7 @@ internal sealed class GitHubModDiscovery : IDisposable
   var list=candidates.Values.OrderByDescending(x=>x.Score).ThenBy(x=>x.Repository,StringComparer.OrdinalIgnoreCase).Take(5).ToArray();
   if(list.Length==0&&note=="")note="未找到可信候选；该 MOD 可能没有公开的 GitHub 仓库。";
   var result=new GitHubSourceDiscoveryResult(mod.Id,list,note);
-  if(!transientFailure)cache[cacheKey]=result;
+  if(!transientFailure)cache[cacheKey]=(result,DateTimeOffset.UtcNow.AddHours(6));
   return result;
  }
 }
