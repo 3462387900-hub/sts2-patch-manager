@@ -321,6 +321,7 @@ public partial class MainWindow
   var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;
   var discoverAll=Btn("批量查找 GitHub 来源",DiscoverGitHubMods,"Ghost");
   discoverAll.IsEnabled=!busy&&modInventory!=null&&!modInventoryDirty;
+  discoverAll.Visibility=modSection=="普通 MOD"?Visibility.Visible:Visibility.Collapsed;
   header.Children.Add(H(refresh,Btn("打开模组目录",()=>{
    string directory=Path.Combine(selectedInstallRoot,"mods");
    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
