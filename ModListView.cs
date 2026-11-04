@@ -118,6 +118,7 @@ public sealed class ModRowControl : Border
   info.Children.Add(title);
   subtitle.Margin=new Thickness(0,2,0,0);info.Children.Add(subtitle);
   health.Margin=new Thickness(0,4,0,0);info.Children.Add(health);
+  github.Margin=new Thickness(0,4,0,0);info.Children.Add(github);
   warning.Margin=new Thickness(0,4,0,0);info.Children.Add(warning);
   Grid.SetColumn(info,1);grid.Children.Add(info);
 
