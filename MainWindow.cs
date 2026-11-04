@@ -25,11 +25,11 @@ public partial class MainWindow : Window
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
   Closing+=(_,e)=>{if(transactionWriting){e.Cancel=true;MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");}else {preparationCancellation?.Cancel();managerUpdateCancellation?.Cancel();}};
   Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
-  shell.Background=new LinearGradientBrush(Color.FromArgb(232,13,21,36),Color.FromArgb(237,25,43,70),55);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
+  shell.Background=SpireGlassTheme.Background(false);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
-  SourceInitialized+=(_,_)=>SpireGlassBackdrop.Enable(this);
+  SourceInitialized+=(_,_)=>shell.Background=SpireGlassTheme.Background(SpireGlassBackdrop.Enable(this));
   shell.ColumnDefinitions.Add(new(){Width=new(205)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
-  Content=shell;BuildSidebar();
+  Content=shell;SpireGlassTheme.AddAmbientGlow(shell);BuildSidebar();
   var main=new Grid{Margin=new(25,18,25,15)};Grid.SetColumn(main,1);shell.Children.Add(main);
   main.RowDefinitions.Add(new(){Height=GridLength.Auto});main.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});main.RowDefinitions.Add(new(){Height=GridLength.Auto});
   var top=new DockPanel{LastChildFill=false,Margin=new(0,0,0,15)};
@@ -47,7 +47,7 @@ public partial class MainWindow : Window
  StackPanel V(params UIElement[] children){var p=new StackPanel();foreach(var c in children)p.Children.Add(c);return p;}
  StackPanel H(params UIElement[] children){var p=new StackPanel{Orientation=Orientation.Horizontal};foreach(var c in children){if(c is FrameworkElement f)f.Margin=new(0,0,10,0);p.Children.Add(c);}return p;}
  Button Btn(string text,Action action,string? style=null){var b=new Button{Content=text};if(style!=null)b.Style=(Style)FindResource(style);if(text.StartsWith("←"))b.HorizontalAlignment=HorizontalAlignment.Left;b.Click+=(_,_)=>action();return b;}
- Border Card(UIElement child,string color="#182942",int padding=20)=>new(){Background=B(color),BorderBrush=B("#405876"),BorderThickness=new(1),CornerRadius=new(12),Padding=new(padding),Child=child};
+ Border Card(UIElement child,string color="#D5182942",int padding=20)=>new(){Background=SpireGlassTheme.GlassPanel(color=="#D5182942"?null:color),BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new(1),CornerRadius=new(12),Padding=new(padding),Child=child};
  Border Badge(string text,Brush? color=null)=>new(){HorizontalAlignment=HorizontalAlignment.Left,Background=B("#233F60"),CornerRadius=new(6),Padding=new(9,4,9,4),Child=T(text,11,color??muted)};
  Border Rule()=>new(){Background=B("#344862"),Height=1,Margin=new(0,20,0,20)};
  void Space(Panel p,int height=18)=>p.Children.Add(new Border{Height=height});
@@ -55,7 +55,7 @@ public partial class MainWindow : Window
  {var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=new(24)});g.ColumnDefinitions.Add(new(){Width=new(rightWidth)});g.Children.Add(left);Grid.SetColumn(right,2);g.Children.Add(right);return g;}
  void BuildSidebar()
  {
-  var border=new Border{Background=B("#B0102035"),BorderBrush=B("#405876"),BorderThickness=new(0,0,1,0),Padding=new(15,22,15,15)};shell.Children.Add(border);
+  var border=new Border{Background=B("#B0162A45"),BorderBrush=B("#587397"),BorderThickness=new(0,0,1,0),Padding=new(15,22,15,15)};shell.Children.Add(border);
   var layout=new DockPanel{LastChildFill=true};border.Child=layout;
   var brand=V(T("尖塔修补站",20,ink,true),T("MOD 与补丁管理",12,muted));brand.Margin=new(4,0,0,30);DockPanel.SetDock(brand,Dock.Top);layout.Children.Add(brand);
   folderLabel.TextWrapping=TextWrapping.Wrap;folderLabel.Foreground=muted;folderLabel.FontSize=11;folderLabel.LineHeight=18;folderLabel.MaxHeight=56;
@@ -86,6 +86,10 @@ public partial class MainWindow : Window
   root.Children.Add(Card(V(T("游戏目录",17,ink,true),T("选择当前游戏安装位置；切换后旧扫描与操作预览会失效。",13,muted),Btn("定位游戏目录",ShowLocations,"Ghost"))));Space(root,12);
   root.Children.Add(Card(V(T("管理器更新",17,ink,true),T("检查更新和查看历史记录，不会自动安装版本。",13,muted),Btn("查看管理器更新",ShowManagerUpdates,"Ghost"))));
   Space(root,12);
+  root.Children.Add(Card(V(T("Spire Glass · 材质诊断",17,ink,true),
+   T(SpireGlassBackdrop.Status,12,muted),
+   T("Windows 11 22H2+ 可尝试真正的桌面 Acrylic；Windows 10、关闭系统透明效果或远程桌面环境会显示应用内渐变玻璃回退。",12,muted))));
+  Space(root,12);
   var net=GitHubNetwork.Load(installer.DataRoot);
   root.Children.Add(Card(V(T("GitHub 网络",17,ink,true),
    T("当前："+(net.Mode=="local"?"本机 HTTP 代理 "+net.ProxyUrl:"跟随系统网络")+"；仓库连接失败或更新下载缓慢时可先诊断。",13,muted),
@@ -103,7 +107,7 @@ public partial class MainWindow : Window
    content.Content=group;
   }else content.Content=element;
   string section=IsPatchCenterPage(active)?"修复补丁":active is "诊断"?"诊断与日志":active is "游戏目录" or "检查更新"?"工具与设置":active;
-  foreach(var kv in navButtons){kv.Value.Background=kv.Key==section?B("#284465"):Brushes.Transparent;kv.Value.Foreground=kv.Key==section?ink:muted;}
+  foreach(var kv in navButtons){kv.Value.Background=kv.Key==section?B("#6983B9F8"):Brushes.Transparent;kv.Value.Foreground=kv.Key==section?ink:muted;}
   modeLabel.Text=active=="检查更新"?"管理器更新 · 自愿下载":active=="模组管理"?"本地模组 · 保留文件 · 可恢复启停":active=="安装与回滚"?"真实操作 · 检查后确认 · 保留备份":active=="在线补丁"?"公开仓库 · 下载校验 · 整合包安装":demo?"演示环境 · 安装流程不会修改游戏":"本地扫描 · 文件状态";
   folderLabel.Text=selectedInstallRoot??(demo?"联机小队 · 示例配置\n尚未选择游戏目录":"尚未选择游戏目录");folderLabel.ToolTip=selectedInstallRoot;
  }
