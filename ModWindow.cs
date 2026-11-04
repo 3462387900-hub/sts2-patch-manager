@@ -11,6 +11,61 @@ public partial class MainWindow
  ModTogglePlan? modTogglePreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
+ GitHubModUpdates? githubModUpdates;
+ string? githubRoot;
+ GitHubModUpdates GitHubUpdates()
+ {
+  if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
+  if(githubModUpdates==null||!string.Equals(githubRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+  {
+   githubModUpdates?.Dispose();githubModUpdates=new GitHubModUpdates(installer.DataRoot,selectedInstallRoot);
+   githubRoot=selectedInstallRoot;
+  }
+  return githubModUpdates;
+ }
+ async void CheckGitHubMods()
+ {
+  if(busy||modInventory==null||selectedInstallRoot==null)return;
+  busy=true;
+  try
+  {
+   var updates=GitHubUpdates();
+   var count=await updates.CheckAllAsync(modInventory.Mods);
+   modStatus=$"已检查 {count} 个绑定 GitHub 的普通 MOD；检测结果仅供参考，不会修改游戏文件。";
+  }
+  catch(Exception e){modStatus="GitHub 检查未完成："+e.Message;}
+  finally{busy=false;ShowMods();}
+ }
+ void BindGitHubMod(ManagedMod mod)
+ {
+  var updates=GitHubUpdates();
+  var dialog=new Window{Title="关联 GitHub 仓库 · "+mod.Name,Owner=this,Width=550,Height=225,
+   WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
+  var body=new StackPanel{Margin=new Thickness(18)};
+  body.Children.Add(T("输入公开 GitHub 仓库的地址（仅检查最新正式 Release）：",13,muted));
+  var input=new TextBox{Text=updates.Repository(mod.Id)??"",Margin=new Thickness(0,12,0,12)};
+  body.Children.Add(input);
+  var hint=T("示例：https://github.com/作者/仓库。绑定按 MOD ID 保存，不改变模组文件。",11,muted);
+  body.Children.Add(hint);
+  var save=Btn("保存关联",()=>{try{updates.Bind(mod.Id,input.Text);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Primary");
+  var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
+  body.Children.Add(H(save,remove,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
+  dialog.Content=body;input.Focus();
+  if(dialog.ShowDialog()==true)ShowModDetail(mod.Folder);
+ }
+ async void CheckGitHubMod(ManagedMod mod)
+ {
+  if(busy)return;
+  busy=true;
+  try
+  {
+   var result=await GitHubUpdates().CheckAsync(mod,true);
+   toast.Text=mod.Name+" · "+result.Status+" · "+result.Message;
+  }
+  catch(Exception e){toast.Text="检查失败："+e.Message;}
+  finally{busy=false;ShowModDetail(mod.Folder);}
+ }
+
  async void RefreshMods()
  {
   if(busy)return;
@@ -257,6 +312,24 @@ public partial class MainWindow
   var mod=modInventory?.Mods.SingleOrDefault(m=>m.Folder==folder);if(mod==null){ShowMods();return;}
   var root=V(Header("MOD DETAILS",mod.Name,mod.Id));Space(root,18);root.Children.Add(T(mod.Description.Length>0?mod.Description:"作者未填写简介。",14,muted));Space(root,18);
   root.Children.Add(T("版本："+mod.Version+"\n作者："+mod.Author+"\n状态："+(mod.Enabled?"启用":"停用")+"\n目录："+mod.Folder,13,muted));Space(root,18);
+  if(!ModPresentation.IsIndependentPatch(mod))
+  {
+   var updates=GitHubUpdates();var repo=updates.Repository(mod.Id);var result=updates.Cached(mod.Id);
+   root.Children.Add(T("GitHub 更新检测",17,ink,true));Space(root,8);
+   root.Children.Add(T(repo==null?"尚未关联 GitHub 仓库。":"仓库："+repo,12,muted));Space(root,6);
+   if(result!=null)
+   {
+    root.Children.Add(H(Badge(result.Status,result.Status=="有更新"?gold:muted),
+     T("本地 "+result.LocalVersion+" · GitHub "+(result.LatestVersion.Length>0?result.LatestVersion:"未知"),12,muted)));
+    root.Children.Add(T(result.Message+" · 检查于 "+result.CheckedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),12,muted));
+    if(result.ReleaseUrl.Length>0)root.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(result.ReleaseUrl),"Ghost"));
+   }
+   else if(repo!=null)root.Children.Add(T("尚未检查该仓库。",12,muted));
+   Space(root,9);
+   var bind=Btn(repo==null?"关联 GitHub 仓库":"修改 GitHub 关联",()=>BindGitHubMod(mod),"Ghost");
+   var check=Btn("检查更新",()=>CheckGitHubMod(mod),"Ghost");check.IsEnabled=repo!=null&&!busy;
+   root.Children.Add(H(bind,check));Space(root,20);
+  }
   root.Children.Add(T("声明的前置模组",17,ink,true));Space(root,8);root.Children.Add(T(mod.Dependencies.Length==0?"清单未声明前置；这不代表一定没有其他依赖。":string.Join("\n",mod.Dependencies.Select(d=>d.Id+(d.Minimum.Length>0?" ≥ "+d.Minimum:"")+(d.Maximum.Length>0?" ≤ "+d.Maximum:""))),13,muted));Space(root,20);
   if(ModPresentation.IsIndependentPatch(mod))
   {
