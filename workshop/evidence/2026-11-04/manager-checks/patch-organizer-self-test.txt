@@ -1,0 +1,16 @@
+PASS preview is read-only and selects independent fix
+PASS changed DLL blocks stale preview
+PASS occupied destination is skipped
+PASS active rollback history is safely planned, without modifying records
+PASS journal changes between preview and confirmation reject the operation
+PASS prepared installer journal blocks migration
+PASS installed patch relocates with exact file integrity
+PASS live rollback journal follows relocated DLL path
+PASS recursive mod scanner recognizes grouped patch
+PASS repeat organization is a no-op
+PASS ordinary mods were never moved
+PASS pending organization blocks further modifications
+PASS recovery restores every moved patch byte
+PASS recovery restores original UTF-8 BOM backup journal bytes
+PASS recovery clears pending organization state
+PASS missing original replacement backup blocks migration

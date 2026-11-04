@@ -1,0 +1,21 @@
+PASS export scans selected root even with no previous report
+PASS export time is actual scan time
+PASS export does not write game files
+PASS unchanged complete reports match
+PASS fixture reproduces stale UI state before import
+PASS import rescans after a whole patch folder was removed
+PASS comparison displays both scan times
+PASS export rescans after restoration instead of using missing state
+PASS export rescans after patch DLL deletion
+PASS two unknown states cannot claim consistency
+PASS incomplete scans cannot claim consistency
+PASS demo and real reports cannot mix
+PASS different catalogs cannot match
+PASS unsupported schema rejected
+PASS duplicate patch IDs rejected
+PASS missing completeness field rejected
+PASS peer-only patch records are included in comparison
+PASS missing peer record is a difference
+PASS same labels with different file verification differ
+PASS invalid import clears previous success and unlocks UI
+PASS failed rescan never exports cached data and unlocks UI

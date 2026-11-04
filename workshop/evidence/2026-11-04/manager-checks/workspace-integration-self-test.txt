@@ -1,0 +1,41 @@
+PASS manifest inventory reads IDs and shared directories without changing files
+PASS virtual list filters only data by category, enabled state, and search
+PASS mod list groups only catalogued independent patches, never original mods
+PASS cannot disable a declared dependency while a dependent mod is active
+PASS shared mod directory cannot be moved as a single mod
+PASS toggle preview is read-only and creates no storage folder
+PASS file changes invalidate prior toggle confirmation
+PASS disable atomically retains the whole mod outside mods
+PASS edited disabled content is not silently restored
+PASS restore never overwrites an occupied original location
+PASS escaped original location in a disabled record is rejected
+PASS enable restores original folder and all file bytes
+PASS cannot enable a mod before its required dependency
+PASS declared dependency minimum version is enforced
+PASS ordered dependency toggles preserve the complete original environment
+PASS known patch metadata protects dependencies omitted from mod manifest
+PASS disabled patch is not recommended for reinstall
+PASS full installer rejects a disabled component inside the shared transaction lock
+PASS all toggle checks leave original mod files intact
+PASS first complete MOD observation establishes a baseline without auto-disabling any patch
+PASS target detection uses affected/trigger roles, never generic dependencies or the patch itself
+PASS multi-target fixes list both affected MODs
+PASS multi-target repair patch remains enabled while ANY affected MOD still exists
+PASS removing the previously observed HextechRunes targets exactly its reviewed standalone fix
+PASS target MOD re-added before execution cancels automatic patch disable
+PASS a later real deletion is detected after the restored baseline
+PASS unreviewed fixture fingerprints do not auto-disable in the real-game code path
+PASS approved isolated transaction moves only the orphan patch into recoverable disabled storage
+PASS repeated scans never disable the same patch twice
+PASS manually restoring an auto-disabled patch uses the original reversible enable action
+PASS user opt-out is saved and disables automatic patch retirement
+PASS user can opt back into orphan-patch automation
+PASS Steam library VDF and manifests discover multiple installs and deduplicate saved path
+PASS invalid remembered game directory is ignored
+PASS bounded common-directory search works without hardcoded drive
+PASS chosen directory persists for next launch
+PASS broken preferences do not crash startup
+PASS marked test fixtures cannot launch a game
+PASS invalid game executable is rejected before launching
+PASS launch uses exact selected executable and game working directory without shell interpolation
+PASS concurrent game-folder operations are blocked by named mutex

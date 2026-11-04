@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "downloaded": false,
+  "code": "Cancelled",
+  "message": "A task was canceled.",
+  "events": []
+}

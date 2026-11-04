@@ -1,0 +1,27 @@
+PASS loose root MOD itself cannot be moved as a folder
+PASS loose root MOD does not block an independent patch directory
+PASS first scan builds baseline, with no false update
+PASS unchanged scan is stable
+PASS DLL mutation is detected even with unchanged declared MOD version
+PASS other MOD folders cannot be attributed to a root-level loose manifest
+PASS loose root MOD only owns its own manifest and matching DLL
+PASS changed related MOD is never declared fixed without proof
+PASS new scan commits the current local baseline
+PASS a second scan preserves unresolved MOD updates instead of silently clearing them
+PASS unresolved review survives any number of identical scans
+PASS health evaluation continues to flag pending MOD changes
+PASS review acknowledgement refuses changed files since the latest baseline
+PASS explicit acknowledgement clears the matching MOD reminder without changing game files
+PASS review acknowledgement refuses items that were already cleared
+PASS unapproved fixed_upstream evidence is rejected
+PASS invalid SHA256 evidence is rejected
+PASS unsupported upstream registry schema is rejected
+PASS exact matching approved upstream hash permits reversible retirement
+PASS unrelated MOD hash cannot prove an upstream fix
+PASS unmatched exact hash cannot prove an upstream fix
+PASS upstream proof becomes invalid if target DLL changes before confirmation
+PASS restored exact proof fingerprint is recognized again
+PASS file changes after retirement preview block write
+PASS retirement keeps files and records outside the game MOD loading folder
+PASS retired fix can be safely re-enabled from its original location
+PASS all fixture files remain present after retiring and re-enabling

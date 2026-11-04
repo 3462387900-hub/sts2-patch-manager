@@ -1,0 +1,19 @@
+PASS release metadata retains version, Chinese notes, date and checksum
+PASS public index accepts UTF-8 BOM from Windows PowerShell
+PASS version comparison is numeric rather than lexical
+PASS equal and older releases never request downgrade
+PASS invalid, prerelease and path-like versions rejected
+PASS draft, prerelease, missing checksum and missing release notes rejected
+PASS foreign sources, changed filenames, invalid hashes and oversized assets rejected
+PASS checking is anonymous and never downloads the update package
+PASS no release and GitHub rate limits are errors rather than latest-version claims
+PASS oversized metadata rejected before parsing
+PASS unavailable public index falls back to official release API
+PASS invalid public index is rejected rather than masked by another source
+PASS explicit download saves exact bytes after checksum verification without login
+PASS unavailable direct download falls back to asset API and verifies bytes
+PASS corrupt or wrong-length download preserves existing destination and removes partial data
+PASS corrupt or wrong-length download preserves existing destination and removes partial data
+PASS corrupt or wrong-length download preserves existing destination and removes partial data
+PASS cancellation preserves existing file and removes temporary download
+PASS download cannot be saved as an executable

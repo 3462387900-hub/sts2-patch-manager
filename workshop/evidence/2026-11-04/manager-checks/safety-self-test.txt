@@ -1,0 +1,38 @@
+PASS empty recovers without scan error
+PASS empty effective state
+PASS empty repeated scans succeed
+PASS empty payload bytes preserved
+PASS prepared-before recovers without scan error
+PASS prepared-before effective state
+PASS prepared-before repeated scans succeed
+PASS prepared-before journal finalized
+PASS prepared-before payload bytes preserved
+PASS prepared-before subsequent toggle works
+PASS prepared-after recovers without scan error
+PASS prepared-after effective state
+PASS prepared-after repeated scans succeed
+PASS prepared-after journal finalized
+PASS prepared-after payload bytes preserved
+PASS enabled-before-record recovers without scan error
+PASS enabled-before-record effective state
+PASS enabled-before-record repeated scans succeed
+PASS enabled-before-record journal finalized
+PASS enabled-before-record payload bytes preserved
+PASS enabled-before-record subsequent toggle works
+PASS conflict fails closed
+PASS conflict journal unchanged
+PASS conflict payload bytes preserved
+PASS modified fails closed
+PASS modified journal unchanged
+PASS modified payload bytes preserved
+PASS missing fails closed
+PASS missing journal unchanged
+PASS missing payload bytes preserved
+PASS normal report accepted
+PASS BOM report accepted: utf-8
+PASS BOM report accepted: utf-16
+PASS oversized file rejected
+PASS too many entries rejected
+PASS long string rejected
+PASS deep JSON rejected
+PASS malformed JSON rejected

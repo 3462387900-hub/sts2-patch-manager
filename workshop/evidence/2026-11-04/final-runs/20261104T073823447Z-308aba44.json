@@ -1,0 +1,34 @@
+{
+  "status": "failed",
+  "command": "download",
+  "requestedId": 3830005491,
+  "downloaded": false,
+  "code": "AccessDenied",
+  "message": "ManifestRequestCode: Steam EResult=AccessDenied (15)。匿名授权未获准；停止此路径，不尝试绕过。",
+  "events": [
+    {
+      "utc": "2026-11-04T07:38:24.5024913+00:00",
+      "message": "metadata: 0/8459103 AncientEntrances"
+    },
+    {
+      "utc": "2026-11-04T07:38:24.5106876+00:00",
+      "message": "anonymous-cm: 0/8459103 "
+    },
+    {
+      "utc": "2026-11-04T07:38:24.9027838+00:00",
+      "message": "CM endpoint=cmp1-dfw2.steamserver.net:443"
+    },
+    {
+      "utc": "2026-11-04T07:38:25.6924422+00:00",
+      "message": "CM connected; requesting LogOnAnonymous"
+    },
+    {
+      "utc": "2026-11-04T07:38:26.1539153+00:00",
+      "message": "Anonymous logon EResult=OK"
+    },
+    {
+      "utc": "2026-11-04T07:38:26.797198+00:00",
+      "message": "Manifest authorization EResult=AccessDenied"
+    }
+  ]
+}

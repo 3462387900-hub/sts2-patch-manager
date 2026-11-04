@@ -1,0 +1,23 @@
+PASS preparation verifies and extracts without changing application files
+PASS recovery command accompanies the verified update plan
+PASS external worker replaces application after full preflight
+PASS obsolete owned files are removed and declared new files installed
+PASS personal data and unrelated files survive automatic update
+PASS changed original program files are preserved in backup
+PASS recovery restores byte-exact previous application including retired files
+PASS interrupted file replacement automatically restores previous application
+PASS locked application file triggers rollback without forcing another process closed
+PASS changed application invalidates stale update before any replacement
+PASS changed staged payload is rejected by external worker
+PASS changed updater request cannot be handed off
+PASS manual recovery refuses to overwrite later file changes
+PASS damaged backup is rejected before manual recovery changes files
+PASS unowned-file collision or undeclared archive file cannot overwrite current application
+PASS unowned-file collision or undeclared archive file cannot overwrite current application
+PASS traversal, personal data and device-name archive paths are rejected
+PASS traversal, personal data and device-name archive paths are rejected
+PASS traversal, personal data and device-name archive paths are rejected
+PASS duplicate-case paths and archive links are rejected without program writes
+PASS duplicate-case paths and archive links are rejected without program writes
+PASS cancelled preparation leaves the application unchanged
+PASS another running manager blocks update through shared directory mutex

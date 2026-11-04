@@ -1,0 +1,18 @@
+PASS missing local patch gets install action
+PASS extra standalone patch gets reversible removal
+PASS old existing file is not misdiagnosed as absent
+PASS newer local patch is never downgraded to older teammate
+PASS missing original MOD blocks patch-only install
+PASS unknown file cannot be overwritten
+PASS uncertain peer cannot trigger removal
+PASS legacy report remains read-only
+PASS legacy same-status report does not create false presence differences
+PASS incomplete teammate report blocks actions
+PASS contradictory presence and status blocks removal
+PASS unsupported peer patch version blocks installation
+PASS missing report record is not proof of an absent patch
+PASS disabled versus absent does not request repeated removal or download
+PASS in-place patch never removes its original MOD
+PASS enabled dependent blocks removing its patch dependency
+PASS shared folder cannot be moved as one patch
+PASS inventory issues disable all actions

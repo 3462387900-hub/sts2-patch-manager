@@ -1,0 +1,8 @@
+PASS embedded catalog and installer plan cover the same 17 IDs
+PASS payload plan version is v3
+PASS TurnEndOrderFix installs only matching runtime DLL and manifest, without patch-info
+PASS VictoryBreedsArroganceSyncFix installs only matching runtime DLL and manifest, without patch-info
+PASS KakarotElbowTargetFix installs only matching runtime DLL and manifest, without patch-info
+PASS NymphKazdelRewardFix installs only matching runtime DLL and manifest, without patch-info
+PASS Act3SnapshotSaveFix installs only matching runtime DLL and manifest, without patch-info
+PASS NeowOptionOrderFix installs only matching runtime DLL and manifest, without patch-info

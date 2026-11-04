@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "command": "download",
+  "requestedId": 1,
+  "downloaded": false,
+  "code": "MetadataUnavailable",
+  "message": "Steam 条目查询失败：result=9（不存在、隐藏或无访问权限）。",
+  "events": []
+}

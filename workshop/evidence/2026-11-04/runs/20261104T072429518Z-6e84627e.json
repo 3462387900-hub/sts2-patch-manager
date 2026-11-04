@@ -1,0 +1,32 @@
+{
+  "status": "failed",
+  "downloaded": false,
+  "code": "AccessDenied",
+  "message": "ManifestRequestCode: Steam EResult=AccessDenied (15)。匿名授权未获准；停止此路径，不尝试绕过。",
+  "events": [
+    {
+      "utc": "2026-11-04T07:24:30.3509608+00:00",
+      "message": "metadata: 0/321575451 [Replaceable with Any Character] Chaos Dream — Rosewitha Skin"
+    },
+    {
+      "utc": "2026-11-04T07:24:30.3587516+00:00",
+      "message": "anonymous-cm: 0/321575451 "
+    },
+    {
+      "utc": "2026-11-04T07:24:30.7092392+00:00",
+      "message": "CM endpoint=cmp3-hkg1.steamserver.net:443"
+    },
+    {
+      "utc": "2026-11-04T07:24:31.771382+00:00",
+      "message": "CM connected; requesting LogOnAnonymous"
+    },
+    {
+      "utc": "2026-11-04T07:24:32.7685288+00:00",
+      "message": "Anonymous logon EResult=OK"
+    },
+    {
+      "utc": "2026-11-04T07:24:33.7896976+00:00",
+      "message": "Manifest authorization EResult=AccessDenied"
+    }
+  ]
+}

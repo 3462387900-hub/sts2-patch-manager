@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "downloaded": false,
+  "code": "WrongApp",
+  "message": "拒绝其他游戏条目，consumer_app_id=294100",
+  "events": []
+}

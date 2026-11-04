@@ -1,0 +1,17 @@
+{
+  "status": "metadata-only",
+  "command": "metadata",
+  "requestedId": 3830179251,
+  "metadata": {
+    "WorkshopId": "3830179251",
+    "Title": "BossEntrances",
+    "AppId": 2868840,
+    "Size": 337885,
+    "UpdatedUtc": "2026-10-30T15:02:41+00:00",
+    "FileUrl": null,
+    "ManifestId": "6700091045726903851",
+    "FileName": ""
+  },
+  "downloaded": false,
+  "events": []
+}

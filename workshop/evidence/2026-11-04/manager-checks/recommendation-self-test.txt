@@ -1,0 +1,34 @@
+PASS empty mods do not receive universal healing or other fixes
+PASS missing affected mod is not applicable
+PASS exact game and target hashes recommend absent fix
+PASS same mod IDs with unknown game build are blocked
+PASS unknown target DLL is blocked
+PASS missing runtime dependency differs from missing affected mod
+PASS renamed mod folder and manifest retain exact detection
+PASS installed fingerprints do not hide missing runtime dependency
+PASS installed fix and exact dependencies are healthy
+PASS unknown existing patch DLL is not upgradeable
+PASS partial patch is blocked
+PASS renamed target folder is supported
+PASS duplicate IDs block ambiguous dependency
+PASS unrelated duplicate IDs invalidate the entire inventory
+PASS profiles are OR and conditions within them are AND
+PASS excluded combination is not recommended
+PASS new unreviewed draft is not trusted as bundled
+PASS withdrawn patch is not recommended
+PASS metadata path traversal is rejected
+PASS malformed metadata produces review state instead of a crash
+PASS required absent patch is explicitly linked
+PASS missing patch reference blocks recommendation
+PASS minimum patch version is enforced
+PASS conditional relation inactive without trigger
+PASS conditional relation active with trigger
+PASS declared dependency cycle is rejected
+PASS one-sided declared conflict blocks both alternatives
+PASS eligible provider can supply a future file explicitly
+PASS blocked provider cannot mask current mismatch with projected files
+PASS reciprocal compatible file update is distinct from declared cycle
+PASS incomplete JSON inventory cannot produce confident recommendation
+PASS exact bundled drafts are recognized as reviewed bundle records
+PASS draft trust requires entire reviewed metadata not just DLL fingerprint
+PASS every synthetic scan preserved all fixture files byte for byte

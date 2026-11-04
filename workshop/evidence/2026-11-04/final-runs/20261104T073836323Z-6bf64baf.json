@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "command": "metadata",
+  "requestedId": 2009463077,
+  "downloaded": false,
+  "code": "WrongApp",
+  "message": "拒绝其他游戏条目，consumer_app_id=294100",
+  "events": []
+}

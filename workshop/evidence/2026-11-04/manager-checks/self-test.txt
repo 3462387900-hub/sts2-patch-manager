@@ -1,0 +1,8 @@
+PASS catalog contains the 17 reviewed fix components
+PASS demo has two related fixes pending
+PASS demo completion state updates without game access
+PASS empty mod directory scans without errors
+PASS missing original mod is not recommended
+PASS unknown DLL is not marked compatible
+PASS duplicate mod IDs are reported
+PASS scanner leaves game files unchanged

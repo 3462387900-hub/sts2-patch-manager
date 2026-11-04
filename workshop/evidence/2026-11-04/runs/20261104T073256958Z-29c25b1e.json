@@ -1,0 +1,16 @@
+{
+  "status": "failed",
+  "downloaded": false,
+  "code": "NetworkTimeout",
+  "message": "HTTP api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/ 失败（第 3 次）：A task was canceled.",
+  "events": [
+    {
+      "utc": "2026-11-04T07:32:59.0594716+00:00",
+      "message": "HTTP api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/: transient failure, retry 2/3 (TaskCanceledException)"
+    },
+    {
+      "utc": "2026-11-04T07:33:01.4822599+00:00",
+      "message": "HTTP api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/: transient failure, retry 3/3 (TaskCanceledException)"
+    }
+  ]
+}

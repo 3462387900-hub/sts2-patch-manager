@@ -1,0 +1,10 @@
+PASS fixed repository release accepted
+PASS foreign source, invalid checksum, path traversal and oversized download rejected
+PASS verified download saved
+PASS bad download preserves existing file and removes temporary data
+PASS canceled download leaves destination unchanged
+PASS reads individual patch metadata and preserves test limits
+PASS manager payload protocol loads and retains installation guidance
+PASS unknown installation protocol requests manager update
+PASS metadata path must stay inside its patch directory
+PASS GitHub rate limit has an actionable error

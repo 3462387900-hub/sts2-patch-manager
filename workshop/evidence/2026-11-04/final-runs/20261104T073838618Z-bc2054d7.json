@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "command": "download",
+  "requestedId": 3830179251,
+  "downloaded": false,
+  "code": "Cancelled",
+  "message": "A task was canceled.",
+  "events": []
+}
