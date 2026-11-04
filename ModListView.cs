@@ -9,7 +9,7 @@ internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReas
 {
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
  public string Name=>Mod.Name;
- public string Details=>Mod.Id+"  ·  "+Mod.Version+"  ·  "+Mod.Author;
+ public string Details=>"模组 ID："+Mod.Id+"    版本号："+Mod.Version+"    作者："+Mod.Author;
  public string State=>Mod.Enabled?"已启用":"已停用";
  public string HealthText=>IsFix?"补丁健康："+Health:"";
  public string WarningText=>BlockReason==null?"":ModListView.BriefBlockReason(BlockReason);
@@ -84,8 +84,8 @@ public sealed class ModRowControl : Border
  internal static readonly RoutedEvent MoreRequestedEvent=EventManager.RegisterRoutedEvent(
   "MoreRequested",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModRowControl));
 
- readonly TextBlock title=new(){FontSize=14,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock subtitle=new(){FontSize=12,Foreground=Paint("#B3C5DB"),TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock title=new(){FontSize=16,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
+ readonly TextBlock subtitle=new(){FontSize=14,Foreground=Paint("#B3C5DB"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#9AD7BC"),TextTrimming=TextTrimming.CharacterEllipsis};
  // One compact, ellipsized context line keeps GitHub and dependency details visible
  // without forcing the entire row to grow to four or five lines.
