@@ -121,11 +121,23 @@ public partial class MainWindow
   Check(ModListView.ColumnCount(600)==1&&ModListView.ColumnCount(790)==2&&ModListView.ColumnCount(1180)==3,
    "MOD cards choose one, two or three columns from usable content width");
   var cardToSelect=Controls<ModCardControl>(activeModList!).First();
+  var groupToCheck=Controls<ModCardGroupControl>(activeModList!).First();
+  groupToCheck.BindActions();await Idle();
+  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
+   "attaching card actions never recreates visible MOD controls");
+  var glassCheckStyle=(Style)FindResource("ModCardCheckBox");
+  var glassActionStyle=(Style)FindResource("ModCardAction");
+  Check(ReferenceEquals(cardToSelect.SelectBox.Style,glassCheckStyle)&&
+   Controls<Button>(cardToSelect).Count(b=>ReferenceEquals(b.Style,glassActionStyle))==3,
+   "card checkbox and three buttons share dedicated soft glass controls");
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
   Check(chosenModFolders.Contains(checkedFolder)&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("已选 1 项")),
    "card checkbox updates selected folders and the batch toolbar");
+  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First())&&
+   cardToSelect.BorderThickness.Left==1&&cardToSelect.SelectBox.ActualWidth>=29,
+   "checkbox selection updates in place, preserves card geometry and keeps an accessible hit area");
   await Shot("02-模组卡片勾选状态");
   var selectionSearch=Controls<TextBox>(shell).Single();
   selectionSearch.Text="__筛选不匹配__";await Idle();
