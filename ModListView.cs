@@ -13,6 +13,7 @@ internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReas
  public string State=>Mod.Enabled?"已启用":"已停用";
  public string HealthText=>IsFix?"补丁健康："+Health:"";
  public string WarningText=>BlockReason==null?"":ModListView.BriefBlockReason(BlockReason);
+ public bool IsDependencyProtection=>BlockReason?.StartsWith("这些启用项依赖它，请先停用依赖项：",StringComparison.Ordinal)==true;
 }
 
 internal static class ModListView
@@ -35,7 +36,7 @@ internal static class ModListView
   if(reason.StartsWith(deps,StringComparison.Ordinal))
   {
    int total=reason[deps.Length..].Split('、',StringSplitOptions.RemoveEmptyEntries).Length;
-   return $"依赖保护 · {total} 项已启用 MOD 需要它（详情查看完整名单）";
+   return $"被 {total} 个已启用 MOD 依赖";
   }
   return reason.Length>78?"操作受限 · "+reason[..74]+"…":"操作受限 · "+reason;
  }
@@ -86,8 +87,9 @@ public sealed class ModRowControl : Border
  readonly TextBlock title=new(){FontSize=14,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock subtitle=new(){FontSize=12,Foreground=Paint("#B3C5DB"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock health=new(){FontSize=11,Foreground=Paint("#9AD7BC"),TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock github=new(){FontSize=11,Foreground=Paint("#A8C9EC"),TextTrimming=TextTrimming.CharacterEllipsis};
- readonly TextBlock warning=new(){FontSize=11,Foreground=Paint("#F0C47C"),TextTrimming=TextTrimming.CharacterEllipsis};
+ // One compact, ellipsized context line keeps GitHub and dependency details visible
+ // without forcing the entire row to grow to four or five lines.
+ readonly TextBlock context=new(){FontSize=11,Foreground=Paint("#A8BCD4"),TextTrimming=TextTrimming.CharacterEllipsis};
  readonly TextBlock status=new(){FontSize=11,FontWeight=FontWeights.SemiBold};
  readonly Border statusPill;
  readonly Border stripe;
@@ -102,9 +104,9 @@ public sealed class ModRowControl : Border
   BorderThickness=new Thickness(1);
   CornerRadius=new CornerRadius(11);
   SnapsToDevicePixels=false;
-  Margin=new Thickness(0,3,6,4);
+  Margin=new Thickness(0,2,6,3);
   Padding=new Thickness(0);
-  MinHeight=64;
+  MinHeight=60;
   HorizontalAlignment=HorizontalAlignment.Stretch;
 
   var grid=new Grid();
@@ -114,16 +116,15 @@ public sealed class ModRowControl : Border
   grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   stripe=new Border{Background=Paint("#739BCB"),CornerRadius=new CornerRadius(9,0,0,9)};
   grid.Children.Add(stripe);
-  var info=new StackPanel{Margin=new Thickness(14,8,8,8),VerticalAlignment=VerticalAlignment.Center};
+  var info=new StackPanel{Margin=new Thickness(14,6,7,6),VerticalAlignment=VerticalAlignment.Center};
   title.Foreground=Paint("#F0F5FC");
   info.Children.Add(title);
-  subtitle.Margin=new Thickness(0,2,0,0);info.Children.Add(subtitle);
-  health.Margin=new Thickness(0,4,0,0);info.Children.Add(health);
-  github.Margin=new Thickness(0,4,0,0);info.Children.Add(github);
-  warning.Margin=new Thickness(0,4,0,0);info.Children.Add(warning);
+  subtitle.Margin=new Thickness(0,1,0,0);info.Children.Add(subtitle);
+  health.Margin=new Thickness(0,3,0,0);info.Children.Add(health);
+  context.Margin=new Thickness(0,3,0,0);info.Children.Add(context);
   Grid.SetColumn(info,1);grid.Children.Add(info);
 
-  statusPill=new Border{CornerRadius=new CornerRadius(6),Padding=new Thickness(8,5,8,5),
+  statusPill=new Border{CornerRadius=new CornerRadius(6),Padding=new Thickness(7,4,7,4),
    VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(5,0,8,0),Child=status};
   Grid.SetColumn(statusPill,2);grid.Children.Add(statusPill);
 
@@ -142,7 +143,7 @@ public sealed class ModRowControl : Border
 
  static Button MakeButton(string name,Action action)
  {
-  var b=new Button{Content=name,MinWidth=56,Padding=new Thickness(9,7,9,7),
+  var b=new Button{Content=name,MinWidth=54,Padding=new Thickness(8,6,8,6),
    Margin=new Thickness(0,0,6,0),VerticalAlignment=VerticalAlignment.Center};
   if(Application.Current?.TryFindResource("Ghost") is Style style)b.Style=style;
   b.Click+=(_,_)=>action();
@@ -161,11 +162,9 @@ public sealed class ModRowControl : Border
   health.Text=item.HealthText;
   health.Visibility=item.IsFix?Visibility.Visible:Visibility.Collapsed;
   health.ToolTip=item.HealthText;
-  github.Text=item.GitHubText;
-  github.ToolTip=item.GitHubText;
-  github.Visibility=string.IsNullOrEmpty(item.GitHubText)?Visibility.Collapsed:Visibility.Visible;
-  warning.Text=item.WarningText;
-  warning.ToolTip=item.BlockReason;
-  warning.Visibility=item.BlockReason==null?Visibility.Collapsed:Visibility.Visible;
+  context.Text=string.Join("  ·  ",new[]{item.WarningText,item.GitHubText}.Where(t=>!string.IsNullOrWhiteSpace(t)));
+  context.ToolTip=item.BlockReason??(string.IsNullOrWhiteSpace(item.GitHubText)?null:item.GitHubText);
+  context.Foreground=item.BlockReason!=null&&!item.IsDependencyProtection?Paint("#F0C47C"):Paint("#A8BCD4");
+  context.Visibility=context.Text.Length==0?Visibility.Collapsed:Visibility.Visible;
  }
 }
