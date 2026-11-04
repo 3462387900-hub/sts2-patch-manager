@@ -29,7 +29,7 @@ public partial class MainWindow
  {
   if(busy||modInventory==null||selectedInstallRoot==null)return;
   busy=true;
-  int found=0,examined=0;
+  int found=0,verified=0,examined=0;
   try
   {
    var mods=modInventory.Mods.Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null)
@@ -37,11 +37,22 @@ public partial class MainWindow
     .Where(m=>Discovery().Cached(m)==null).Take(8).ToArray();
    foreach(var mod in mods)
    {
+    toast.Text="正在查找 GitHub 来源："+mod.Name+"（"+(examined+1)+"/"+mods.Length+"）";
     var result=await Discovery().DiscoverAsync(mod);
     if(result.Candidates.Length>0)found++;
+    if(result.Candidates.Any(c=>c.Verified))verified++;
     examined++;
+    if(result.Retryable)
+    {
+     modStatus=$"已检查 {examined} 个 MOD，GitHub 搜索暂不可用："+result.Note+
+      "。已查到的候选仍可在详情确认；稍后可继续批量查找。";
+     return;
+    }
    }
-   modStatus=$"自动查找完成：检查 {examined} 个未关联 MOD，{found} 个有候选。进入 MOD 详情确认来源；每次最多搜索 8 个新 MOD 以避免 API 限流。";
+   modStatus=mods.Length==0
+    ?"尚无待查找的普通 MOD；已关联的来源或近期检查结果均予以保留。"
+    :$"查找完成：检查 {examined} 个 MOD，找到 {found} 个候选，其中 {verified} 个有明确来源证据。"+
+      "进入 MOD 详情核对并确认；每次最多查找 8 个，重复点击可继续下一批。";
   }
   catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
   finally{busy=false;ShowMods();}
@@ -50,7 +61,12 @@ public partial class MainWindow
  {
   if(busy)return;
   busy=true;
-  try{await Discovery().DiscoverAsync(mod,true);}
+  try
+  {
+   var result=await Discovery().DiscoverAsync(mod,true);
+   if(result.Candidates.Length==0)toast.Text=mod.Name+"："+result.Note;
+   else if(result.Retryable)toast.Text=mod.Name+"："+result.Note+"；已有候选可在详情查看。";
+  }
   catch(Exception e){toast.Text="查找失败："+e.Message;}
   finally{busy=false;ShowModDetail(mod.Folder);}
  }
@@ -303,10 +319,13 @@ public partial class MainWindow
    SetPage("模组管理",root,restore:ShowMods);return;
   }
   var refresh=Btn("刷新模组",RefreshMods,"Primary");refresh.IsEnabled=!busy;
+  var discoverAll=Btn("批量查找 GitHub 来源",DiscoverGitHubMods,"Ghost");
+  discoverAll.IsEnabled=!busy&&modInventory!=null&&!modInventoryDirty;
+  discoverAll.Visibility=modSection=="普通 MOD"?Visibility.Visible:Visibility.Collapsed;
   header.Children.Add(H(refresh,Btn("打开模组目录",()=>{
    string directory=Path.Combine(selectedInstallRoot,"mods");
    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
-  },"Ghost")));
+  },"Ghost"),discoverAll));
   Space(header,6);
   header.Children.Add(T(modStatus,12,muted));Space(header,11);
   if(modInventoryDirty)
@@ -398,7 +417,10 @@ public partial class MainWindow
    if(updates.Repository(mod.Id)==null)
    {
     var candidates=Discovery().Cached(mod);
-    return candidates==null?"":candidates.Candidates.Length>0?"GitHub：找到 "+candidates.Candidates.Length+" 个候选 · 待确认":"GitHub：未找到来源";
+    return candidates==null?"":candidates.Candidates.Length>0
+     ?"GitHub："+(candidates.Candidates.Any(c=>c.Verified)?"已核验来源":"疑似来源")+
+      " "+candidates.Candidates.Length+" 个 · 待确认"
+     :candidates.Retryable?"GitHub：查找受限，可重试":"GitHub：暂无来源";
    }
    var result=updates.Cached(mod.Id);
    return result==null?"GitHub：已关联 · 待检查":"GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:"");
@@ -466,10 +488,16 @@ public partial class MainWindow
    if(repo==null&&discovery!=null)
    {
     Space(root,6);
-    root.Children.Add(T(discovery.Candidates.Length>0?"找到 "+discovery.Candidates.Length+" 个候选来源（请确认）":discovery.Note,12,muted));
+    root.Children.Add(T(discovery.Candidates.Length>0
+     ?"找到 "+discovery.Candidates.Length+" 个候选来源；优先参考核验 MOD ID 的仓库，请确认再关联。"
+     :discovery.Note,12,muted));
+    if(discovery.Candidates.Length>0&&discovery.Note.Length>0)
+     root.Children.Add(T(discovery.Note,11,muted));
     foreach(var candidate in discovery.Candidates)
     {
-     var row=V(T(candidate.Repository,13,ink,true),T(candidate.Reason+" · "+(candidate.Verified?"已核验元数据":"尚未核验"),11,muted));
+     var evidence=candidate.Reason.StartsWith("MOD 清单声明",StringComparison.Ordinal)
+       ?"本地清单声明":candidate.Verified?"仓库 MOD ID 已核验":"尚未核验，请仔细确认";
+      var row=V(T(candidate.Repository,13,ink,true),T(candidate.Reason+" · "+evidence,11,muted));
      var confirm=Btn("确认关联",()=>{
       try{updates.Bind(mod.Id,candidate.Repository);ShowModDetail(mod.Folder);}
       catch(Exception e){toast.Text="关联失败："+e.Message;}
