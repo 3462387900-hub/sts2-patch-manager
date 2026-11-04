@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -31,7 +33,12 @@ public partial class MainWindow
     ready=null;await Task.Delay(60);
    }
    if(ready==null)throw new InvalidOperationException("界面操作按钮一直不可用："+label);
-   ready.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   // Invoke the real WPF button automation pattern rather than synthesizing
+   // RoutedEventArgs. Synthetic Click events were intermittently lost in CI.
+   var peer=new ButtonAutomationPeer(ready);
+   if(peer.GetPattern(PatternInterface.Invoke) is IInvokeProvider invoke)
+    invoke.Invoke();
+   else throw new InvalidOperationException("无法以 WPF UIAutomation 调用按钮："+label);
    for(int i=0;i<150&&(busy||transactionWriting);i++)await Task.Delay(60);
    if(busy||transactionWriting)throw new InvalidOperationException("UI 操作超时："+label);
    await Idle();
