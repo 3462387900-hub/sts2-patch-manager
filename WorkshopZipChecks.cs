@@ -70,6 +70,6 @@ internal static class WorkshopZipChecks
   Archive(Path.Combine(test,"duplicate.zip"),("Dup/mod_manifest.json",manifest.Replace("ImportedSample","Dup")),
    ("Dup/Dup.dll","a"),("dup/dup.dll","b"));
   Reject(()=>WorkshopZipImport.Preview(separateRoot,Path.Combine(test,"duplicate.zip")),"case-insensitive duplicate archive paths are blocked");
-  Check(checks.Count==9,"ZIP import checks completed");
+  Check(checks.Count==10,"ZIP import checks completed");
  }
 }
