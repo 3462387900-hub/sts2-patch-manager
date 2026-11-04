@@ -9,13 +9,14 @@ namespace SpirePatch;
 /// <summary>Visual glass layering shared by native Acrylic and an opaque fallback.</summary>
 internal static class SpireGlassTheme
 {
- internal static Brush Background(bool nativeAcrylic)
+ internal static Brush Background(bool nativeAcrylic,bool diagnostic=false)
  {
-  // On Windows 11, the tint must remain substantially translucent:
-  // 0xA0 (~63%) instead of the former 0xE8 (~91%) that hid the native blur.
+  // The previous 63%-68% full-window tint masked most Desktop Acrylic detail.
+  // Diagnostic temporarily removes nearly all tint so the OS blur can be tested against a high-contrast window behind this one.
   if(nativeAcrylic)
-   return new LinearGradientBrush(Color.FromArgb(160,11,19,34),
-    Color.FromArgb(173,21,34,55),58);
+   return diagnostic
+    ? new SolidColorBrush(Color.FromArgb(16,10,18,31))
+    : new LinearGradientBrush(Color.FromArgb(95,11,19,34),Color.FromArgb(112,21,34,55),58);
   // Without DWM Acrylic never leave a transparent WPF window exposing black pixels.
   return new LinearGradientBrush(Color.FromRgb(12,21,38),
    Color.FromRgb(27,43,69),58);
@@ -24,8 +25,8 @@ internal static class SpireGlassTheme
  internal static Brush GlassPanel(string? color=null)
  {
   if(color!=null)return (Brush)new BrushConverter().ConvertFromString(color)!;
-  return new LinearGradientBrush(Color.FromArgb(219,29,46,71),
-   Color.FromArgb(199,19,33,55),110);
+  return new LinearGradientBrush(Color.FromArgb(189,29,46,71),
+   Color.FromArgb(177,19,33,55),110);
  }
 
  internal static Brush PanelStroke()=>new LinearGradientBrush(
