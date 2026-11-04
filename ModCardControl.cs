@@ -23,6 +23,7 @@ public sealed class ModCardControl : Border
  internal Action<ModListRow>? DetailsRequested,ToggleRequested,UpdateRequested;
  internal Action<ModListRow,Button>? MoreRequested;
  bool setting;
+ static Brush Paint(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
  static readonly Brush NormalCardStroke=SpireGlassTheme.PanelStroke();
  static readonly Brush HoverCardStroke=Paint("#468CB3D7");
  static readonly Brush SelectedCardStroke=Paint("#7B85B8E8");
