@@ -44,6 +44,12 @@ public partial class MainWindow
   Check(SpireGlassTheme.GlassPanel() is LinearGradientBrush surface&&
    surface.GradientStops.All(stop=>stop.Color.A<235),
    "glass cards allow blurred and ambient backdrop to show through");
+  Check(SpireGlassTheme.Background(true) is LinearGradientBrush newTint&&
+   newTint.GradientStops.All(stop=>stop.Color.A<=120),
+   "balanced native acrylic no longer uses a nearly opaque window overlay");
+  Check(SpireGlassTheme.Background(true,true) is SolidColorBrush diagnosticTint&&
+   diagnosticTint.Color.A<=20,
+   "bare acrylic diagnostic can expose the actual desktop composition without decorative color");
   Check(Controls<Canvas>(shell).Any(c=>!c.IsHitTestVisible&&c.Children.Count>=3),
    "decorative glass fallback is rendered behind navigation without stealing pointer input");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");
