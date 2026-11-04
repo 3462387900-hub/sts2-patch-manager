@@ -534,13 +534,10 @@ public partial class MainWindow
    SetPage("模组管理",root,restore:ShowMods);return;
   }
   var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
-  var discoverAll=Btn("批量查找 GitHub 来源",DiscoverGitHubMods,"Ghost");
-  discoverAll.IsEnabled=!busy&&modInventory!=null&&!modInventoryDirty;
-  discoverAll.Visibility=modSection=="普通 MOD"?Visibility.Visible:Visibility.Collapsed;
   header.Children.Add(H(refresh,Btn("打开模组目录",()=>{
    string directory=Path.Combine(selectedInstallRoot,"mods");
    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
-  },"Ghost"),discoverAll));
+  },"Ghost")));
   Space(header,4);
   header.Children.Add(T(modStatus,12,muted));Space(header,7);
   if(modInventoryDirty)
@@ -555,13 +552,14 @@ public partial class MainWindow
    Space(header,10);
   }
   var mods=modInventory?.Mods??[];
+  chosenModFolders.RemoveWhere(path=>!mods.Any(m=>m.Folder.Equals(path,StringComparison.OrdinalIgnoreCase)));
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
   var groups=new WrapPanel{Margin=new Thickness(0,0,0,6)};
   foreach(var (name,count) in new[]{("普通 MOD",normalCount),("修复补丁",fixCount)})
   {
    string selected=name;
    var tab=Btn($"{name}  ({count})",()=>{
-    CaptureModListOffset();modListOffset=0;modSection=selected;chosenModFolders.Clear();ShowMods();
+    CaptureModListOffset();modListOffset=0;modSection=selected;modFilter="全部";chosenModFolders.Clear();ShowMods();
    },modSection==name?"SelectedTab":"Ghost");
    tab.Margin=new Thickness(0,0,9,0);
    groups.Children.Add(tab);
@@ -617,7 +615,7 @@ public partial class MainWindow
   var shownCount=T("",12,muted);shownCount.VerticalAlignment=VerticalAlignment.Center;
   DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
   var filters=new WrapPanel();
-  foreach(var name in new[]{"全部","启用","停用"})
+  foreach(var name in new[]{"全部","启用","停用","有更新","有问题"})
   {
    string selected=name;
    var button=Btn(name,()=>{CaptureModListOffset();modListOffset=0;modFilter=selected;ShowMods();},
@@ -694,7 +692,10 @@ public partial class MainWindow
   void UpdateSelectionToolbar()
   {
    int count=ChosenMods().Length;
-   selectionCount.Text=count>0?"已选 "+count+" 项":"";
+   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery)
+    .Count(r=>chosenModFolders.Contains(r.Mod.Folder));
+   selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
+    (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
    foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch})
     button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
    findBatch.IsEnabled=checkBatch.IsEnabled=enableBatch.IsEnabled=disableBatch.IsEnabled=
