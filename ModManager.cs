@@ -93,7 +93,7 @@ public static class ModManager
   foreach(var group in mods.GroupBy(m=>m.Id,StringComparer.OrdinalIgnoreCase).Where(g=>g.Count()>1))issues.Add("存在重复模组 ID（含停用区）："+group.Key);
   return new(mods.OrderBy(m=>m.Name,StringComparer.CurrentCultureIgnoreCase).ToList(),issues);
  }
- static IEnumerable<string> RequiredByPatch(string id)
+ internal static IEnumerable<string> RequiredByPatch(string id)
  {
   var patch=Catalog.Bundled.FirstOrDefault(p=>p.ComponentId.Equals(id,StringComparison.OrdinalIgnoreCase));if(patch==null)return [];
   var sets=patch.Metadata.GetProperty("compatibility").GetProperty("profiles").EnumerateArray().Select(p=>p.GetProperty("required_mods").EnumerateArray().Select(m=>m.GetProperty("mod_id").GetString()!).ToHashSet(StringComparer.OrdinalIgnoreCase)).ToArray();
