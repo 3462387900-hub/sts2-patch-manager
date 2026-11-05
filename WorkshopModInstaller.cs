@@ -508,6 +508,9 @@ internal sealed class WorkshopModInstaller : IDisposable
         catch (UnauthorizedAccessException)
         {
         }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     private static InventorySnapshot CaptureInventory(string root)
@@ -543,8 +546,11 @@ internal sealed class WorkshopModInstaller : IDisposable
     private static List<ModManifestCandidate> FindModManifests(string root)
     {
         var candidates = new List<ModManifestCandidate>();
+        int inspected = 0;
         foreach (string path in Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories))
         {
+            if (++inspected > MaxFiles)
+                throw new InvalidDataException("MOD 清单数量超过安全限制。");
             GameEnvironment.NoLinks(path);
             if (Path.GetFileName(path).Equals("assembly-manifest.json", StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -610,12 +616,17 @@ internal sealed class WorkshopModInstaller : IDisposable
     private static string[] SafeFiles(string root)
     {
         GameEnvironment.NoLinks(root);
-        var files = Directory.GetFiles(root, "*", SearchOption.AllDirectories);
-        if (files.Length == 0 || files.Length > MaxFiles)
-            throw new InvalidDataException("MOD 文件数量为空或超过安全限制。");
-        foreach (string file in files)
+        var files = new List<string>();
+        foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            if (files.Count >= MaxFiles)
+                throw new InvalidDataException("MOD 文件数量超过安全限制。");
             GameEnvironment.NoLinks(file);
-        return files;
+            files.Add(file);
+        }
+        if (files.Count == 0)
+            throw new InvalidDataException("MOD 内容目录为空。");
+        return files.ToArray();
     }
 
     private static void ValidateRelativePath(string relative)
@@ -697,7 +708,7 @@ internal sealed class WorkshopModInstaller : IDisposable
         IReadOnlyDictionary<string, string> second) =>
         first.Count == second.Count &&
         first.All(pair => second.TryGetValue(pair.Key, out string? value) &&
-            value.Equals(pair.Value, StringComparison.OrdinalIgnoreCase));
+            string.Equals(value, pair.Value, StringComparison.OrdinalIgnoreCase));
 
     private sealed record InventorySnapshot(
         string Token,
