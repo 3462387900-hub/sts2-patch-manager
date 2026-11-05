@@ -146,9 +146,12 @@ internal static class ModDependencyGraph
         }
 
         var summaries = new Dictionary<string, ModDependencySummary>(StringComparer.OrdinalIgnoreCase);
+        var edgesByDependent = edges
+            .GroupBy(edge => edge.Dependent.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
         foreach (var group in inventory.Mods.GroupBy(mod => mod.Id, StringComparer.OrdinalIgnoreCase))
         {
-            var related = edges.Where(edge => edge.Dependent.Id.Equals(group.Key, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var related = edgesByDependent.TryGetValue(group.Key, out var found) ? found : [];
             summaries[group.Key] = new ModDependencySummary(
                 related.Length,
                 related.Count(edge => edge.Status != ModDependencyStatus.Satisfied),
@@ -217,21 +220,23 @@ internal static class ModDependencyGraph
         IReadOnlyList<ManagedMod> mods,
         IReadOnlyList<ModDependencyEdge> edges)
     {
-        var adjacency = mods
-            .Select(mod => mod.Id)
+        var knownIds = mods.Select(mod => mod.Id)
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var outgoing = edges
+            .Where(edge => edge.Prerequisite is not null && edge.Status != ModDependencyStatus.Duplicate)
+            .GroupBy(edge => edge.Dependent.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
-                id => id,
-                id => edges.Where(edge =>
-                        edge.Dependent.Id.Equals(id, StringComparison.OrdinalIgnoreCase) &&
-                        edge.Prerequisite is not null &&
-                        edge.Status != ModDependencyStatus.Duplicate)
-                    .Select(edge => edge.DependencyId)
-                    .Where(dependencyId => mods.Any(mod =>
-                        mod.Id.Equals(dependencyId, StringComparison.OrdinalIgnoreCase)))
+                group => group.Key,
+                group => group.Select(edge => edge.DependencyId)
+                    .Where(knownIds.Contains)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray(),
                 StringComparer.OrdinalIgnoreCase);
+        var adjacency = knownIds.ToDictionary(
+            id => id,
+            id => outgoing.TryGetValue(id, out var dependencies) ? dependencies : Array.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase);
 
         var indexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var lowLinks = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
