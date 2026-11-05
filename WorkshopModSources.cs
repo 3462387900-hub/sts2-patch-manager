@@ -205,9 +205,9 @@ internal sealed class WorkshopModSources
         foreach (var pair in files.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
         {
             canonical.Append(pair.Key.Replace('\\', '/'))
-                .Append('\\0')
+                .Append((char)0)
                 .Append(pair.Value.ToUpperInvariant())
-                .Append('\\n');
+                .Append((char)10);
         }
 
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString())));
