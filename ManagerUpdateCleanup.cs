@@ -72,7 +72,7 @@ internal static class ManagerUpdateCleanup
     :newHash!=null;
    if(!include)continue;
    string hash=backup?oldHash!:newHash!;
-   if(!Regex.IsMatch(hash,@"\\A[0-9a-f]{64}\\z",RegexOptions.IgnoreCase))return false;
+   if(!Regex.IsMatch(hash,@"\A[0-9a-f]{64}\z",RegexOptions.IgnoreCase))return false;
    string path=BundleInstaller.Child(folder,relative);
    if(!File.Exists(path)||Link(path)||!Catalog.Hash(path).Equals(hash,StringComparison.OrdinalIgnoreCase))return false;
    expectedFiles.Add(Path.GetFullPath(path));
