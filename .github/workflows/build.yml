@@ -25,7 +25,7 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($managerVersion)) { throw "SpirePatch.csproj is missing the manager Version." }
           dotnet publish ./tools/SupplyStationProbe/SupplyStationProbe.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=$managerVersion" -o ./artifacts/SpireSupplyStationProbe
           if ($LASTEXITCODE -ne 0) { throw "Standalone Supply Station probe publish failed." }
-          @'
+          $instructions = @'
 尖塔补给站真实接口探测工具
 管理器版本：{VERSION}
 测试 Workshop ID：3737335127
