@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -415,7 +414,6 @@ internal sealed class SpireSupplyStationClient : IDisposable
         left.FileName == right.FileName &&
         left.FileSizeBytes == right.FileSizeBytes &&
         left.ContentVersion == right.ContentVersion &&
-        left.DirectUrl == right.DirectUrl &&
         left.ManifestId == right.ManifestId &&
         left.DepotId == right.DepotId &&
         left.DepotKeyBase64 == right.DepotKeyBase64;
