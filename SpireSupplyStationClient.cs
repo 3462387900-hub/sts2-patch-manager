@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
 namespace SpirePatch;
@@ -87,6 +88,44 @@ internal sealed class SpireSupplyStationClient : IDisposable
     const string ApiHost = "workshop.apricityx.top";
     const int MaxJsonBytes = 1024 * 1024;
     const long MaxFileSizeBytes = 2L * 1024 * 1024 * 1024;
+    static readonly string[] TrustedSteamCdnRedirectSuffixes =
+    [
+        "steamcontent.com",
+        "steamusercontent.com",
+        "steampowered.com",
+        "steamstatic.com",
+        "steamgames.com",
+        "steamserver.net",
+        "akamaized.net",
+        "akamaihd.net",
+        "valve.net",
+        "steamchina.com",
+        "steam-content-dnld-1.apac-1-cdn.cqloud.com",
+        "steam-content-dnld-1.eu-c1-cdn.cqloud.com",
+        "ssl.hwcdn.net"
+    ];
+    static readonly HashSet<string> TrustedSteamCdnRedirectHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "edge.steam-dns.top.comcast.net",
+        "steam.apac.qtlglb.com",
+        "steam.eca.qtlglb.com",
+        "steam.naeu.qtlglb.com",
+        "steam.ru.qtlglb.com",
+        "steam.apac.qtlglb.com.mwcloudcdn.com",
+        "steam.cdn.on.net",
+        "steam.cdn.orcon.net.nz",
+        "steam.cdn.slingshot.co.nz",
+        "steam.cdn.webra.ru",
+        "st.dl.bscstorage.net",
+        "st.dl.eccdnx.com",
+        "st.dl.pinyuncloud.com",
+        "dl.steam.clngaa.com",
+        "dl.steam.ksyna.com",
+        "steamcontent.tnkjmec.com",
+        "cdn.mileweb.cs.steampowered.com.8686c.com",
+        "f3b7q2p3.ssl.hwcdn.net",
+        "a4e8s8k3.map2.ssl.hwcdn.net"
+    };
     static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -320,7 +359,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
                     if (bytes is null)
                         throw new HttpRequestException(
-                            $"Chunk {chunk.Id} 下载失败，已重试 3 次。", lastError);
+                            $"Chunk {chunk.Id} 下载失败，已重试 3 次。最后错误：{DescribeCdnFailure(lastError)}",
+                            lastError);
 
                     if (bytes.LongLength != chunk.CompressedLength)
                         throw new InvalidDataException($"Chunk {chunk.Id} 实际长度与 Manifest 不一致。");
@@ -414,8 +454,10 @@ internal sealed class SpireSupplyStationClient : IDisposable
         CancellationToken cancellationToken)
     {
         Exception? lastError = null;
+        var failures = new List<string>();
         foreach (var endpoint in descriptor.Endpoints)
         {
+            string host = NormalizeCdnOrigin(endpoint.Origin).Host;
             try
             {
                 return await GetCdnBytesAsync(
@@ -429,10 +471,12 @@ internal sealed class SpireSupplyStationClient : IDisposable
                                           InvalidOperationException or TimeoutException or IOException)
             {
                 lastError = error;
+                failures.Add(host + ": " + DescribeCdnFailure(error));
             }
         }
 
-        throw new HttpRequestException("所有尖塔补给站授权 CDN 节点均无法提供请求的内容。", lastError);
+        string detail = failures.Count == 0 ? "" : " 节点错误：" + string.Join("；", failures);
+        throw new HttpRequestException("所有尖塔补给站授权 CDN 节点均无法提供请求的内容。" + detail, lastError);
     }
 
     async Task<Descriptor> ResolveDescriptorAsync(
@@ -575,15 +619,12 @@ internal sealed class SpireSupplyStationClient : IDisposable
                     : new Uri(currentUri, response.Headers.Location);
                 ValidateCdnUri(nextUri, endpoints);
 
-                bool hostChanged = !nextUri.Host.Equals(currentUri.Host, StringComparison.OrdinalIgnoreCase);
-                currentEndpoint = endpoints[nextUri.Host];
-                if (hostChanged)
-                {
-                    // Never forward one CDN host's token to another host.
-                    tokenQuery = await GetCachedCdnTokenAsync(request, currentEndpoint, cancellationToken);
-                    nextUri = new UriBuilder(nextUri) { Query = tokenQuery }.Uri;
-                }
-                else if (string.IsNullOrEmpty(nextUri.Query))
+                // SteamPipe may redirect an authorized CDN request to a separate
+                // Valve/partner CDN host. Preserve the signed query only across
+                // the redirect returned by the already-authorized CDN response.
+                // The destination must still be HTTPS/HTTP on its default port and
+                // belong to a known Steam CDN domain or partner host.
+                if (string.IsNullOrEmpty(nextUri.Query))
                 {
                     tokenQuery = currentUri.Query.TrimStart('?');
                     nextUri = new UriBuilder(nextUri) { Query = tokenQuery }.Uri;
@@ -651,12 +692,46 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
     static void ValidateCdnUri(Uri uri, IReadOnlyDictionary<string, Endpoint> allowedEndpoints)
     {
-        if (uri.Scheme != Uri.UriSchemeHttps ||
-            uri.Port != 443 ||
+        bool supportedTransport =
+            (uri.Scheme == Uri.UriSchemeHttps && uri.Port == 443) ||
+            (uri.Scheme == Uri.UriSchemeHttp && uri.Port == 80);
+        bool trustedHost =
+            allowedEndpoints.ContainsKey(uri.Host) ||
+            IsTrustedSteamCdnRedirectHost(uri.Host);
+
+        if (!supportedTransport ||
             uri.UserInfo.Length != 0 ||
             uri.Fragment.Length != 0 ||
-            !allowedEndpoints.ContainsKey(uri.Host))
-            throw new InvalidDataException("Steam CDN 重定向目标不在尖塔补给站授权的 HTTPS 节点列表中。");
+            !trustedHost)
+            throw new InvalidDataException(
+                "Steam CDN 重定向目标不是受信任的 Steam CDN 主机，或使用了不支持的协议/端口。");
+    }
+
+    static bool IsTrustedSteamCdnRedirectHost(string host)
+    {
+        string normalized = host.TrimEnd('.');
+        if (TrustedSteamCdnRedirectHosts.Contains(normalized))
+            return true;
+
+        return TrustedSteamCdnRedirectSuffixes.Any(domain =>
+            normalized.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
+    }
+
+    static string DescribeCdnFailure(Exception? error)
+    {
+        if (error is null)
+            return "未知错误";
+
+        string message = error.Message;
+        message = Regex.Replace(
+            message,
+            @"(?i)(token|authorization|signature|requestcode|depotkey)(=|:)[^&\s]+",
+            "$1=[redacted]");
+        message = Regex.Replace(message, @"https?://[^\s""']+", "[CDN URL]");
+        if (message.Length > 320)
+            message = message[..320] + "…";
+        return error.GetType().Name + ": " + message;
     }
 
     async Task<T> GetJsonAsync<T>(Uri uri, CancellationToken cancellationToken)
