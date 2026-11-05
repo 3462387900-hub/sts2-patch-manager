@@ -364,8 +364,9 @@ internal static class ModEnvironmentSnapshots
     static void ValidateMetadata(string root, string folder, ModEnvironmentSnapshot snapshot)
     {
         if (snapshot.SchemaVersion != Schema ||
-            !IdPattern.IsMatch(snapshot.Id) ||
+            string.IsNullOrWhiteSpace(snapshot.Id) || !IdPattern.IsMatch(snapshot.Id) ||
             !snapshot.Id.Equals(Path.GetFileName(folder), StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(snapshot.GameRoot) ||
             !snapshot.GameRoot.Equals(NormalizeRoot(root), StringComparison.OrdinalIgnoreCase) ||
             snapshot.CreatedAt == default ||
             snapshot.Files is null || snapshot.Directories is null ||
@@ -380,9 +381,9 @@ internal static class ModEnvironmentSnapshots
         foreach (var file in snapshot.Files)
         {
             ValidateTreeAndRelativePath(folder, file.Tree, file.RelativePath);
-            if (file.Length < 0 || file.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
+            if (file is null || file.Length < 0 || file.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
                 file.LastWriteUtcTicks > DateTime.MaxValue.Ticks ||
-                !HashPattern.IsMatch(file.Sha256) ||
+                string.IsNullOrWhiteSpace(file.Sha256) || !HashPattern.IsMatch(file.Sha256) ||
                 !fileKeys.Add(file.Tree + "\0" + file.RelativePath))
                 throw new InvalidDataException("快照文件清单存在重复路径或无效摘要。");
             total = checked(total + file.Length);
@@ -393,7 +394,7 @@ internal static class ModEnvironmentSnapshots
         foreach (var directory in snapshot.Directories)
         {
             ValidateTreeAndRelativePath(folder, directory.Tree, directory.RelativePath);
-            if (directory.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
+            if (directory is null || directory.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
                 directory.LastWriteUtcTicks > DateTime.MaxValue.Ticks ||
                 !directoryKeys.Add(directory.Tree + "\0" + directory.RelativePath))
                 throw new InvalidDataException("快照目录清单存在重复路径。");
@@ -689,7 +690,11 @@ internal static class ModEnvironmentSnapshots
         GameEnvironment.WithLock(root, () =>
         {
             string folder = SnapshotPath(root, dataRoot, id);
-            if (!Directory.Exists(folder)) throw new DirectoryNotFoundException("找不到指定快照。");
+            if (!Directory.Exists(folder))
+            {
+                if (File.Exists(folder)) throw new InvalidDataException("快照编号位置被同名文件占用。");
+                throw new DirectoryNotFoundException("找不到指定快照。");
+            }
             GameEnvironment.NoLinks(folder);
             TryDeleteTree(folder);
             if (Directory.Exists(folder))
