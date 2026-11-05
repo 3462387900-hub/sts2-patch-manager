@@ -336,11 +336,19 @@ public partial class MainWindow
    try
    {
     toast.Text="正在下载、验证并安装："+selected.FileName;
-    var result=await installerSource.InstallAsync(gameRoot,mod,selected);
+    string? safetySnapshotId=null;
+    var result=await installerSource.InstallAsync(gameRoot,mod,selected,
+     beforeCommit:async()=>{
+      toast.Text="安装包已校验，正在创建更新前完整环境快照…";
+      var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+       gameRoot,installer.DataRoot,"更新前自动保护"));
+      safetySnapshotId=safety.Id;
+      toast.Text="更新前环境已保存，正在替换 MOD…";
+     });
     changed=true;
     orphanPatchNotice="已更新 "+mod.Name+" 至 "+result.Version+
-     "。旧版本备份："+result.BackupFolder+"；可以在 MOD 详情中恢复。";
-    toast.Text="MOD 更新成功："+mod.Name+" → "+result.Version;
+     "。旧版本备份："+result.BackupFolder+"；环境快照："+safetySnapshotId+"。";
+    toast.Text="MOD 更新成功："+mod.Name+" → "+result.Version+"；更新前快照："+safetySnapshotId;
     InvalidateLifecycle("MOD 已更新，现有修复补丁健康结果需要重新检查。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    }
