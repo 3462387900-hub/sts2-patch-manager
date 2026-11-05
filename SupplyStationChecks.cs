@@ -86,6 +86,25 @@ internal static class SupplyStationChecks
                 "probe result never exposes CDN tokens, signed endpoint queries, Depot Key or request code");
         }
 
+        int identityDescriptorCalls = 0;
+        using (var client = new SpireSupplyStationClient(new Handler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
+            {
+                identityDescriptorCalls++;
+                return Json(request, UgcDescriptor());
+            }
+            throw new InvalidOperationException("Content identity check must not request CDN tokens or content.");
+        })))
+        {
+            var identity = await client.ReadContentIdentityAsync(AppId, ItemId);
+            Check(identity.Mode == "UGC" &&
+                identity.ManifestId == "2983186950050217793" &&
+                identity.ContentVersion == "fixture-v1" &&
+                identityDescriptorCalls == 1,
+                "read-only content identity exposes the validated Manifest ID using one descriptor request only");
+        }
+
         bool tokenCalled = false;
         using (var client = new SpireSupplyStationClient(new Handler(request =>
         {
