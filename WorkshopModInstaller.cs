@@ -27,7 +27,8 @@ internal sealed record WorkshopModPrepared(
     bool IsUpdate,
     bool IsUnchanged,
     string? ExistingFolder,
-    string? ExistingVersion);
+    string? ExistingVersion,
+    Dictionary<string, string>? ExistingFileSnapshot);
 
 internal sealed record WorkshopModInstallResult(
     ulong WorkshopId,
@@ -314,6 +315,7 @@ internal sealed class WorkshopModInstaller : IDisposable
         string destination;
         string? existingFolder = null;
         string? existingVersion = null;
+        Dictionary<string, string>? existingFileSnapshot = null;
         bool unchanged = false;
 
         if (isUpdate)
@@ -330,6 +332,11 @@ internal sealed class WorkshopModInstaller : IDisposable
             destination = existing.Folder;
             existingFolder = existing.Folder;
             existingVersion = existing.Version;
+            existingFileSnapshot = new Dictionary<string, string>(
+                inventory.FileSnapshots[existing.Folder], StringComparer.OrdinalIgnoreCase);
+            if (TryCompareVersions(candidate.Version, existing.Version, out int versionOrder) && versionOrder < 0)
+                throw new InvalidOperationException(
+                    $"下载到的 MOD 版本（{candidate.Version}）低于本地版本（{existing.Version}），已阻止降级。");
             unchanged = SameSnapshot(
                 inventory.FileSnapshots[existing.Folder],
                 payloadSnapshot);
@@ -371,10 +378,14 @@ internal sealed class WorkshopModInstaller : IDisposable
             isUpdate,
             unchanged,
             existingFolder,
-            existingVersion);
+            existingVersion,
+            existingFileSnapshot);
     }
 
-    public static WorkshopModInstallResult Commit(string gameRoot, WorkshopModPrepared prepared)
+    public static WorkshopModInstallResult Commit(
+        string gameRoot,
+        WorkshopModPrepared prepared,
+        Action? beforePayloadMove = null)
     {
         string root = GameEnvironment.Root(gameRoot);
         if (!root.Equals(prepared.GameRoot, StringComparison.OrdinalIgnoreCase))
@@ -425,25 +436,36 @@ internal sealed class WorkshopModInstaller : IDisposable
                     !existing.Folder.Equals(prepared.ExistingFolder, StringComparison.OrdinalIgnoreCase) ||
                     !existing.Folder.Equals(prepared.DestinationDirectory, StringComparison.OrdinalIgnoreCase) ||
                     !Path.GetDirectoryName(existing.Folder)!.Equals(modsRoot, StringComparison.OrdinalIgnoreCase) ||
-                    !Path.GetDirectoryName(existing.Manifest)!.Equals(existing.Folder, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("原 MOD 的位置或状态已变化，已取消替换。");
+                    !Path.GetDirectoryName(existing.Manifest)!.Equals(existing.Folder, StringComparison.OrdinalIgnoreCase) ||
+                    prepared.ExistingFileSnapshot is null)
+                    throw new InvalidOperationException("原 MOD 的位置、状态或文件快照已变化，已取消替换。");
 
                 string backupParent = BackupRoot(root, prepared.ModId);
                 GameEnvironment.NoLinks(backupParent);
                 Directory.CreateDirectory(backupParent);
+                GameEnvironment.NoLinks(backupParent);
                 string backup = Path.Combine(
                     backupParent,
                     DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff", CultureInfo.InvariantCulture) +
                     "-" + Guid.NewGuid().ToString("N"));
+                if (Directory.Exists(backup) || File.Exists(backup))
+                    throw new IOException("备份目标已被占用，请重新执行更新。");
 
                 Directory.Move(existing.Folder, backup);
                 try
                 {
+                    // Verify the moved-aside original against the exact preview snapshot
+                    // before allowing the new payload to replace it.
+                    var backedUpFiles = ModManager.FileSnapshot(backup);
+                    if (!SameSnapshot(prepared.ExistingFileSnapshot, backedUpFiles))
+                        throw new InvalidOperationException("旧 MOD 在备份过程中发生变化，已取消更新。");
+
+                    beforePayloadMove?.Invoke();
                     Directory.Move(prepared.PayloadDirectory, existing.Folder);
                 }
-                catch
+                catch (Exception updateError)
                 {
-                    if (!Directory.Exists(existing.Folder))
+                    if (!Directory.Exists(existing.Folder) && !File.Exists(existing.Folder))
                     {
                         try
                         {
@@ -452,11 +474,19 @@ internal sealed class WorkshopModInstaller : IDisposable
                         catch (Exception rollbackError)
                         {
                             throw new IOException(
-                                "创意工坊 MOD 更新失败且自动回滚失败。旧版本仍保存在：" + backup,
-                                rollbackError);
+                                "创意工坊 MOD 更新失败且自动回滚失败。旧版本仍安全保存在：" + backup,
+                                new AggregateException(updateError, rollbackError));
                         }
+
+                        throw new IOException(
+                            "创意工坊 MOD 更新未完成，已自动恢复旧版本。原始错误：" + updateError.Message,
+                            updateError);
                     }
-                    throw;
+
+                    throw new IOException(
+                        "创意工坊 MOD 更新未完成；为避免覆盖新出现的目标目录，旧版本仍安全保存在：" +
+                        backup + "。原始错误：" + updateError.Message,
+                        updateError);
                 }
 
                 return new WorkshopModInstallResult(
@@ -725,6 +755,26 @@ internal sealed class WorkshopModInstaller : IDisposable
             return "";
 
         return name;
+    }
+
+    internal static bool TryCompareVersions(string left, string right, out int comparison)
+    {
+        static string Normalize(string value)
+        {
+            string normalized = value.Trim();
+            return normalized.StartsWith('v') || normalized.StartsWith('V')
+                ? normalized[1..]
+                : normalized;
+        }
+
+        comparison = 0;
+        if (!Version.TryParse(Normalize(left), out Version? first) ||
+            !Version.TryParse(Normalize(right), out Version? second) ||
+            first is null || second is null)
+            return false;
+
+        comparison = first.CompareTo(second);
+        return true;
     }
 
     private static string BackupRoot(string root, string modId)
