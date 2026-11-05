@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
 
@@ -76,20 +77,23 @@ internal sealed class WorkshopModUpdates
                 cancellationToken);
 
             if (!remote.Mode.Equals("UGC", StringComparison.Ordinal) ||
-                string.IsNullOrWhiteSpace(remote.ManifestId))
+                !ulong.TryParse(remote.ManifestId, NumberStyles.None, CultureInfo.InvariantCulture, out ulong remoteManifestNumber))
                 return Store(mod.Id, new WorkshopModUpdateResult(
                     workshopId, mod.Version, remote.Title, remote.ContentVersion, "",
                     "暂不支持",
-                    "该条目使用非 UGC 下载模式；当前管理器只对 UGC Manifest 提供更新检测。",
+                    "该条目使用非 UGC 下载模式或缺少有效 Manifest；当前管理器只对 UGC Manifest 提供更新检测。",
                     DateTimeOffset.UtcNow));
 
-            bool changed = !remote.ManifestId.Equals(baseline.ManifestId, StringComparison.Ordinal);
+            string remoteManifestId = remoteManifestNumber.ToString(CultureInfo.InvariantCulture);
+            bool baselineValid = ulong.TryParse(
+                baseline.ManifestId, NumberStyles.None, CultureInfo.InvariantCulture, out ulong baselineManifestNumber);
+            bool changed = !baselineValid || remoteManifestNumber != baselineManifestNumber;
             return Store(mod.Id, new WorkshopModUpdateResult(
                 workshopId,
                 mod.Version,
                 remote.Title,
                 remote.ContentVersion,
-                remote.ManifestId,
+                remoteManifestId,
                 changed ? "有更新" : "已是最新",
                 changed
                     ? "创意工坊 Manifest 已变化。点击获取更新预览后，会重新下载、校验并展示实际 MOD 版本；不会自动覆盖本地文件。"
