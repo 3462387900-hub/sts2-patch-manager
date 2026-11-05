@@ -17,6 +17,37 @@ jobs:
       - name: Build and test without touching a game
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly
+      - name: Verify local release fixture helper
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP ("fixture-helper-" + [Guid]::NewGuid().ToString("N"))
+          $game = Join-Path $root "game"
+          $sample = Join-Path $root "sample"
+          New-Item -ItemType Directory -Path (Join-Path $game "mods") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $game "data_sts2_windows_x86_64") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $game "saves") -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $game "SlayTheSpire2.exe") -Value "source game executable"
+          Set-Content -LiteralPath (Join-Path $game "mods/test-mod.dll") -Value "test mod"
+          Set-Content -LiteralPath (Join-Path $game "data_sts2_windows_x86_64/test.dat") -Value "game data"
+          Set-Content -LiteralPath (Join-Path $game "saves/keep.dat") -Value "must not copy"
+          try {
+            ./scripts/创建隔离样本.ps1 -GameRoot $game -OutputRoot $sample
+            if (!(Test-Path -LiteralPath (Join-Path $sample ".spirepatch-fixture"))) { throw "Fixture marker missing." }
+            if ((Get-Item -LiteralPath (Join-Path $sample "SlayTheSpire2.exe")).Length -ne 0) { throw "Fixture game marker is not empty." }
+            if ((Get-Content -LiteralPath (Join-Path $sample "mods/test-mod.dll") -Raw).Trim() -ne "test mod") { throw "MOD files were not copied." }
+            if (!(Test-Path -LiteralPath (Join-Path $sample "data_sts2_windows_x86_64/test.dat"))) { throw "Game data was not copied." }
+            if (Test-Path -LiteralPath (Join-Path $sample "saves")) { throw "Save data must not be copied." }
+            $nested = Join-Path $game "nested-fixture"
+            try {
+              ./scripts/创建隔离样本.ps1 -GameRoot $game -OutputRoot $nested
+              throw "Nested fixture output was accepted."
+            } catch {
+              if ($_.Exception.Message -notmatch "隔离样本必须位于游戏目录之外") { throw }
+            }
+            Write-Output "PASS local fixture helper copies only approved folders and rejects nested output."
+          } finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          }
       - name: Build standalone Supply Station probe
         shell: pwsh
         run: |
