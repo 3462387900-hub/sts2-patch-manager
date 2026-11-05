@@ -246,7 +246,12 @@ public partial class MainWindow
             }
         }
 
-        if (gameRoot != selectedInstallRoot) return;
+        if (gameRoot != selectedInstallRoot)
+        {
+            transactionWriting = false;
+            busy = false;
+            return;
+        }
         if (result is null)
         {
             toast.Text = "环境恢复未完成：" + restoreError;
