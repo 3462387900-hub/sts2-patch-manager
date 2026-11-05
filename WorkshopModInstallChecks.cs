@@ -130,6 +130,7 @@ public static class WorkshopModInstallChecks
 
             string assembledRollback = Path.Combine(root, "assembled-rollback");
             CreateAssembled(assembledRollback, "BaseLib", "BaseLib", "1.1.0", "failed dll", "failed pck");
+            int backupCountBeforeRollback = GitHubModInstaller.Backups(root, current).Length;
             var preparedRollback = WorkshopModInstaller.PrepareAssembled(
                 root, workshopId, "BaseLib", "1005",
                 assembledRollback, Path.Combine(root, "workspace-rollback"));
@@ -144,8 +145,8 @@ public static class WorkshopModInstallChecks
             }
             Check(ModManager.Scan(root).Mods.Single().Version == "1.0.0" &&
                 File.ReadAllText(Path.Combine(root, "mods", "BaseLib", "BaseLib.dll")) == "old dll" &&
-                GitHubModInstaller.Backups(root, ModManager.Scan(root).Mods.Single()).Length == 0,
-                "a failed Workshop replacement restores the original MOD and leaves no partial backup");
+                GitHubModInstaller.Backups(root, ModManager.Scan(root).Mods.Single()).Length == backupCountBeforeRollback,
+                "a failed Workshop replacement restores the original MOD and does not add a partial backup");
             WorkshopModInstaller.Cleanup(preparedRollback);
 
             string assembledDowngrade = Path.Combine(root, "assembled-downgrade");
