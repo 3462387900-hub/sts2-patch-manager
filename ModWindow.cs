@@ -101,6 +101,7 @@ public partial class MainWindow
   if(modInventoryDirty){toast.Text="本地 MOD 清单尚未稳定，请刷新后重试。";return;}
   busy=true;
   toast.Text="正在检查 GitHub 与创意工坊来源…";
+  if(page=="更新中心")ShowModUpdatesCenter();
   try
   {
    int githubCount=await GitHubUpdates().CheckAllAsync(modInventory.Mods);
