@@ -15,3 +15,8 @@ The upstream license is reproduced in third_party/WorkshopAndroidDownloader-LICE
 - Upstream: https://github.com/ModinMobileSTS/Sts2MobileLauncher
 - Reference area: its public SpireSupplyStationClient.kt implementation and Steam CDN request sequencing.
 - The project-specific reference was consulted for compatibility behavior; no Android application UI or account-authentication code is being ported into this manager.
+
+
+## Compression libraries planned for the next processing phase
+
+Raw Chunk download in this phase does not add third-party compression dependencies. Any later AES/decompression implementation will list its exact package versions and licenses here before it is included in a release.
