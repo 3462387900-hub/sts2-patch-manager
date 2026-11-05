@@ -1438,15 +1438,22 @@ public partial class MainWindow
     plan.Root,installer.DataRoot,"本地 ZIP 导入前自动保护"));
    await Task.Run(()=>WorkshopZipImport.Apply(plan));
    imported=true;
+   string baselineWarning="";
+   try
+   {
+    WorkshopSources().ClearBaseline(plan.ModId);
+    WorkshopUpdates().Invalidate(plan.ModId);
+   }
+   catch(Exception baselineError){baselineWarning="；版本基线未能重置："+baselineError.Message;}
    InvalidateLifecycle("导入了新的 MOD，请重新检查补丁健康状态。");
-   report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+   report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;modTogglePreview=null;
    modInventoryDirty=true;
    try
    {
     modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));
     modInventoryDirty=false;
     modStatus="成功导入 "+plan.ModName+"；请检查依赖与游戏兼容性。";
-    toast.Text=modStatus+"；导入前环境快照："+safety.Id;
+    toast.Text=modStatus+"；导入前环境快照："+safety.Id+baselineWarning;
    }
    catch(Exception scanError)
    {
