@@ -454,6 +454,7 @@ public partial class MainWindow
   if(selectedInstallRoot==null){LocateGame();return;}
   string root=selectedInstallRoot;
   int watchVersion=modChangeVersion;
+  string? recoveryNotice=null;
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
   if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
   try
@@ -466,6 +467,7 @@ public partial class MainWindow
     return;
    }
    if(modInventoryDirty)githubDiscovery?.ClearCache();
+   recoveryNotice=ModEnvironmentSnapshots.TakeRecoveryNotice();
    modInventory=inventory;modInventoryDirty=false;
    modStatus=$"共 {inventory.Mods.Count} 项 · {inventory.Mods.Count(m=>m.Enabled)} 项启用 · {inventory.Mods.Count(m=>!m.Enabled)} 项停用";
    // Only a complete, stable inventory is eligible for orphan-patch automation.
@@ -525,6 +527,8 @@ public partial class MainWindow
   finally
   {
    busy=false;
+   if(recoveryNotice!=null&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+    toast.Text=recoveryNotice;
    if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
