@@ -68,24 +68,22 @@ public static class WorkshopModInstallChecks
             WorkshopModInstaller.Cleanup(preparedV1);
 
             string sourceData = Path.Combine(root, "manager-data");
-            using (var sources = new WorkshopModSources(sourceData, root))
+            var sources = new WorkshopModSources(sourceData, root);
+            sources.Bind("BaseLib", workshopId);
+            Check(sources.Get("BaseLib") == workshopId &&
+                sources.ModIdFor(workshopId) == "BaseLib",
+                "Workshop source binding is stored by MOD ID");
+            try
             {
-                sources.Bind("BaseLib", workshopId);
-                Check(sources.Get("BaseLib") == workshopId &&
-                    sources.ModIdFor(workshopId) == "BaseLib",
-                    "Workshop source binding is stored by MOD ID");
-                try
-                {
-                    sources.Bind("OtherMod", workshopId);
-                    throw new InvalidOperationException("duplicate Workshop source binding was accepted");
-                }
-                catch (InvalidOperationException error) when (error.Message.Contains("已关联", StringComparison.Ordinal))
-                {
-                }
+                sources.Bind("OtherMod", workshopId);
+                throw new InvalidOperationException("duplicate Workshop source binding was accepted");
             }
-            using (var reloaded = new WorkshopModSources(sourceData, root))
-                Check(reloaded.Get("BaseLib") == workshopId,
-                    "Workshop source binding survives manager restart");
+            catch (InvalidOperationException error) when (error.Message.Contains("已关联", StringComparison.Ordinal))
+            {
+            }
+            var reloaded = new WorkshopModSources(sourceData, root);
+            Check(reloaded.Get("BaseLib") == workshopId,
+                "Workshop source binding survives manager restart");
 
             string assembledV2 = Path.Combine(root, "assembled-v2");
             CreateAssembled(assembledV2, "BaseLib", "BaseLib", "1.1.0", "new dll", "new pck");
