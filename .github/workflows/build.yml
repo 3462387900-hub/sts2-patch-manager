@@ -17,6 +17,112 @@ jobs:
       - name: Build and test without touching a game
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly
+      - name: Verify fixture helper in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $helper = Get-ChildItem -LiteralPath "./scripts" -Filter "*.ps1" -File | Where-Object {
+            [IO.File]::ReadAllText($_.FullName).Contains("isolated release fixture")
+          } | Select-Object -First 1
+          if ($null -eq $helper) { throw "Fixture helper was not found." }
+          $scriptPath = $helper.FullName
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Format-List | Out-String | Write-Error
+          }
+          $root = Join-Path $env:TEMP ("fixture-ps51-" + [Guid]::NewGuid().ToString("N"))
+          $game = Join-Path $root "game"
+          $sample = Join-Path $root "sample"
+          try {
+            New-Item -ItemType Directory -Path (Join-Path $game "mods") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $game "data_sts2_windows_x86_64") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $game "saves") -Force | Out-Null
+            [IO.File]::WriteAllText((Join-Path $game "SlayTheSpire2.exe"), "source")
+            [IO.File]::WriteAllText((Join-Path $game "mods/test-mod.dll"), "test mod")
+            [IO.File]::WriteAllText((Join-Path $game "data_sts2_windows_x86_64/test.dat"), "game data")
+            [IO.File]::WriteAllText((Join-Path $game "saves/keep.dat"), "do not copy")
+            & $scriptPath -GameRoot $game -OutputRoot $sample
+            if (!(Test-Path -LiteralPath (Join-Path $sample ".spirepatch-fixture"))) { throw "Fixture marker missing." }
+            if ((Get-Item -LiteralPath (Join-Path $sample "SlayTheSpire2.exe")).Length -ne 0) { throw "Fixture executable marker must be empty." }
+            if (!(Test-Path -LiteralPath (Join-Path $sample "mods/test-mod.dll"))) { throw "MOD file missing." }
+            if (!(Test-Path -LiteralPath (Join-Path $sample "data_sts2_windows_x86_64/test.dat"))) { throw "Game data missing." }
+            if (Test-Path -LiteralPath (Join-Path $sample "saves")) { throw "Save data must not be copied." }
+            Write-Output "PASS fixture helper parses and runs under Windows PowerShell 5.1."
+          }
+          finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          }
+      - name: Verify local release fixture helper
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP ("fixture-helper-" + [Guid]::NewGuid().ToString("N"))
+          $game = Join-Path $root "game"
+          $sample = Join-Path $root "sample"
+          New-Item -ItemType Directory -Path (Join-Path $game "mods") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $game "data_sts2_windows_x86_64") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $game "saves") -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $game "SlayTheSpire2.exe") -Value "source game executable"
+          Set-Content -LiteralPath (Join-Path $game "mods/test-mod.dll") -Value "test mod"
+          Set-Content -LiteralPath (Join-Path $game "data_sts2_windows_x86_64/test.dat") -Value "game data"
+          Set-Content -LiteralPath (Join-Path $game "saves/keep.dat") -Value "must not copy"
+          try {
+            ./scripts/创建隔离样本.ps1 -GameRoot $game -OutputRoot $sample
+            if (!(Test-Path -LiteralPath (Join-Path $sample ".spirepatch-fixture"))) { throw "Fixture marker missing." }
+            if ((Get-Item -LiteralPath (Join-Path $sample "SlayTheSpire2.exe")).Length -ne 0) { throw "Fixture game marker is not empty." }
+            if ((Get-Content -LiteralPath (Join-Path $sample "mods/test-mod.dll") -Raw).Trim() -ne "test mod") { throw "MOD files were not copied." }
+            if (!(Test-Path -LiteralPath (Join-Path $sample "data_sts2_windows_x86_64/test.dat"))) { throw "Game data was not copied." }
+            if (Test-Path -LiteralPath (Join-Path $sample "saves")) { throw "Save data must not be copied." }
+            $nested = Join-Path $game "nested-fixture"
+            try {
+              ./scripts/创建隔离样本.ps1 -GameRoot $game -OutputRoot $nested
+              throw "Nested fixture output was accepted."
+            } catch {
+              if ($_.Exception.Message -notmatch "隔离样本必须位于游戏目录之外") { throw }
+            }
+            Write-Output "PASS local fixture helper copies only approved folders and rejects nested output."
+          } finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          }
+      - name: Build standalone Supply Station probe
+        shell: pwsh
+        run: |
+          [xml]$managerProject = Get-Content ./SpirePatch.csproj -Raw
+          $managerVersion = [string]$managerProject.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($managerVersion)) { throw "SpirePatch.csproj is missing the manager Version." }
+          dotnet publish ./tools/SupplyStationProbe/SupplyStationProbe.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=$managerVersion" -o ./artifacts/SpireSupplyStationProbe
+          if ($LASTEXITCODE -ne 0) { throw "Standalone Supply Station probe publish failed." }
+          $instructions = @(
+            '尖塔补给站真实接口探测工具'
+            '管理器版本：{VERSION}'
+            '测试 Workshop ID：3737335127'
+            ''
+            '在此文件夹地址栏输入 powershell，然后执行：'
+            '.\SpireSupplyStationProbe.exe 3737335127 "$env:TEMP\spire-supply-station-3737335127.json"'
+            'Get-Content "$env:TEMP\spire-supply-station-3737335127.json" -Raw'
+            ''
+            '第二阶段 A：仅下载并解析 Manifest，不下载 Chunk：'
+            '.\SpireSupplyStationProbe.exe --manifest-check 3737335127 "$env:TEMP\spire-supply-station-manifest-3737335127.json"'
+            'Get-Content "$env:TEMP\spire-supply-station-manifest-3737335127.json" -Raw'
+            ''
+            '第二阶段 B：下载原始 Chunk（不会解密、解压或组装 MOD）：'
+            '.\SpireSupplyStationProbe.exe --chunk-check 3737335127 "$env:TEMP\spire-base-lib-3737335127-chunks" "$env:TEMP\spire-supply-station-chunks-3737335127.json"'
+            'Get-Content "$env:TEMP\spire-supply-station-chunks-3737335127.json" -Raw'
+            ''
+            '第三阶段：使用上一步的本地原始 Chunk 解密、解压并组装 MOD（不重复下载 Chunk）：'
+            '.\SpireSupplyStationProbe.exe --assemble-check 3737335127 "$env:TEMP\spire-base-lib-3737335127-chunks" "$env:TEMP\spire-base-lib-3737335127-mod" "$env:TEMP\spire-supply-station-assemble-3737335127.json"'
+            'Get-Content "$env:TEMP\spire-supply-station-assemble-3737335127.json" -Raw'
+            ''
+            '组装模式会重新获取 descriptor 和 Manifest，核对 Workshop ID / Manifest ID / Depot ID，验证本地 Chunk SHA-256，执行 AES 解密、VZip/VZstd/ZIP 解压、Chunk Adler32、文件偏移重组和文件 SHA-1 校验。'
+            '输出只写入独立 MOD 目录，不会安装到游戏目录；Manifest 签名与游戏分支仍不验证。'
+            ''
+            '工具会使用 Sts2PatchManager/{VERSION} 作为 User-Agent。'
+            'Chunk 模式只下载 Manifest 列出的原始数据块，输出到单独目录；不会解密、解压、组装 MOD 或修改游戏目录。'
+            '无论成功失败，都会尝试生成 JSON 报告。'
+          ) -join [Environment]::NewLine
+          $instructions = $instructions.Replace('{VERSION}', $managerVersion)
+          $instructions | Set-Content ./artifacts/SpireSupplyStationProbe/使用说明.txt -Encoding utf8
+          Compress-Archive -Path ./artifacts/SpireSupplyStationProbe/* -DestinationPath ./artifacts/SpireSupplyStationProbe-win-x64.zip -CompressionLevel Optimal -Force
       - name: Verify release ZIP excludes runtime data
         shell: pwsh
         run: ./scripts/验证发布清理.ps1

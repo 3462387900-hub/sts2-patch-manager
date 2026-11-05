@@ -121,11 +121,26 @@ public partial class MainWindow
   Check(ModListView.ColumnCount(600)==1&&ModListView.ColumnCount(790)==2&&ModListView.ColumnCount(1180)==3,
    "MOD cards choose one, two or three columns from usable content width");
   var cardToSelect=Controls<ModCardControl>(activeModList!).First();
+  var groupToCheck=Controls<ModCardGroupControl>(activeModList!).First();
+  groupToCheck.BindActions();await Idle();
+  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
+   "attaching card actions never recreates visible MOD controls");
+  var glassCheckStyle=(Style)FindResource("ModCardCheckBox");
+  var glassActionStyle=(Style)FindResource("ModCardAction");
+  Check(ReferenceEquals(cardToSelect.SelectBox.Style,glassCheckStyle)&&
+   Controls<Button>(cardToSelect).Count(b=>ReferenceEquals(b.Style,glassActionStyle))==3,
+   "card checkbox and three buttons share dedicated soft glass controls");
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
   Check(chosenModFolders.Contains(checkedFolder)&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("已选 1 项")),
    "card checkbox updates selected folders and the batch toolbar");
+  Check(cardToSelect.BorderThickness.Left==1,
+   "card border remains a constant 1px after toggling the selection");
+  Check(cardToSelect.SelectBox.ActualWidth>=29,
+   "glass checkbox hit target is at least 29px; actual "+cardToSelect.SelectBox.ActualWidth);
+  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
+   "checkbox selection does not reconstruct its original card");
   await Shot("02-模组卡片勾选状态");
   var selectionSearch=Controls<TextBox>(shell).Single();
   selectionSearch.Text="__筛选不匹配__";await Idle();
@@ -140,13 +155,14 @@ public partial class MainWindow
   selectAll.IsChecked=false;await Idle();
   Check(ChosenMods().Length==0,"deselect all removes current filtered selections");
   bool? reviewAccepted=null;
-  Dispatcher.BeginInvoke(new Action(()=>{
+  var cancelOperation=Dispatcher.BeginInvoke(new Action(()=>{
    var modal=Application.Current.Windows.OfType<Window>().First(w=>w.Title=="模组批量预览隔离测试");
    var cancel=Controls<Button>(modal).First(b=>b.Content?.ToString()=="取消");
    cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,cancel));
   }),DispatcherPriority.ApplicationIdle);
   reviewAccepted=ModBatchDialogs.Confirm(this,"模组批量预览隔离测试",
    "仅展示预览，不涉及文件修改。",[new ModBatchReview("TestSolo","可处理","测试预览")]);
+  await cancelOperation.Task;
   Check(reviewAccepted==false,"batch review can be cancelled before any file operation");
   var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();

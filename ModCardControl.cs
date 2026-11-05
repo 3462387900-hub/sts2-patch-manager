@@ -12,7 +12,7 @@ public sealed class ModCardControl : Border
  public static readonly RoutedEvent SelectEvent=EventManager.RegisterRoutedEvent("CardSelect",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModCardControl));
  public static readonly RoutedEvent ToggleEvent=EventManager.RegisterRoutedEvent("CardToggle",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModCardControl));
  public static readonly RoutedEvent UpdateEvent=EventManager.RegisterRoutedEvent("CardUpdate",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModCardControl));
- public CheckBox SelectBox{get;}=new(){Margin=new(0,0,9,0),VerticalAlignment=VerticalAlignment.Top};
+ public CheckBox SelectBox{get;}=new(){Margin=new(0,0,9,0),VerticalAlignment=VerticalAlignment.Top,ToolTip="勾选以批量操作模组"};
  public Button MoreButton{get;}
  readonly TextBlock title=new(){FontSize=16,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MaxHeight=50};
  readonly TextBlock status=new(){FontSize=12};
@@ -23,10 +23,19 @@ public sealed class ModCardControl : Border
  internal Action<ModListRow>? DetailsRequested,ToggleRequested,UpdateRequested;
  internal Action<ModListRow,Button>? MoreRequested;
  bool setting;
+ static Brush Paint(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
+ static readonly Brush NormalCardStroke=SpireGlassTheme.PanelStroke();
+ static readonly Brush HoverCardStroke=Paint("#468CB3D7");
+ static readonly Brush SelectedCardStroke=Paint("#7B85B8E8");
+ static readonly Brush NormalCardFill=Paint("#B21A2D48");
+ static readonly Brush SelectedCardFill=Paint("#C129405C");
+ static readonly Brush SoftRule=Paint("#2F8CAACA");
  public ModCardControl()
  {
-  Background=SpireGlassTheme.GlassPanel("#BE1A2D48");BorderBrush=SpireGlassTheme.PanelStroke();
-  BorderThickness=new(1);CornerRadius=new(12);Padding=new(13);Margin=new(0,3,10,8);MinHeight=265;
+  Background=NormalCardFill;BorderBrush=NormalCardStroke;
+  BorderThickness=new(1);CornerRadius=new(14);Padding=new(13);Margin=new(0,3,10,8);MinHeight=265;
+  SnapsToDevicePixels=false;UseLayoutRounding=false;
+  if(Application.Current?.TryFindResource("ModCardCheckBox") is Style checkStyle)SelectBox.Style=checkStyle;
   var root=new Grid();
   root.RowDefinitions.Add(new(){Height=GridLength.Auto});
   root.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});
@@ -42,11 +51,11 @@ public sealed class ModCardControl : Border
   detail.Click+=(_,_)=>{if(DataContext is ModListRow row)DetailsRequested?.Invoke(row);};
   head.Children.Add(detail);top.Children.Add(head);root.Children.Add(top);
   var fields=new StackPanel{Margin=new(0,12,0,10)};
-  fields.Children.Add(new Border{Height=1,Background=Brushes.SlateGray,Margin=new(0,0,0,9)});
+  fields.Children.Add(new Border{Height=1,Background=SoftRule,Margin=new(0,0,0,9)});
   AddField(fields,"模组 ID",id);AddField(fields,"版本号",version);AddField(fields,"作者",author);
   updateLabel=AddField(fields,"更新状态",github);AddField(fields,"依赖情况",depends);
   Grid.SetRow(fields,1);root.Children.Add(fields);
-  var foot=new StackPanel();foot.Children.Add(new Border{Height=1,Background=Brushes.SlateGray,Margin=new(0,0,0,8)});
+  var foot=new StackPanel();foot.Children.Add(new Border{Height=1,Background=SoftRule,Margin=new(0,0,0,8)});
   var actions=new Grid();
   actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
   actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
@@ -61,8 +70,15 @@ public sealed class ModCardControl : Border
   SelectBox.Checked+=(_,_)=>Select(true);
   SelectBox.Unchecked+=(_,_)=>Select(false);
   DataContextChanged+=(_,_)=>Refresh();
+  MouseEnter+=(_,_)=>{if(DataContext is ModListRow row&&!row.Selected)BorderBrush=HoverCardStroke;};
+  MouseLeave+=(_,_)=>UpdateSelectionVisual();
  }
- static Button MakeButton(string name)=>new(){Content=name,FontSize=13,Padding=new(9,7,9,7),Margin=new(0,0,5,4),MinWidth=49};
+ static Button MakeButton(string name)
+ {
+  var button=new Button{Content=name,FontSize=13,Padding=new(9,7,9,7),Margin=new(0,0,5,4),MinWidth=49,MinHeight=35};
+  if(Application.Current?.TryFindResource("ModCardAction") is Style style)button.Style=style;
+  return button;
+ }
  static TextBlock AddField(Panel panel,string label,TextBlock value)
  {
   var row=new Grid{Margin=new(0,3,0,3)};
@@ -72,13 +88,25 @@ public sealed class ModCardControl : Border
   value.FontSize=14;value.TextWrapping=TextWrapping.NoWrap;value.TextTrimming=TextTrimming.CharacterEllipsis;
   Grid.SetColumn(value,1);row.Children.Add(value);panel.Children.Add(row);return fieldName;
  }
- void Select(bool value){if(!setting&&DataContext is ModListRow row)SelectionChanged?.Invoke(row,value);}
+ void Select(bool value)
+ {
+  if(setting||DataContext is not ModListRow row)return;
+  row.Selected=value;
+  UpdateSelectionVisual();
+  SelectionChanged?.Invoke(row,value);
+ }
+ public void UpdateSelectionVisual()
+ {
+  if(DataContext is not ModListRow row)return;
+  BorderBrush=row.Selected?SelectedCardStroke:IsMouseOver?HoverCardStroke:NormalCardStroke;
+  Background=row.Selected?SelectedCardFill:NormalCardFill;
+ }
  public void Refresh()
  {
   if(DataContext is not ModListRow row)return;
   title.Text=row.Name;title.ToolTip=row.Name;
   status.Text=row.State;status.Foreground=row.Mod.Enabled?Brushes.LightGreen:Brushes.LightGray;
-  stateBadge.Background=new SolidColorBrush(row.Mod.Enabled?Color.FromRgb(31,75,66):Color.FromRgb(54,67,86));
+  stateBadge.Background=new SolidColorBrush(row.Mod.Enabled?Color.FromArgb(118,31,75,66):Color.FromArgb(114,54,67,86));
   id.Text=row.Mod.Id;id.ToolTip=id.Text;
   version.Text=row.Mod.Version;version.ToolTip=version.Text;
   author.Text=row.Mod.Author;author.ToolTip=author.Text;
@@ -88,15 +116,15 @@ public sealed class ModCardControl : Border
   const string dep="这些启用项依赖它，请先停用依赖项：";
   depends.Text=row.BlockReason?.StartsWith(dep,StringComparison.Ordinal)==true?
    row.BlockReason[dep.Length..].Split('、',StringSplitOptions.RemoveEmptyEntries).Length+" 项已启用 MOD 依赖此模组":
+   row.DependencyText.Length>0?row.DependencyText:
    row.Mod.Dependencies.Length==0?"未声明前置模组":"已声明 "+row.Mod.Dependencies.Length+" 项前置模组";
   if(row.BlockReason!=null&&!row.BlockReason.StartsWith(dep,StringComparison.Ordinal))depends.Text=row.BlockReason;
-  depends.ToolTip=row.BlockReason??depends.Text;
-  depends.Foreground=row.BlockReason!=null?Brushes.Khaki:Brushes.White;
+  depends.ToolTip=string.Join("\n",new[]{row.BlockReason,row.DependencyText}.Where(value=>!string.IsNullOrWhiteSpace(value)));
+  depends.Foreground=row.BlockReason!=null||row.DependencyIssue?Brushes.Khaki:Brushes.White;
   toggle.Content=row.Mod.Enabled?"停用模组":"启用模组";
   toggle.IsEnabled=row.BlockReason==null;toggle.ToolTip=row.BlockReason;
   update.Content=row.IsFix?"查看健康":row.GitHubText.Contains("有更新")?"下载并更新":"检查更新";
   setting=true;SelectBox.IsChecked=row.Selected;setting=false;
-  BorderBrush=row.Selected?Brushes.SkyBlue:SpireGlassTheme.PanelStroke();
-  BorderThickness=new Thickness(row.Selected?2:1);
+  UpdateSelectionVisual();
  }
 }

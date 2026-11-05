@@ -137,9 +137,10 @@ public partial class MainWindow : Window
    home.Children.Add(Card(intro,"#B5203B5C",21));Space(home,15);
    if(modInventory!=null&&selectedInstallRoot!=null)
    {
-    var updates=GitHubUpdates();
+    var updates=GitHubUpdates();var workshopUpdates=WorkshopUpdates();
     int normal=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m));
-    int newer=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&updates.Cached(m.Id)?.Status=="有更新");
+    int newer=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+     (updates.Cached(m.Id)?.Status=="有更新"||workshopUpdates.Cached(m.Id)?.Status=="有更新"));
     var chips=new WrapPanel{Margin=new Thickness(0,0,0,14)};
     foreach(var (count,label,open) in new (int,string,Action)[]
     {(normal,"普通 MOD",ShowMods),(newer,"可更新 MOD",ShowModUpdatesCenter),
@@ -171,9 +172,9 @@ public partial class MainWindow : Window
   // Keep actionable MOD updates and stale patch evidence visible on the start page.
   if(!demo&&modInventory!=null&&selectedInstallRoot!=null)
   {
-   var updates=GitHubUpdates();
+   var updates=GitHubUpdates();var workshopUpdates=WorkshopUpdates();
    int available=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    updates.Cached(m.Id)?.Status=="有更新");
+    (updates.Cached(m.Id)?.Status=="有更新"||workshopUpdates.Cached(m.Id)?.Status=="有更新"));
    var tasks=new WrapPanel{Margin=new Thickness(0,0,0,13)};
    if(available>0)
    {

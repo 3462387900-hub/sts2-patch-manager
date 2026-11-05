@@ -333,7 +333,7 @@ internal sealed class GitHubModInstaller : IDisposable
   });
  }
  public async Task<GitHubModInstallResult> InstallAsync(string gameRoot,ManagedMod mod,
-  GitHubModPackage package,CancellationToken ct=default)
+  GitHubModPackage package,CancellationToken ct=default,Func<Task>? beforeCommit=null)
  {
   ValidatePackage(package);
   Require(IsNewer(package.Tag,mod.Version),"只允许安装高于本地版本的正式版本。");
@@ -351,6 +351,8 @@ internal sealed class GitHubModInstaller : IDisposable
    await DownloadAsync(package,archive,ct);
    ct.ThrowIfCancellationRequested();
    string payload=ExtractAndVerify(archive,Path.Combine(workspace,"extract"),mod.Id,package.Tag);
+   ct.ThrowIfCancellationRequested();
+   if(beforeCommit is not null)await beforeCommit();
    ct.ThrowIfCancellationRequested();
    return Commit(root,mod,payload,package.Tag,snapshot);
   }
@@ -376,10 +378,20 @@ internal sealed class GitHubModInstaller : IDisposable
    // Refuse backup payloads containing links or replaced files.
    var backupFiles=ModManager.FileSnapshot(backup);
    Require(backupFiles.Count>0,"备份目录没有可恢复的文件。");
-   var manifest=Directory.EnumerateFiles(backup,"*.json",SearchOption.TopDirectoryOnly)
-    .FirstOrDefault(path=>Path.GetFileName(path) is "mod_manifest.json" or "manifest.json");
-   Require(manifest!=null&&ManifestId(manifest,out _,out _,out _).Equals(mod.Id,StringComparison.OrdinalIgnoreCase),
-    "备份 MOD 的 ID 不匹配。");
+   var manifests=Directory.EnumerateFiles(backup,"*.json",SearchOption.TopDirectoryOnly)
+    .Where(path=>{
+     try{
+      string id=ManifestId(path,out _,out bool dll,out bool pck);
+      return (dll||pck)&&id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase);
+     }catch(JsonException){return false;}
+    }).ToArray();
+   Require(manifests.Length==1,"备份 MOD 的 ID 不匹配，或没有唯一的顶层 MOD 清单。");
+   bool requiresDll,requiresPck;
+   ManifestId(manifests[0],out _,out requiresDll,out requiresPck);
+   var backupPaths=Directory.GetFiles(backup,"*",SearchOption.AllDirectories);
+   Require((!requiresDll||backupPaths.Any(path=>path.EndsWith(".dll",StringComparison.OrdinalIgnoreCase)))&&
+    (!requiresPck||backupPaths.Any(path=>path.EndsWith(".pck",StringComparison.OrdinalIgnoreCase))),
+    "备份缺少清单要求的 DLL 或 PCK 文件，拒绝恢复。");
    var current=Path.Combine(backupRoot,DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff")+"-restore-"+Guid.NewGuid().ToString("N"));
    Directory.Move(mod.Folder,current);
    try{Directory.Move(backup,mod.Folder);}
