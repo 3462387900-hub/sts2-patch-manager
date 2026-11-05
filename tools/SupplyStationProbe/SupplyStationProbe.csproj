@@ -10,5 +10,6 @@
   <ItemGroup>
     <Compile Include="../../SpireSupplyStationClient.cs" Link="SpireSupplyStationClient.cs" />
     <Compile Include="../../SteamDepotManifest.cs" Link="SteamDepotManifest.cs" />
+    <Compile Include="../../SupplyStationContentChecks.cs" Link="SupplyStationContentChecks.cs" />
   </ItemGroup>
 </Project>
