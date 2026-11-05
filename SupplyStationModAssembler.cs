@@ -313,7 +313,7 @@ internal static class SupplyStationModAssembler
             string[] segments = filePath.Split('/');
             for (int i = 1; i < segments.Length; i++)
             {
-                string parent = string.Join('/', segments.Take(i));
+                string parent = string.Join("/", segments.Take(i));
                 if (filePaths.Contains(parent))
                     throw new InvalidDataException($"Manifest 文件路径存在父子冲突：{parent}。");
             }
@@ -469,7 +469,7 @@ internal static class SupplyStationModAssembler
                 segment.EndsWith(' ') ||
                 segment.EndsWith('.') ||
                 segment.Any(character =>
-                    char.IsControl(character) || "<>:" + "\"/\\|?*".Contains(character))))
+                    char.IsControl(character) || "<>:\"/\\|?*".Contains(character))))
             throw new InvalidDataException($"Manifest 包含不安全的 Windows 文件路径：{rawPath}。");
 
         foreach (string segment in segments)
