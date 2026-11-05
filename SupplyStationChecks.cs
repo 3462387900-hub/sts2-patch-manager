@@ -60,6 +60,8 @@ internal static class SupplyStationChecks
             var result = await client.ProbeAsync(AppId, ItemId);
             Check(result.Mode == "UGC" && result.PublishedFileId == ItemId.ToString(),
                 "UGC descriptor is parsed and bound to the requested Workshop ID");
+            Check(result.Source == "spire_supply_station" && result.SourceDisplayName == "尖塔补给站（Apricityx）",
+                "probe result preserves the machine-readable source and user-facing attribution");
             Check(result.ManifestId == "2983186950050217793" && result.DepotId == 2868841,
                 "64-bit Manifest ID and Depot ID are retained without numeric truncation");
             Check(result.CdnTokenValidated && result.CdnHosts.SequenceEqual(["cdn.example"]),
@@ -73,7 +75,7 @@ internal static class SupplyStationChecks
                 requests[1].Host!.Contains("host=cdn.example", StringComparison.Ordinal),
                 "only descriptor and CDN-token endpoints are called in phase 1");
             Check(requests.All(item =>
-                item.UserAgent!.StartsWith("Sts2PatchManager/", StringComparison.Ordinal) &&
+                item.UserAgent == "Sts2PatchManager/" + ManagerUpdates.CurrentVersion &&
                 item.Authorization is null && item.Cookie is null),
                 "requests use the manager User-Agent and send no Steam credentials or cookies");
             string report = JsonSerializer.Serialize(result);
