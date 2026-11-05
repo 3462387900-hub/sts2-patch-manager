@@ -992,7 +992,7 @@ public partial class MainWindow
   var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
   workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
   header.Children.Add(H(refresh,workshopDownload,
-   Btn("依赖关系",ShowDependencyGraph,"Ghost"),
+   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost"),
    Btn("打开模组目录",()=>{
     string directory=Path.Combine(selectedInstallRoot,"mods");
     if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
@@ -1332,7 +1332,7 @@ public partial class MainWindow
    }
   }
   else root.Children.Add(T("清单未声明必需前置；这不代表一定没有其他运行时依赖。",12,muted));
-  root.Children.Add(Btn("查看完整依赖关系图",ShowDependencyGraph,"Ghost"));Space(root,20);
+  root.Children.Add(Btn("查看完整依赖关系图",()=>ShowDependencyGraph(),"Ghost"));Space(root,20);
   if(ModPresentation.IsIndependentPatch(mod))
   {
    root.Children.Add(H(Badge("健康："+LifecycleTag(mod.Id),muted),
