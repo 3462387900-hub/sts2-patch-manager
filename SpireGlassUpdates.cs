@@ -50,7 +50,6 @@ public partial class MainWindow
   int workshopAvailable=normal.Count(m=>workshopUpdates.Cached(m.Id)?.Status=="有更新");
   int workshopReview=normal.Count(m=>workshopUpdates.Cached(m.Id)?.Status is "待首次核验" or "本地文件已变化");
   int workshopBound=normal.Count(m=>workshopSources.Get(m.Id)!=null);
-  int githubUnbound=normal.Count(m=>updates.Repository(m.Id)==null);
   var stats=new WrapPanel{Margin=new Thickness(0,0,0,14)};
   foreach(var (value,label) in new[]{
    (normal.Length.ToString(),"普通 MOD"),
