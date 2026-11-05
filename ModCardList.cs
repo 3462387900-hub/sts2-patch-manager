@@ -43,12 +43,7 @@ internal static class ModCardList
  {
   list.ItemsSource=rows.Chunk(columns).Select(x=>new ModCardGroup(x)).ToArray();
  }
- internal static void RefreshVisible(DependencyObject node)
- {
-  if(node is ModCardControl card)card.Refresh();
-  for(int i=0;i<VisualTreeHelper.GetChildrenCount(node);i++)
-   RefreshVisible(VisualTreeHelper.GetChild(node,i));
- }
+
 }
 internal sealed record ModCardActions(Action<ModListRow> Detail,
  Action<ModListRow,Button> More,Action<ModListRow> Toggle,
@@ -56,23 +51,35 @@ internal sealed record ModCardActions(Action<ModListRow> Detail,
 
 public sealed class ModCardGroupControl : Grid
 {
- public ModCardGroupControl(){DataContextChanged+=(_,_)=>Refresh();Loaded+=(_,_)=>Refresh();}
+ ModCardGroup? displayedGroup;
+ public ModCardGroupControl()
+ {
+  // Loaded must not recreate all card controls: it only attaches callbacks.
+  DataContextChanged+=(_,_)=>Refresh();
+  Loaded+=(_,_)=>BindActions();
+ }
  void Refresh()
  {
+  if(ReferenceEquals(DataContext,displayedGroup)){BindActions();return;}
   Children.Clear();ColumnDefinitions.Clear();
-  if(DataContext is not ModCardGroup group)return;
-  for(int i=0;i<group.Cards.Length;i++)
+  displayedGroup=DataContext as ModCardGroup;
+  if(displayedGroup==null)return;
+  for(int i=0;i<displayedGroup.Cards.Length;i++)
   {
    ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-   var card=new ModCardControl{DataContext=group.Cards[i]};
-   var owner=FindOwner();
-   if(owner?.Tag is ModCardActions callbacks)
-   {
-    card.DetailsRequested=callbacks.Detail;card.MoreRequested=callbacks.More;
-    card.ToggleRequested=callbacks.Toggle;card.UpdateRequested=callbacks.Update;
-    card.SelectionChanged=callbacks.Selected;
-   }
+   var card=new ModCardControl{DataContext=displayedGroup.Cards[i]};
    SetColumn(card,i);Children.Add(card);
+  }
+  BindActions();
+ }
+ internal void BindActions()
+ {
+  if(FindOwner()?.Tag is not ModCardActions callbacks)return;
+  foreach(var card in Children.OfType<ModCardControl>())
+  {
+   card.DetailsRequested=callbacks.Detail;card.MoreRequested=callbacks.More;
+   card.ToggleRequested=callbacks.Toggle;card.UpdateRequested=callbacks.Update;
+   card.SelectionChanged=callbacks.Selected;
   }
  }
  ListBox? FindOwner()
