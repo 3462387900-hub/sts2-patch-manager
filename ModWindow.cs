@@ -280,7 +280,7 @@ public partial class MainWindow
    toast.Text=mod.Name+" · "+result.Status+" · "+result.Message;
   }
   catch(Exception e){toast.Text="检查失败："+e.Message;}
-  finally{busy=false;ShowModDetail(mod.Folder);}
+  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
 
 
