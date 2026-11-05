@@ -27,6 +27,25 @@ internal sealed record SupplyStationProbeResult(
     bool GameBranchVerified,
     string Note);
 
+internal sealed record SupplyStationManifestProbeResult(
+    uint AppId,
+    string PublishedFileId,
+    string Title,
+    string FileName,
+    string ContentVersion,
+    string ManifestId,
+    uint DepotId,
+    int ManifestArchiveBytes,
+    bool ManifestDownloaded,
+    bool ManifestParsed,
+    SteamDepotManifestSummary Manifest,
+    string Source,
+    string SourceDisplayName,
+    string RequestedBranch,
+    bool GameBranchVerified,
+    string Note);
+
+
 // Phase 1 only resolves and validates the public protocol. It never downloads or installs a MOD.
 internal sealed class SpireSupplyStationClient : IDisposable
 {
@@ -53,14 +72,14 @@ internal sealed class SpireSupplyStationClient : IDisposable
         var transport = handler ?? new HttpClientHandler
         {
             AllowAutoRedirect = false,
-            UseProxy = true
+            UseProxy = true,
+            UseCookies = false
         };
         client = new HttpClient(transport, disposeHandler: true)
         {
             Timeout = Timeout.InfiniteTimeSpan
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd(RequiredUserAgent);
-        client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
 
     public void Dispose() => client.Dispose();
@@ -85,7 +104,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
                 .ToArray();
 
             // Validate one authorized CDN token without requesting a manifest or content chunk.
-            await GetCdnTokenAsync(request, descriptor.Endpoints[0], cancellationToken);
+            _ = await GetCdnTokenAsync(request, descriptor.Endpoints[0], cancellationToken);
             tokenValidated = true;
         }
 
@@ -109,6 +128,49 @@ internal sealed class SpireSupplyStationClient : IDisposable
             false,
             "已验证下载描述信息" + (tokenValidated ? "及 CDN 授权接口" : "") +
             "；尚未下载内容，也未验证其与本机游戏分支的匹配关系。");
+    }
+
+    public async Task<SupplyStationManifestProbeResult> ProbeManifestAsync(
+        uint appId,
+        ulong publishedFileId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequest(appId, publishedFileId);
+        var request = new WorkshopRequest(appId, publishedFileId);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        if (descriptor.Mode != "UGC")
+            throw new InvalidOperationException("该条目不是 UGC 下载模式，没有 Steam Depot Manifest。");
+
+        if (!ulong.TryParse(descriptor.ManifestId, NumberStyles.None, CultureInfo.InvariantCulture, out var manifestId) ||
+            descriptor.DepotId is null or 0 ||
+            !ulong.TryParse(descriptor.RequestCode, NumberStyles.None, CultureInfo.InvariantCulture, out var requestCode))
+            throw new InvalidDataException("UGC 下载描述缺少有效的 Manifest、Depot 或请求码。");
+
+        var endpoint = descriptor.Endpoints[0];
+        string path = $"depot/{descriptor.DepotId.Value}/manifest/{manifestId}/5/{requestCode}";
+        byte[] archiveBytes = await GetCdnBytesAsync(request, descriptor, endpoint, path, cancellationToken);
+        var manifest = SteamDepotManifestParser.ParseZip(archiveBytes);
+
+        if (manifest.DepotId != descriptor.DepotId.Value || manifest.ManifestId != manifestId)
+            throw new InvalidDataException("Steam CDN 返回的 Manifest 身份与尖塔补给站下载描述不一致。");
+
+        return new SupplyStationManifestProbeResult(
+            appId,
+            publishedFileId.ToString(CultureInfo.InvariantCulture),
+            descriptor.Title,
+            descriptor.FileName,
+            descriptor.ContentVersion,
+            manifestId.ToString(CultureInfo.InvariantCulture),
+            descriptor.DepotId.Value,
+            archiveBytes.Length,
+            true,
+            true,
+            manifest,
+            Source,
+            SourceDisplayName,
+            DefaultBranchNamespace,
+            false,
+            "已从授权 CDN 下载并解析 Manifest；尚未下载 Chunk，也未验证本机游戏分支匹配关系。");
     }
 
     async Task<Descriptor> ResolveDescriptorAsync(
@@ -143,14 +205,15 @@ internal sealed class SpireSupplyStationClient : IDisposable
         return descriptor;
     }
 
-    async Task GetCdnTokenAsync(
+    async Task<string> GetCdnTokenAsync(
         WorkshopRequest request,
         Endpoint endpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool refresh = false)
     {
         var expectedOrigin = NormalizeCdnOrigin(endpoint.Origin);
         var token = await GetJsonAsync<CdnToken>(
-            BuildApiUri("cdn/token", request, host: expectedOrigin.Host),
+            BuildApiUri("cdn/token", request, host: expectedOrigin.Host, refresh: refresh),
             cancellationToken);
 
         var actualOrigin = NormalizeCdnOrigin(token.Origin);
@@ -164,6 +227,127 @@ internal sealed class SpireSupplyStationClient : IDisposable
         var expiration = ReadTokenExpiration(query);
         if (expiration <= DateTimeOffset.UtcNow)
             throw new InvalidDataException("CDN 授权已经过期。");
+
+        return query;
+    }
+
+    async Task<byte[]> GetCdnBytesAsync(
+        WorkshopRequest request,
+        Descriptor descriptor,
+        Endpoint initialEndpoint,
+        string path,
+        CancellationToken cancellationToken)
+    {
+        const int maxRedirects = 5;
+        const int maxResponseBytes = 64 * 1024 * 1024;
+        var endpoints = descriptor.Endpoints.ToDictionary(
+            item => NormalizeCdnOrigin(item.Origin).Host,
+            item => item,
+            StringComparer.OrdinalIgnoreCase);
+
+        var currentEndpoint = initialEndpoint;
+        var currentOrigin = NormalizeCdnOrigin(currentEndpoint.Origin);
+        string tokenQuery = await GetCdnTokenAsync(request, currentEndpoint, cancellationToken);
+        Uri currentUri = BuildCdnUri(currentOrigin, path, tokenQuery);
+        bool refreshedAfterAuthorizationFailure = false;
+
+        for (int redirectCount = 0; redirectCount <= maxRedirects; redirectCount++)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(60));
+
+            using var cdnRequest = new HttpRequestMessage(HttpMethod.Get, currentUri);
+            cdnRequest.Headers.Accept.ParseAdd("*/*");
+            using var response = await client.SendAsync(
+                cdnRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                timeout.Token);
+
+            if (response.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect or
+                HttpStatusCode.RedirectMethod or HttpStatusCode.TemporaryRedirect or
+                HttpStatusCode.PermanentRedirect)
+            {
+                if (redirectCount == maxRedirects || response.Headers.Location is null)
+                    throw new InvalidDataException("Steam CDN 重定向次数超限或缺少 Location。");
+
+                Uri nextUri = response.Headers.Location.IsAbsoluteUri
+                    ? response.Headers.Location
+                    : new Uri(currentUri, response.Headers.Location);
+                ValidateCdnUri(nextUri, endpoints);
+
+                currentEndpoint = endpoints[nextUri.Host];
+                if (string.IsNullOrEmpty(nextUri.Query))
+                {
+                    tokenQuery = nextUri.Host.Equals(currentUri.Host, StringComparison.OrdinalIgnoreCase)
+                        ? currentUri.Query.TrimStart('?')
+                        : await GetCdnTokenAsync(request, currentEndpoint, cancellationToken);
+                    nextUri = new UriBuilder(nextUri) { Query = tokenQuery }.Uri;
+                }
+
+                currentUri = nextUri;
+                continue;
+            }
+
+            if ((int)response.StatusCode is 401 or 403 && !refreshedAfterAuthorizationFailure)
+            {
+                tokenQuery = await GetCdnTokenAsync(
+                    request,
+                    currentEndpoint,
+                    cancellationToken,
+                    refresh: true);
+                currentUri = new UriBuilder(currentUri) { Query = tokenQuery }.Uri;
+                refreshedAfterAuthorizationFailure = true;
+                redirectCount--;
+                continue;
+            }
+
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException("Steam CDN Manifest 请求失败（HTTP " + (int)response.StatusCode + "）。");
+
+            var finalUri = response.RequestMessage?.RequestUri ?? currentUri;
+            ValidateCdnUri(finalUri, endpoints);
+
+            if (response.Content.Headers.ContentLength is long length && length > maxResponseBytes)
+                throw new InvalidDataException("Steam CDN Manifest 响应超过 64 MiB 限制。");
+
+            await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var output = new MemoryStream();
+            var buffer = new byte[64 * 1024];
+            int read;
+            while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), timeout.Token)) > 0)
+            {
+                if (output.Length + read > maxResponseBytes)
+                    throw new InvalidDataException("Steam CDN Manifest 响应超过 64 MiB 限制。");
+                await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
+            }
+
+            return output.ToArray();
+        }
+
+        throw new HttpRequestException("Steam CDN Manifest 请求重试次数已用尽。");
+    }
+
+    static Uri BuildCdnUri(Uri origin, string path, string query)
+    {
+        if (path.StartsWith("/", StringComparison.Ordinal) ||
+            path.Contains("..", StringComparison.Ordinal) ||
+            path.Contains('\\') || path.Contains('\r') || path.Contains('\n'))
+            throw new InvalidDataException("Steam CDN 请求路径不安全。");
+        return new UriBuilder(origin)
+        {
+            Path = "/" + path,
+            Query = query.Trim().TrimStart('?')
+        }.Uri;
+    }
+
+    static void ValidateCdnUri(Uri uri, IReadOnlyDictionary<string, Endpoint> allowedEndpoints)
+    {
+        if (uri.Scheme != Uri.UriSchemeHttps ||
+            uri.Port != 443 ||
+            uri.UserInfo.Length != 0 ||
+            uri.Fragment.Length != 0 ||
+            !allowedEndpoints.ContainsKey(uri.Host))
+            throw new InvalidDataException("Steam CDN 重定向目标不在尖塔补给站授权的 HTTPS 节点列表中。");
     }
 
     async Task<T> GetJsonAsync<T>(Uri uri, CancellationToken cancellationToken)
@@ -173,6 +357,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
 
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Accept.ParseAdd("application/json");
         using var response = await client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
