@@ -53,7 +53,8 @@ public partial class MainWindow
             T("创建快照", 16, ink, true),
             T("复制当前两个 MOD 目录中的全部文件，并记录 SHA-256、文件大小和目录结构。快照保存在管理器的数据目录，不会改动游戏文件。", 12, muted),
             create,
-            T("单个快照最多 50,000 个文件、30 GB；创建前会检查磁盘空间。建议在大型 MOD 更新或批量调整前创建。", 11, muted)), padding: 14));
+            T("GitHub 和创意工坊安装 / 更新会在写入前自动创建保护快照。手动删除 MOD 或批量调整前，建议先创建。", 11, muted),
+            T("单个快照最多 50,000 个文件、30 GB；创建前会检查磁盘空间。", 11, muted)), padding: 14));
         Space(root, 14);
 
         root.Children.Add(T($"已有快照 · {entries.Length}", 17, ink, true));
