@@ -55,6 +55,36 @@ internal static class ManagerUpdateCleanup
   }
   catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException or OverflowException){return false;}
  }
+ static bool MatchesExpectedTree(string folder,JsonElement files,bool backup)
+ {
+  if(files.ValueKind!=JsonValueKind.Array||!Directory.Exists(folder)||Link(folder))return false;
+  var expectedFiles=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+  var expectedDirectories=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+  string root=Full(folder);
+  foreach(var item in files.EnumerateArray())
+  {
+   string? relative=Text(item,"Path");
+   string? oldHash=Text(item,"OldHash");
+   string? newHash=Text(item,"NewHash");
+   if(string.IsNullOrWhiteSpace(relative))return false;
+   bool include=backup
+    ?oldHash!=null&&!string.Equals(oldHash,newHash,StringComparison.OrdinalIgnoreCase)
+    :newHash!=null;
+   if(!include)continue;
+   string hash=backup?oldHash!:newHash!;
+   if(!Regex.IsMatch(hash,@"\\A[0-9a-f]{64}\\z",RegexOptions.IgnoreCase))return false;
+   string path=BundleInstaller.Child(folder,relative);
+   if(!File.Exists(path)||Link(path)||!Catalog.Hash(path).Equals(hash,StringComparison.OrdinalIgnoreCase))return false;
+   expectedFiles.Add(Path.GetFullPath(path));
+   for(string? parent=Path.GetDirectoryName(path);parent!=null&&!parent.Equals(root,Paths);parent=Path.GetDirectoryName(parent))
+    expectedDirectories.Add(Path.GetFullPath(parent));
+  }
+  var actualFiles=Directory.EnumerateFiles(folder,"*",SearchOption.AllDirectories)
+   .Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  var actualDirectories=Directory.EnumerateDirectories(folder,"*",SearchOption.AllDirectories)
+   .Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  return expectedFiles.SetEquals(actualFiles)&&expectedDirectories.SetEquals(actualDirectories);
+ }
  static bool IsConfirmedJob(string job,string appRoot,out DateTime timestamp,out string? version)
  {
   timestamp=default;version=null;
@@ -68,6 +98,10 @@ internal static class ManagerUpdateCleanup
    if(!string.Equals(Full(ReadString(result,"job")??""),Full(job),Paths))return false;
    if(!string.Equals(ReadString(request,"Root") is string path?Full(path):"",Full(appRoot),Paths))return false;
    if(ReadString(request,"ToVersion")!=version||ReadString(proof,"version")!=version)return false;
+   using var requestDocument=JsonDocument.Parse(File.ReadAllText(request));
+   if(!requestDocument.RootElement.TryGetProperty("Files",out var files)||
+      !MatchesExpectedTree(Path.Combine(job,"payload"),files,false)||
+      !MatchesExpectedTree(Path.Combine(job,"backup"),files,true))return false;
    // A working rollback needs its original request, worker, and backup payload.
    foreach(var f in new[]{"UpdateWorker.ps1","恢复上一版.cmd"})
     if(!File.Exists(Path.Combine(job,f))||Link(Path.Combine(job,f)))return false;
