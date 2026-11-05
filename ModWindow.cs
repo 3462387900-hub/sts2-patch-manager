@@ -15,6 +15,18 @@ public partial class MainWindow
  GitHubModDiscovery? githubDiscovery;
  GitHubModDiscovery Discovery()=>githubDiscovery??=new GitHubModDiscovery();
  string? githubRoot;
+ WorkshopModSources? workshopModSources;
+ string? workshopSourceRoot;
+ WorkshopModSources WorkshopSources()
+ {
+  if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
+  if(workshopModSources==null||!string.Equals(workshopSourceRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+  {
+   workshopModSources=new WorkshopModSources(installer.DataRoot,selectedInstallRoot);
+   workshopSourceRoot=selectedInstallRoot;
+  }
+  return workshopModSources;
+ }
  GitHubModUpdates GitHubUpdates()
  {
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
@@ -100,6 +112,115 @@ public partial class MainWindow
   dialog.Content=body;input.Focus();
   if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
+ async void DownloadWorkshopMod(ManagedMod? target=null)
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  string gameRoot=selectedInstallRoot;
+  ulong? savedId=target==null?null:WorkshopSources().Get(target.Id);
+  var dialog=new Window{Title="从尖塔补给站下载 MOD",Owner=this,Width=560,Height=245,
+   MinWidth=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
+  var body=new StackPanel{Margin=new Thickness(18)};
+  body.Children.Add(T("输入 Steam 创意工坊 Workshop ID，或粘贴 Steam / 尖塔补给站分享链接。",13,muted));
+  var input=new TextBox{Text=savedId?.ToString()??"",Margin=new Thickness(0,12,0,10),MinHeight=32};
+  body.Children.Add(input);
+  var hint=T("支持数字 ID、steamcommunity.com/sharedfiles/filedetails 链接，以及 workshop.apricityx.top/mod 链接。",11,muted);
+  body.Children.Add(hint);
+  ulong workshopId=0;
+  var start=Btn("获取并预览",()=>{
+   if(!WorkshopModInstaller.TryParseWorkshopId(input.Text,out workshopId))
+   {hint.Text="ID 或链接无效；请确认属于《杀戮尖塔 2》（AppID 2868840）的创意工坊条目。";return;}
+   dialog.DialogResult=true;
+  },"Primary");
+  body.Children.Add(H(start,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
+  dialog.Content=body;input.Focus();
+  if(dialog.ShowDialog()!=true)return;
+
+  busy=true;
+  bool changed=false;
+  WorkshopModPrepared? prepared=null;
+  try
+  {
+   using var source=new WorkshopModInstaller(installer.DataRoot);
+   toast.Text="正在准备创意工坊 MOD…";
+   prepared=await source.PrepareAsync(gameRoot,workshopId,
+    progress:message=>Dispatcher.BeginInvoke(new Action(()=>{
+     if(gameRoot==selectedInstallRoot)toast.Text=message;
+    })));
+   if(gameRoot!=selectedInstallRoot)
+    throw new InvalidOperationException("游戏目录已切换，已取消本次安装。");
+
+   string? boundModId=WorkshopSources().ModIdFor(workshopId);
+   if(boundModId!=null&&!boundModId.Equals(prepared.ModId,StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("这个 Workshop ID 已关联到另一个 MOD ID："+boundModId+"；为避免来源错配，未安装。");
+
+   string action=prepared.IsUnchanged?"本地文件与创意工坊内容完全一致，无需替换。":
+    prepared.IsUpdate?"将更新现有 MOD，并先备份旧版本。":"将新增一个 MOD，不会覆盖现有目录。";
+   string review=
+    "来源：尖塔补给站（Apricityx）\n"+
+    "Workshop ID："+prepared.WorkshopId+"\n"+
+    "MOD："+prepared.ModName+"（"+prepared.ModId+"）\n"+
+    "版本："+prepared.Version+"\n"+
+    "操作："+action+"\n"+
+    "文件数："+prepared.FileCount+" · 总大小："+prepared.TotalBytes.ToString("N0")+" 字节\n"+
+    "目标目录："+prepared.DestinationDirectory+"\n\n"+
+    "安全说明：Chunk 和文件 SHA-1 校验已通过；Manifest 签名验证、游戏分支匹配验证尚未执行。"+
+    "请仅安装你信任的创意工坊内容。安装前必须退出游戏。";
+   if(prepared.IsUnchanged)
+   {
+    MessageBox.Show(this,review,"创意工坊 MOD 已是最新",MessageBoxButton.OK,MessageBoxImage.Information);
+   }
+   else if(MessageBox.Show(this,review+"\n\n确认后才会写入游戏 mods 目录；更新时旧版本会保留在尖塔修补站_MOD备份中。",
+    prepared.IsUpdate?"确认更新 MOD":"确认安装 MOD",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)
+    return;
+
+   if(gameRoot!=selectedInstallRoot)
+    throw new InvalidOperationException("游戏目录已切换，已取消本次安装。");
+   transactionWriting=true;
+   WorkshopModInstallResult result;
+   try
+   {
+    toast.Text=prepared.IsUpdate?"正在备份旧版本并安装创意工坊 MOD…":"正在安装创意工坊 MOD…";
+    result=await Task.Run(()=>WorkshopModInstaller.Commit(gameRoot,prepared));
+   }
+   finally{transactionWriting=false;}
+
+   try{WorkshopSources().Bind(result.ModId,workshopId);}
+   catch(Exception sourceError)
+   {
+    toast.Text="MOD 文件已安装，但来源记录保存失败："+sourceError.Message;
+   }
+
+   changed=result.Changed;
+   if(changed)
+   {
+    orphanPatchNotice=result.BackupFolder==null
+     ?"已从创意工坊新增 "+result.ModName+"（"+result.ModId+"）。"
+     :"已从创意工坊更新 "+result.ModName+"。旧版本备份："+result.BackupFolder;
+    toast.Text=result.BackupFolder==null
+     ?"创意工坊 MOD 安装成功："+result.ModName
+     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。";
+    InvalidateLifecycle("创意工坊 MOD 已安装或更新，现有修复补丁健康结果需要重新检查。");
+    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+   }
+   else
+   {
+    toast.Text="创意工坊内容与本地文件一致，无需更新："+result.ModName;
+   }
+  }
+  catch(Exception ex){toast.Text="创意工坊 MOD 安装未完成："+ex.Message;}
+  finally
+  {
+   WorkshopModInstaller.Cleanup(prepared);
+   busy=false;transactionWriting=false;
+   if(changed)RefreshMods();
+   else if(gameRoot==selectedInstallRoot)
+   {
+    if(target!=null)ShowModDetail(target.Folder);
+    else ShowMods();
+   }
+  }
+ }
+
  async void CheckGitHubMod(ManagedMod mod)
  {
   if(busy)return;
@@ -534,7 +655,9 @@ public partial class MainWindow
    SetPage("模组管理",root,restore:ShowMods);return;
   }
   var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
-  header.Children.Add(H(refresh,Btn("打开模组目录",()=>{
+  var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
+  workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
+  header.Children.Add(H(refresh,workshopDownload,Btn("打开模组目录",()=>{
    string directory=Path.Combine(selectedInstallRoot,"mods");
    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
   },"Ghost")));
@@ -749,6 +872,23 @@ public partial class MainWindow
   root.Children.Add(T("版本："+mod.Version+"\n作者："+mod.Author+"\n状态："+(mod.Enabled?"启用":"停用")+"\n目录："+mod.Folder,13,muted));Space(root,18);
   if(!ModPresentation.IsIndependentPatch(mod))
   {
+   ulong? workshopId=WorkshopSources().Get(mod.Id);
+   root.Children.Add(T("Steam 创意工坊来源",17,ink,true));Space(root,8);
+   root.Children.Add(T(workshopId.HasValue
+    ?"已关联 Workshop ID："+workshopId.Value
+    :"尚未关联创意工坊来源；下载时可输入 Workshop ID。",12,muted));
+   var workshopActions=new List<UIElement>
+   {
+    Btn(workshopId.HasValue?"从创意工坊重新下载 / 更新":"从创意工坊下载并关联",
+     ()=>DownloadWorkshopMod(mod),"Ghost")
+   };
+   if(workshopId.HasValue)
+    workshopActions.Add(Btn("解除来源关联",()=>{
+     try{WorkshopSources().Unbind(mod.Id);ShowModDetail(mod.Folder);}
+     catch(Exception e){toast.Text="解除关联失败："+e.Message;}
+    },"Ghost"));
+   root.Children.Add(H(workshopActions.ToArray()));Space(root,18);
+
    var updates=GitHubUpdates();var repo=updates.Repository(mod.Id);var result=updates.Cached(mod.Id);
    root.Children.Add(T("GitHub 更新检测",17,ink,true));Space(root,8);
    root.Children.Add(T(repo==null?"尚未关联 GitHub 仓库。":"仓库："+repo,12,muted));Space(root,6);
