@@ -29,6 +29,8 @@ public partial class App : Application
             if(e.Args.Contains("--coop-alignment-check")){await CoopActionChecks.IntegrationAsync(e.Args[1],e.Args[2],e.Args[3]);Shutdown(0);return;}
             if(e.Args.Contains("--coop-self-test")){var checks=new MainWindow(false);await checks.CheckCoopAsync(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--auto-update-self-test")){await AutoUpdateChecks.RunAsync(e.Args.Last());Shutdown(0);return;}
+            if(e.Args.Contains("--manager-update-cleanup-self-test")){ManagerUpdateCleanupChecks.Run(e.Args.Last());Shutdown(0);return;}
+            if(e.Args.Contains("--workshop-zip-self-test")){WorkshopZipChecks.Run(e.Args.Last());Shutdown(0);return;}
             if((e.Args.Length==0||e.Args.Contains("--manager-update-complete"))&&!AcquireManagerInstance()){MessageBox.Show("此目录的管理器已打开或正在更新，请稍后再试。","尖塔修补站");Shutdown(0);return;}
             if(e.Args.Contains("--update-restart-fail")){if(!File.Exists(Path.Combine(AppContext.BaseDirectory,ManagerAutoUpdate.FixtureMarker)))throw new InvalidOperationException("Only fixtures can simulate failed startup.");Shutdown(42);return;}
             if(e.Args.Contains("--update-restart-probe")){if(!File.Exists(Path.Combine(AppContext.BaseDirectory,ManagerAutoUpdate.FixtureMarker))||!AcquireManagerInstance())throw new InvalidOperationException("Restart probe requires an isolated fixture.");File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(new{version=ManagerUpdates.CurrentVersion,root=AppContext.BaseDirectory,pid=Environment.ProcessId}));Shutdown(0);return;}
@@ -58,6 +60,8 @@ public partial class App : Application
             if(e.Args.Contains("--manager-update-complete")){string job=e.Args.Last();string expected=ManagerAutoUpdate.Child(AppContext.BaseDirectory,"数据/管理器更新/"+Path.GetFileName(job));if(Path.GetFullPath(job)!=expected)throw new InvalidOperationException("Invalid update completion path.");window.Loaded+=(_,_)=>File.WriteAllText(ManagerAutoUpdate.Child(job,"restart-proof.json"),System.Text.Json.JsonSerializer.Serialize(new{version=ManagerUpdates.CurrentVersion,pid=Environment.ProcessId}));}
             if(e.Args.Any(a=>a.StartsWith("--capture"))) { window.Left=-15000;window.Top=-15000;window.ShowActivated=false; }
             window.Show();
+            // Cleanup only on a later normal launch, never while the update worker is confirming a restart.
+            if(e.Args.Length==0)_=window.CleanupOnNormalLaunchAsync();
             if(e.Args.Contains("--capture-coop-actions")) { await window.CaptureCoopActionsAsync(e.Args[1],e.Args[2],e.Args[3],e.Args[4]); Shutdown(); }
             if(e.Args.Contains("--capture-coop")) { await window.CheckCoopAsync(e.Args.Last(),true); Shutdown(); }
             if(e.Args.Contains("--capture-updates")) { await window.CaptureUpdateChecksAsync(e.Args.Last()); Shutdown(); }
