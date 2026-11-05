@@ -165,7 +165,7 @@ internal static class SupplyStationContentChecks
                 {
                     blockedRedirectError = error.Message;
                 }
-                Check(blockedRedirectError?.Contains("not trusted", StringComparison.OrdinalIgnoreCase) == true &&
+                Check(blockedRedirectError?.Contains("受信任的 Steam CDN 主机", StringComparison.Ordinal) == true &&
                     !blockedRedirectRequests.Contains("evil.example", StringComparer.OrdinalIgnoreCase),
                     "untrusted cross-host redirects are blocked and the reason is retained in the error report");
             }
