@@ -25,3 +25,21 @@ The upstream license is reproduced in `third_party/WorkshopAndroidDownloader-LIC
 - The package is referenced by the WPF manager and the isolated Windows probe project. No native DLL or external executable is required.
 
 The MIT license notice is reproduced in `third_party/SharpCompress-LICENSE.txt`.
+
+
+## 尖塔补给站（接口来源与鸣谢）
+
+- Service: https://workshop.apricityx.top/
+- Maintainer: Apricityx
+- The Workshop download integration in 尖塔修补站 uses the service's interface with maintainer authorization. The interface supplies Workshop descriptor and short-lived CDN authorization data used by the Steam UGC Manifest / Chunk retrieval flow.
+- The Windows manager's C# downloader, assembly, validation and installation code is independently implemented. This notice does not claim that the website's source code is included or copied.
+- Acknowledgement: thanks to Apricityx and the 尖塔补给站 maintainer for authorizing third-party integration and maintaining the service.
+- This project is an independent third-party manager and is not the official client of, or an endorsement by, 尖塔补给站.
+
+## Sts2MobileLauncher (protocol reference only)
+
+- Upstream: https://github.com/ModinMobileSTS/Sts2MobileLauncher
+- License: MIT
+- Reference areas: public Steam depot manifest, Workshop chunk processing and directory-download behavior.
+- The project was consulted for protocol compatibility only. No Android UI, account-authentication flow or Kotlin source files are redistributed in this repository.
+- No Sts2MobileLauncher source code is bundled with the manager.
