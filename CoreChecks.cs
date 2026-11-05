@@ -80,6 +80,22 @@ public static class CoreChecks
   Check(snapshotEntries.Length==2&&snapshotEntries.Any(entry=>entry.Id==restoreResult.SafetySnapshotId&&
    entry.Purpose=="恢复前自动保护"),
    "environment restore automatically snapshots the pre-restore state");
+  var recoverySafety=ModEnvironmentSnapshots.Create(root,settings,"恢复日志测试");
+  string recoveryStageId=Guid.NewGuid().ToString("N");
+  string recoveryStage=Path.Combine(root,"尖塔修补站_环境恢复暂存",recoveryStageId);
+  string recoveryPrevious=Path.Combine(recoveryStage,"previous");
+  Directory.CreateDirectory(recoveryPrevious);
+  Directory.Move(Path.Combine(root,"mods"),Path.Combine(recoveryPrevious,"mods"));
+  Directory.CreateDirectory(Path.Combine(root,"mods"));
+  string partialTarget=Path.Combine(root,"mods","partial-target.txt");
+  File.WriteAllText(partialTarget,"interrupted target tree");
+  var recoveryJournal=new ModEnvironmentSnapshots.ModEnvironmentRestoreJournal(
+   1,Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar),recoveryStageId,
+   environmentSnapshot.Id,recoverySafety.Id,true,true,true,true,"new-moved-mods",DateTimeOffset.UtcNow);
+  ModEnvironmentSnapshots.WriteRestoreJournal(recoveryStage,recoveryJournal);
+  ModEnvironmentSnapshots.RecoverInterrupted(root,settings);
+  Check(File.ReadAllText(dllPath)=="unknown build"&&!File.Exists(partialTarget)&&!Directory.Exists(recoveryStage),
+   "interrupted environment restore is rolled back before MOD scanning");
   string snapshotStore=Directory.GetDirectories(Path.Combine(settings,"MOD环境快照")).Single();
   string snapshotPayload=Path.Combine(snapshotStore,environmentSnapshot.Id,"mods","renamed folder","Act4FinalAscent.dll");
   File.WriteAllText(snapshotPayload,"tampered snapshot payload");
@@ -89,6 +105,7 @@ public static class CoreChecks
   Check(tamperedRejected,"environment restore rejects a snapshot whose payload hash no longer matches");
   ModEnvironmentSnapshots.Delete(root,settings,environmentSnapshot.Id);
   ModEnvironmentSnapshots.Delete(root,settings,restoreResult.SafetySnapshotId);
+  ModEnvironmentSnapshots.Delete(root,settings,recoverySafety.Id);
   Check(ModEnvironmentSnapshots.List(root,settings).Length==0,
    "environment snapshots can be explicitly deleted without touching live MOD files");
   using(var github=new GitHubModUpdates(settings,root))
