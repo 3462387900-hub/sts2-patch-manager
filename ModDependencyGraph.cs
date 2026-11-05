@@ -151,7 +151,7 @@ internal static class ModDependencyGraph
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
         foreach (var group in inventory.Mods.GroupBy(mod => mod.Id, StringComparer.OrdinalIgnoreCase))
         {
-            var related = edgesByDependent.TryGetValue(group.Key, out var found) ? found : [];
+            var related = edgesByDependent.TryGetValue(group.Key, out var found) ? found : Array.Empty<ModDependencyEdge>();
             summaries[group.Key] = new ModDependencySummary(
                 related.Length,
                 related.Count(edge => edge.Status != ModDependencyStatus.Satisfied),
