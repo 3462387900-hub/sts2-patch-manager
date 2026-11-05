@@ -10,6 +10,17 @@ using System.Text.Json.Serialization;
 
 namespace SpirePatch;
 
+internal sealed record SupplyStationContentIdentity(
+    uint AppId,
+    string PublishedFileId,
+    string Mode,
+    string Title,
+    string FileName,
+    long? FileSizeBytes,
+    string ContentVersion,
+    string? ManifestId,
+    uint? DepotId);
+
 internal sealed record SupplyStationProbeResult(
     uint AppId,
     string PublishedFileId,
@@ -152,6 +163,31 @@ internal sealed class SpireSupplyStationClient : IDisposable
     }
 
     public void Dispose() => client.Dispose();
+
+    /// <summary>
+    /// Reads the current public content identity without downloading MOD files or requesting a CDN token.
+    /// The Manifest ID is suitable for comparing the installed Workshop revision after a verified install.
+    /// </summary>
+    public async Task<SupplyStationContentIdentity> ReadContentIdentityAsync(
+        uint appId,
+        ulong publishedFileId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequest(appId, publishedFileId);
+        var request = new WorkshopRequest(appId, publishedFileId);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+
+        return new SupplyStationContentIdentity(
+            appId,
+            publishedFileId.ToString(CultureInfo.InvariantCulture),
+            descriptor.Mode,
+            descriptor.Title,
+            descriptor.FileName,
+            descriptor.FileSizeBytes,
+            descriptor.ContentVersion,
+            descriptor.ManifestId,
+            descriptor.DepotId);
+    }
 
     public async Task<SupplyStationProbeResult> ProbeAsync(
         uint appId,
