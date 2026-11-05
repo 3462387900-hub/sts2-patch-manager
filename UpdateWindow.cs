@@ -19,7 +19,7 @@ public partial class MainWindow
  {
   var root=V(Header("MANAGER UPDATES","检查更新","查看尖塔修补站的新版本与更新内容，按需下载。"));Space(root,20);
   var summary=V(Badge("当前版本  "+ManagerUpdates.CurrentVersion,gold),T(managerUpdateStatus,16,ink,true));Space(summary,16);
-  var check=Btn(managerUpdateBusy?"正在处理…":"检查更新",()=>_=CheckManagerUpdatesAsync(true),"Primary");check.IsEnabled=!managerUpdateBusy;
+  var check=Btn(managerUpdateBusy?"正在处理…":"检查更新",()=>_=CheckManagerUpdatesAsync(true),"Primary");check.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy;
   summary.Children.Add(H(check,Btn("打开发布页",()=>OpenUrl(ManagerUpdates.RepositoryUrl+"/releases/latest"),"Ghost")));
   if(managerUpdateBusy&&managerUpdateCancellation!=null){Space(summary,10);summary.Children.Add(Btn("取消",()=>managerUpdateCancellation?.Cancel(),"Ghost"));}
   root.Children.Add(Card(summary));Space(root,20);
@@ -31,8 +31,8 @@ public partial class MainWindow
     download.IsEnabled=CanUpdateManager;
     var alternate=Btn("备用官方通道更新",DownloadAndApplyManagerUpdateViaApi,"Ghost");
     alternate.IsEnabled=CanUpdateManager;
-    var manual=Btn("仅下载 ZIP",DownloadManagerUpdate,"Ghost");manual.IsEnabled=!managerUpdateBusy;
-    var later=Btn("暂不更新",DeferManagerUpdate,"Ghost");later.IsEnabled=!managerUpdateBusy;
+    var manual=Btn("仅下载 ZIP",DownloadManagerUpdate,"Ghost");manual.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy;
+    var later=Btn("暂不更新",DeferManagerUpdate,"Ghost");later.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy;
     details.Children.Add(H(download,alternate,manual,later));
     details.Children.Add(T("备用通道使用 GitHub 官方附件 API；可能仍走相同的下载网络，不保证提速。两种方式均验证 SHA-256。",11,muted));
    }
@@ -53,7 +53,7 @@ public partial class MainWindow
   string resultPath=Path.Combine(installer.DataRoot,"管理器更新","最近结果.json");if(File.Exists(resultPath)){try{using var result=System.Text.Json.JsonDocument.Parse(File.ReadAllText(resultPath));Space(root,12);root.Children.Add(T("最近一次："+result.RootElement.GetProperty("message").GetString(),13,muted));}catch{}}
   SetPage("检查更新",root,restore:ShowManagerUpdates);toast.Text="更新由你确认；会保留程序备份和个人数据。";
  }
- void DeferManagerUpdate(){if(managerUpdateBusy)return;if(backHistory.Count>0)GoBack();else ShowOverview();}
+ void DeferManagerUpdate(){if(managerUpdateBusy||managerCleanupBusy)return;if(backHistory.Count>0)GoBack();else ShowOverview();}
  bool CanUpdateManager=>!managerUpdateBusy&&!managerCleanupBusy&&!busy&&!transactionWriting&&!onlineBusy;
  async void CleanupOldManagerFiles()
  {
