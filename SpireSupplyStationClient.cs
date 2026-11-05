@@ -622,8 +622,9 @@ internal sealed class SpireSupplyStationClient : IDisposable
                 // SteamPipe may redirect an authorized CDN request to a separate
                 // Valve/partner CDN host. Preserve the signed query only across
                 // the redirect returned by the already-authorized CDN response.
-                // The destination must still be HTTPS/HTTP on its default port and
-                // belong to a known Steam CDN domain or partner host.
+                // Do not downgrade an authorized HTTPS request to HTTP: the
+                // temporary CDN authorization query must never travel in clear text.
+                // The destination must be HTTPS on port 443 and a known Steam CDN host.
                 if (string.IsNullOrEmpty(nextUri.Query))
                 {
                     tokenQuery = currentUri.Query.TrimStart('?');
@@ -692,19 +693,23 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
     static void ValidateCdnUri(Uri uri, IReadOnlyDictionary<string, Endpoint> allowedEndpoints)
     {
-        bool supportedTransport =
-            (uri.Scheme == Uri.UriSchemeHttps && uri.Port == 443) ||
-            (uri.Scheme == Uri.UriSchemeHttp && uri.Port == 80);
+        bool supportedTransport = uri.Scheme == Uri.UriSchemeHttps && uri.Port == 443;
         bool trustedHost =
             allowedEndpoints.ContainsKey(uri.Host) ||
             IsTrustedSteamCdnRedirectHost(uri.Host);
+        var reasons = new List<string>();
+        if (!supportedTransport)
+            reasons.Add("只允许 HTTPS 默认端口 443（禁止 HTTPS 降级到 HTTP）");
+        if (!trustedHost)
+            reasons.Add("主机不在可信 Steam CDN 列表中");
+        if (uri.UserInfo.Length != 0)
+            reasons.Add("不允许 URI 用户信息");
+        if (uri.Fragment.Length != 0)
+            reasons.Add("不允许 URI 片段");
 
-        if (!supportedTransport ||
-            uri.UserInfo.Length != 0 ||
-            uri.Fragment.Length != 0 ||
-            !trustedHost)
+        if (reasons.Count != 0)
             throw new InvalidDataException(
-                "Steam CDN 重定向目标不是受信任的 Steam CDN 主机，或使用了不支持的协议/端口。");
+                $"Steam CDN 重定向目标校验失败：{uri.Scheme}://{uri.Host}:{uri.Port}（{string.Join("；", reasons)}）。");
     }
 
     static bool IsTrustedSteamCdnRedirectHost(string host)
@@ -723,15 +728,24 @@ internal sealed class SpireSupplyStationClient : IDisposable
         if (error is null)
             return "未知错误";
 
-        string message = error.Message;
-        message = Regex.Replace(
-            message,
-            @"(?i)(token|authorization|signature|requestcode|depotkey)(=|:)[^&\s]+",
-            "$1=[redacted]");
-        message = Regex.Replace(message, @"https?://[^\s""']+", "[CDN URL]");
-        if (message.Length > 320)
-            message = message[..320] + "…";
-        return error.GetType().Name + ": " + message;
+        var parts = new List<string>();
+        var seen = new HashSet<Exception>();
+        for (Exception? current = error; current is not null && parts.Count < 4 && seen.Add(current);
+             current = current.InnerException)
+        {
+            string message = current.Message;
+            message = Regex.Replace(
+                message,
+                @"(?i)(token|authorization|signature|requestcode|depotkey)(=|:)[^&\s]+",
+                "$1=[redacted]");
+            message = Regex.Replace(message, @"https?://[^\s""']+", "[CDN URL]");
+            message = Regex.Replace(message, @"(?i)([?&](?:token|auth|key|signature|requestcode)=)[^&\s]+", "$1[redacted]");
+            if (message.Length > 240)
+                message = message[..240] + "…";
+            parts.Add(current.GetType().Name + ": " + message);
+        }
+
+        return string.Join(" -> ", parts);
     }
 
     async Task<T> GetJsonAsync<T>(Uri uri, CancellationToken cancellationToken)
