@@ -1171,7 +1171,7 @@ public partial class MainWindow
     .Count(r=>chosenModFolders.Contains(r.Mod.Folder));
    selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
-   foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch})
+   foreach(var button in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch,enableBatch,disableBatch,clearBatch})
     button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
    bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&WorkshopSources().Get(m.Id).HasValue);
    bool hasWorkshopUpdate=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
