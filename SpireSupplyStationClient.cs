@@ -446,6 +446,77 @@ internal sealed class SpireSupplyStationClient : IDisposable
         }
     }
 
+    public async Task<SupplyStationAssemblyProbeResult> AssembleChunksAsync(
+        uint appId,
+        ulong publishedFileId,
+        string rawChunkDirectory,
+        string outputDirectory,
+        Action<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequest(appId, publishedFileId);
+        var request = new WorkshopRequest(appId, publishedFileId);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        if (descriptor.Mode != "UGC")
+            throw new InvalidOperationException("该条目不是 UGC 下载模式，无法组装 Steam UGC Chunk。");
+
+        if (!ulong.TryParse(descriptor.ManifestId, NumberStyles.None, CultureInfo.InvariantCulture, out var manifestId) ||
+            descriptor.DepotId is null or 0 ||
+            !ulong.TryParse(descriptor.RequestCode, NumberStyles.None, CultureInfo.InvariantCulture, out var requestCode))
+            throw new InvalidDataException("UGC 下载描述缺少有效的 Manifest、Depot 或请求码。");
+
+        byte[] depotKey;
+        try
+        {
+            depotKey = Convert.FromBase64String(descriptor.DepotKeyBase64 ?? "");
+        }
+        catch (FormatException error)
+        {
+            throw new InvalidDataException("UGC 下载描述中的 Depot Key 格式无效。", error);
+        }
+
+        if (depotKey.Length != 32)
+        {
+            CryptographicOperations.ZeroMemory(depotKey);
+            throw new InvalidDataException("UGC 下载描述中的 Depot Key 长度无效。");
+        }
+
+        try
+        {
+            string manifestPath = $"depot/{descriptor.DepotId.Value}/manifest/{manifestId}/5/{requestCode}";
+            byte[] manifestArchive = await GetCdnBytesFromAnyEndpointAsync(
+                request, descriptor, manifestPath, expectedLength: null, cancellationToken);
+            var encryptedManifest = SteamDepotManifestParser.ParseZipDetailed(manifestArchive);
+            if (encryptedManifest.Summary.DepotId != descriptor.DepotId.Value ||
+                encryptedManifest.Summary.ManifestId != manifestId)
+                throw new InvalidDataException("Steam CDN 返回的 Manifest 身份与尖塔补给站下载描述不一致。");
+
+            bool fileNamesWereEncrypted = encryptedManifest.Summary.FileNamesEncrypted;
+            var manifest = encryptedManifest.DecryptFileNames(depotKey);
+            progress?.Invoke("Manifest 已重新获取并解析；正在校验本地原始 Chunk 清单。");
+
+            return await Task.Run(
+                () => SupplyStationModAssembler.Assemble(
+                    appId,
+                    publishedFileId.ToString(CultureInfo.InvariantCulture),
+                    descriptor.Title,
+                    manifestId.ToString(CultureInfo.InvariantCulture),
+                    descriptor.DepotId.Value,
+                    manifest,
+                    rawChunkDirectory,
+                    outputDirectory,
+                    depotKey,
+                    fileNamesWereEncrypted,
+                    progress,
+                    cancellationToken),
+                cancellationToken);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(depotKey);
+        }
+    }
+
     async Task<byte[]> GetCdnBytesFromAnyEndpointAsync(
         WorkshopRequest request,
         Descriptor descriptor,
