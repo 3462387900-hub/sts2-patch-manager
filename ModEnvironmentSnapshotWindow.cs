@@ -138,24 +138,25 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || modInventoryDirty || selectedInstallRoot is null) return;
         string gameRoot = selectedInstallRoot;
+        ModEnvironmentSnapshotPreview? preview = null;
+        string? errorMessage = null;
         busy = true;
         toast.Text = "正在校验快照文件并比较当前 MOD 环境…";
         try
         {
-            var preview = await Task.Run(() =>
+            preview = await Task.Run(() =>
                 ModEnvironmentSnapshots.PreviewRestore(gameRoot, installer.DataRoot, snapshotId));
-            if (gameRoot == selectedInstallRoot)
-                ShowModEnvironmentRestorePreview(preview);
         }
-        catch (Exception error)
-        {
-            if (gameRoot == selectedInstallRoot)
-            {
-                toast.Text = "快照校验或预览失败：" + error.Message;
-                ShowModEnvironmentSnapshots();
-            }
-        }
+        catch (Exception error) { errorMessage = error.Message; }
         finally { busy = false; }
+
+        if (gameRoot != selectedInstallRoot) return;
+        if (preview is not null) ShowModEnvironmentRestorePreview(preview);
+        else
+        {
+            toast.Text = "快照校验或预览失败：" + errorMessage;
+            ShowModEnvironmentSnapshots();
+        }
     }
 
     void ShowModEnvironmentRestorePreview(ModEnvironmentSnapshotPreview preview)
@@ -228,11 +229,42 @@ public partial class MainWindow
         busy = true;
         transactionWriting = true;
         toast.Text = "正在准备恢复，当前环境会先自动保存…";
+        ModEnvironmentSnapshotRestoreResult? result = null;
+        string? restoreError = null;
         try
         {
-            var result = await Task.Run(() => ModEnvironmentSnapshots.Restore(
+            result = await Task.Run(() => ModEnvironmentSnapshots.Restore(
                 gameRoot, installer.DataRoot, preview.SnapshotId, preview.Token));
+        }
+        catch (Exception error) { restoreError = error.Message; }
+        finally
+        {
+            if (result is null)
+            {
+                transactionWriting = false;
+                busy = false;
+            }
+        }
 
+        if (gameRoot != selectedInstallRoot) return;
+        if (result is null)
+        {
+            toast.Text = "环境恢复未完成：" + restoreError;
+            ShowModEnvironmentSnapshots();
+            return;
+        }
+
+        InvalidateLifecycle("MOD 环境已恢复，修复补丁健康结果需要重新扫描。");
+        report = null;
+        states = [];
+        ClearCoop();
+        ClearSelection();
+        installPreview = null;
+        lastInstallResult = null;
+        modTogglePreview = null;
+
+        try
+        {
             var refreshed = await Task.Run(() => ModManager.Scan(gameRoot));
             modInventory = refreshed;
             modInventoryDirty = false;
@@ -255,14 +287,6 @@ public partial class MainWindow
             }
 
             modStatus = $"恢复完成 · 共 {refreshed.Mods.Count} 个 MOD · {refreshed.Mods.Count(mod => mod.Enabled)} 个启用 · {refreshed.Mods.Count(mod => !mod.Enabled)} 个停用";
-            InvalidateLifecycle("MOD 环境已恢复，修复补丁健康结果需要重新扫描。");
-            report = null;
-            states = [];
-            ClearCoop();
-            ClearSelection();
-            installPreview = null;
-            lastInstallResult = null;
-            modTogglePreview = null;
             toast.Text = $"环境恢复完成。恢复前自动保护快照：{result.SafetySnapshotId}。" +
                 cacheWarning + (refreshed.Issues.Count > 0
                     ? "；恢复后的清单仍有 " + refreshed.Issues.Count + " 项问题，请查看模组管理。"
@@ -270,7 +294,8 @@ public partial class MainWindow
         }
         catch (Exception error)
         {
-            toast.Text = "环境恢复未完成：" + error.Message;
+            modInventoryDirty = true;
+            toast.Text = $"环境恢复已完成，恢复前自动保护快照：{result.SafetySnapshotId}。但刷新 MOD 清单失败：{error.Message}";
         }
         finally
         {
