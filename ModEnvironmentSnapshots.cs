@@ -380,8 +380,9 @@ internal static class ModEnvironmentSnapshots
         long total = 0;
         foreach (var file in snapshot.Files)
         {
+            if (file is null) throw new InvalidDataException("快照文件清单包含空项目。");
             ValidateTreeAndRelativePath(folder, file.Tree, file.RelativePath);
-            if (file is null || file.Length < 0 || file.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
+            if (file.Length < 0 || file.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
                 file.LastWriteUtcTicks > DateTime.MaxValue.Ticks ||
                 string.IsNullOrWhiteSpace(file.Sha256) || !HashPattern.IsMatch(file.Sha256) ||
                 !fileKeys.Add(file.Tree + "\0" + file.RelativePath))
@@ -393,8 +394,9 @@ internal static class ModEnvironmentSnapshots
         }
         foreach (var directory in snapshot.Directories)
         {
+            if (directory is null) throw new InvalidDataException("快照目录清单包含空项目。");
             ValidateTreeAndRelativePath(folder, directory.Tree, directory.RelativePath);
-            if (directory is null || directory.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
+            if (directory.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
                 directory.LastWriteUtcTicks > DateTime.MaxValue.Ticks ||
                 !directoryKeys.Add(directory.Tree + "\0" + directory.RelativePath))
                 throw new InvalidDataException("快照目录清单存在重复路径。");
