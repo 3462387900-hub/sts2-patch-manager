@@ -1332,6 +1332,20 @@ public partial class MainWindow
    }
   }
   else root.Children.Add(T("清单未声明必需前置；这不代表一定没有其他运行时依赖。",12,muted));
+  var incomingDependencies=dependencyReport.Edges.Where(edge=>
+   edge.DependencyId.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)).ToArray();
+  Space(root,7);
+  root.Children.Add(T("依赖此 MOD 的其他项目",14,ink,true));
+  if(incomingDependencies.Length==0)
+   root.Children.Add(T("没有在当前清单或修复补丁规则中发现其他 MOD 依赖它。",12,muted));
+  else
+  {
+   root.Children.Add(T("共 "+incomingDependencies.Length+" 条依赖关系；停用前请特别留意仍处于启用状态的项目。",12,muted));
+   foreach(var edge in incomingDependencies)
+    root.Children.Add(T(edge.Dependent.Name+" · "+(edge.Dependent.Enabled?"已启用":"已停用")+
+     (edge.FromPatchRule?" · 修复补丁兼容规则":" · MOD 清单声明"),12,
+     edge.Dependent.Enabled?gold:muted));
+  }
   root.Children.Add(Btn("查看完整依赖关系图",()=>ShowDependencyGraph(),"Ghost"));Space(root,20);
   if(ModPresentation.IsIndependentPatch(mod))
   {
