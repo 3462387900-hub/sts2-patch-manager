@@ -521,6 +521,7 @@ public partial class MainWindow
     else ShowMods();
    }
    else if(page=="模组管理"&&currentVisit?.Key=="mod-dependencies")ShowDependencyGraph();
+   else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
   }
@@ -992,7 +993,9 @@ public partial class MainWindow
   var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
   workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
   header.Children.Add(H(refresh,workshopDownload,
-   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost"),
+   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost")));
+  header.Children.Add(H(
+   Btn("环境快照",ShowModEnvironmentSnapshots,"Ghost"),
    Btn("打开模组目录",()=>{
     string directory=Path.Combine(selectedInstallRoot,"mods");
     if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
