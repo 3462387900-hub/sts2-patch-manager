@@ -1,4 +1,3 @@
-using System.IO;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
@@ -20,6 +19,50 @@ internal sealed record SteamDepotManifestSummary(
     long TotalChunkUncompressedBytes,
     int SignatureBytes);
 
+internal sealed record SteamDepotManifestChunk(
+    string Id,
+    byte[] IdBytes,
+    uint Checksum,
+    ulong Offset,
+    uint CompressedLength,
+    uint UncompressedLength);
+
+internal sealed record SteamDepotManifestFile(
+    string Path,
+    long Size,
+    uint Flags,
+    byte[] ShaContent,
+    string? LinkTarget,
+    IReadOnlyList<SteamDepotManifestChunk> Chunks);
+
+internal sealed record SteamDepotManifestData(
+    SteamDepotManifestSummary Summary,
+    IReadOnlyList<SteamDepotManifestFile> Files)
+{
+    public IReadOnlyList<SteamDepotManifestChunk> UniqueChunks()
+    {
+        var chunks = new Dictionary<string, SteamDepotManifestChunk>(StringComparer.Ordinal);
+        foreach (var file in Files)
+        {
+            foreach (var chunk in file.Chunks)
+            {
+                if (chunks.TryGetValue(chunk.Id, out var existing))
+                {
+                    if (existing.Checksum != chunk.Checksum ||
+                        existing.CompressedLength != chunk.CompressedLength ||
+                        existing.UncompressedLength != chunk.UncompressedLength)
+                        throw new InvalidDataException("Steam manifest reuses a Chunk ID with conflicting content metadata.");
+                }
+                else
+                {
+                    chunks.Add(chunk.Id, chunk);
+                }
+            }
+        }
+        return chunks.Values.ToArray();
+    }
+}
+
 internal static class SteamDepotManifestParser
 {
     private const uint PayloadMagic = 0x71F617D0;
@@ -31,10 +74,13 @@ internal static class SteamDepotManifestParser
     private const int MaxSectionBytes = 64 * 1024 * 1024;
     private const int MaxFiles = 100_000;
     private const int MaxChunks = 2_000_000;
+    private const long MaxTotalFileBytes = 2L * 1024 * 1024 * 1024;
+    private const uint MaxChunkBytes = 64 * 1024 * 1024;
 
-    private sealed record ChunkInfo(string Id, uint Checksum, ulong Offset, uint CompressedLength, uint UncompressedLength);
+    public static SteamDepotManifestSummary ParseZip(byte[] archiveBytes) =>
+        ParseZipDetailed(archiveBytes).Summary;
 
-    public static SteamDepotManifestSummary ParseZip(byte[] archiveBytes)
+    public static SteamDepotManifestData ParseZipDetailed(byte[] archiveBytes)
     {
         ArgumentNullException.ThrowIfNull(archiveBytes);
         if (archiveBytes.Length == 0 || archiveBytes.Length > MaxArchiveBytes)
@@ -42,14 +88,14 @@ internal static class SteamDepotManifestParser
 
         using var archiveStream = new MemoryStream(archiveBytes, writable: false);
         using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read, leaveOpen: false);
-        var files = archive.Entries
+        var entries = archive.Entries
             .Where(entry => !entry.FullName.EndsWith("/", StringComparison.Ordinal) &&
                             !entry.FullName.EndsWith("\\", StringComparison.Ordinal))
             .ToArray();
-        if (files.Length != 1)
+        if (entries.Length != 1)
             throw new InvalidDataException("Steam manifest archive must contain exactly one file.");
 
-        var entry = files[0];
+        var entry = entries[0];
         if (entry.Length <= 0 || entry.Length > MaxManifestBytes)
             throw new InvalidDataException("Steam manifest payload is empty or exceeds 64 MiB.");
 
@@ -64,10 +110,12 @@ internal static class SteamDepotManifestParser
             output.Write(buffer, 0, read);
         }
 
-        return Parse(output.ToArray());
+        return ParseDetailed(output.ToArray());
     }
 
-    public static SteamDepotManifestSummary Parse(byte[] bytes)
+    public static SteamDepotManifestSummary Parse(byte[] bytes) => ParseDetailed(bytes).Summary;
+
+    public static SteamDepotManifestData ParseDetailed(byte[] bytes)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         if (bytes.Length == 0 || bytes.Length > MaxManifestBytes)
@@ -107,9 +155,13 @@ internal static class SteamDepotManifestParser
             switch (magic)
             {
                 case PayloadMagic:
+                    if (payload is not null)
+                        throw new InvalidDataException("Steam manifest contains duplicate payload sections.");
                     payload = section.ToArray();
                     break;
                 case MetadataMagic:
+                    if (metadata is not null)
+                        throw new InvalidDataException("Steam manifest contains duplicate metadata sections.");
                     metadata = section.ToArray();
                     break;
                 case SignatureMagic:
@@ -126,8 +178,11 @@ internal static class SteamDepotManifestParser
             throw new InvalidDataException("Steam manifest payload or metadata section is missing.");
 
         var metadataSummary = ParseMetadata(metadata);
-        var payloadSummary = ParsePayload(payload);
-        return new SteamDepotManifestSummary(
+        var files = ParsePayload(payload, metadataSummary.FileNamesEncrypted);
+        var uniqueChunks = UniqueChunks(files);
+        long totalFileBytes = files.Aggregate(0L, (sum, file) => checked(sum + file.Size));
+
+        var summary = new SteamDepotManifestSummary(
             metadataSummary.DepotId,
             metadataSummary.ManifestId,
             metadataSummary.CreatedAtUnix,
@@ -135,12 +190,17 @@ internal static class SteamDepotManifestParser
             metadataSummary.EncryptedCrc,
             metadataSummary.ClearCrc,
             metadataSummary.DeclaredUniqueChunkCount,
-            payloadSummary.FileCount,
-            payloadSummary.Chunks.Count,
-            payloadSummary.TotalFileBytes,
-            payloadSummary.Chunks.Values.Sum(chunk => (long)chunk.CompressedLength),
-            payloadSummary.Chunks.Values.Sum(chunk => (long)chunk.UncompressedLength),
+            files.Count,
+            uniqueChunks.Count,
+            totalFileBytes,
+            uniqueChunks.Values.Sum(chunk => (long)chunk.CompressedLength),
+            uniqueChunks.Values.Sum(chunk => (long)chunk.UncompressedLength),
             signatureBytes);
+
+        if (totalFileBytes > MaxTotalFileBytes)
+            throw new InvalidDataException("Steam manifest total file size exceeds the 2 GiB safety limit.");
+
+        return new SteamDepotManifestData(summary, files);
     }
 
     private sealed record MetadataSummary(
@@ -151,8 +211,6 @@ internal static class SteamDepotManifestParser
         uint EncryptedCrc,
         uint ClearCrc,
         uint DeclaredUniqueChunkCount);
-
-    private sealed record PayloadSummary(int FileCount, long TotalFileBytes, Dictionary<string, ChunkInfo> Chunks);
 
     private static MetadataSummary ParseMetadata(byte[] bytes)
     {
@@ -183,38 +241,17 @@ internal static class SteamDepotManifestParser
             encryptedCrc, clearCrc, uniqueChunks);
     }
 
-    private static PayloadSummary ParsePayload(byte[] bytes)
+    private static List<SteamDepotManifestFile> ParsePayload(byte[] bytes, bool filenamesEncrypted)
     {
         var reader = new ProtoReader(bytes);
-        var chunks = new Dictionary<string, ChunkInfo>(StringComparer.Ordinal);
-        int fileCount = 0;
-        long totalFileBytes = 0;
-
+        var files = new List<SteamDepotManifestFile>();
         while (reader.TryReadTag(out int field, out int wire))
         {
             if (field == 1 && wire == 2)
             {
-                if (++fileCount > MaxFiles)
+                if (files.Count >= MaxFiles)
                     throw new InvalidDataException("Steam manifest contains too many files.");
-                var file = ParseFileMapping(reader.ReadLengthDelimited());
-                totalFileBytes = checked(totalFileBytes + file.Size);
-
-                foreach (var chunk in file.Chunks)
-                {
-                    if (chunks.TryGetValue(chunk.Id, out var existing))
-                    {
-                        if (existing.Checksum != chunk.Checksum ||
-                            existing.CompressedLength != chunk.CompressedLength ||
-                            existing.UncompressedLength != chunk.UncompressedLength)
-                            throw new InvalidDataException("Steam manifest reuses a Chunk ID with conflicting content metadata.");
-                    }
-                    else
-                    {
-                        if (chunks.Count >= MaxChunks)
-                            throw new InvalidDataException("Steam manifest contains too many unique chunks.");
-                        chunks.Add(chunk.Id, chunk);
-                    }
-                }
+                files.Add(ParseFileMapping(reader.ReadLengthDelimited(), filenamesEncrypted));
             }
             else
             {
@@ -222,29 +259,43 @@ internal static class SteamDepotManifestParser
             }
         }
 
-        if (fileCount == 0)
+        if (files.Count == 0)
             throw new InvalidDataException("Steam manifest contains no file mappings.");
 
-        return new PayloadSummary(fileCount, totalFileBytes, chunks);
+        return files;
     }
 
-    private sealed record FileSummary(long Size, List<ChunkInfo> Chunks);
-
-    private static FileSummary ParseFileMapping(byte[] bytes)
+    private static SteamDepotManifestFile ParseFileMapping(byte[] bytes, bool filenamesEncrypted)
     {
         var reader = new ProtoReader(bytes);
+        string path = "";
+        string? linkTarget = null;
         ulong size = 0;
-        var chunks = new List<ChunkInfo>();
+        uint flags = 0;
+        byte[] shaContent = [];
+        var chunks = new List<SteamDepotManifestChunk>();
 
         while (reader.TryReadTag(out int field, out int wire))
         {
             switch (field)
             {
+                case 1 when wire == 2:
+                    path = SanitizeManifestString(Encoding.UTF8.GetString(reader.ReadLengthDelimited()));
+                    break;
                 case 2 when wire == 0:
                     size = reader.ReadVarint();
                     break;
+                case 3 when wire == 0:
+                    flags = checked((uint)reader.ReadVarint());
+                    break;
+                case 5 when wire == 2:
+                    shaContent = reader.ReadLengthDelimited();
+                    break;
                 case 6 when wire == 2:
                     chunks.Add(ParseChunk(reader.ReadLengthDelimited()));
+                    break;
+                case 7 when wire == 2:
+                    linkTarget = SanitizeManifestString(Encoding.UTF8.GetString(reader.ReadLengthDelimited()));
                     break;
                 default:
                     reader.SkipField(wire);
@@ -252,8 +303,21 @@ internal static class SteamDepotManifestParser
             }
         }
 
+        if (string.IsNullOrWhiteSpace(path))
+            throw new InvalidDataException("Steam manifest contains a file mapping with an empty path.");
         if (size > long.MaxValue)
             throw new InvalidDataException("Steam manifest file size exceeds the supported range.");
+        if (shaContent.Length is not (0 or 20))
+            throw new InvalidDataException("Steam manifest file SHA-1 field has an invalid length.");
+        if (chunks.Count > MaxChunks)
+            throw new InvalidDataException("Steam manifest file contains too many chunks.");
+
+        if (!filenamesEncrypted)
+        {
+            path = path.Replace('\\', '/');
+            if (!string.IsNullOrWhiteSpace(linkTarget))
+                linkTarget = linkTarget.Replace('\\', '/');
+        }
 
         foreach (var chunk in chunks)
         {
@@ -262,10 +326,10 @@ internal static class SteamDepotManifestParser
                 throw new InvalidDataException("Steam manifest chunk range exceeds its file size.");
         }
 
-        return new FileSummary((long)size, chunks);
+        return new SteamDepotManifestFile(path, (long)size, flags, shaContent, linkTarget, chunks);
     }
 
-    private static ChunkInfo ParseChunk(byte[] bytes)
+    private static SteamDepotManifestChunk ParseChunk(byte[] bytes)
     {
         var reader = new ProtoReader(bytes);
         byte[]? sha = null;
@@ -285,11 +349,42 @@ internal static class SteamDepotManifestParser
             }
         }
 
-        if (sha is null || sha.Length != 20 || compressedLength == 0 || uncompressedLength == 0)
-            throw new InvalidDataException("Steam manifest contains an invalid Chunk record.");
+        if (sha is null || sha.Length != 20 || compressedLength == 0 || uncompressedLength == 0 ||
+            compressedLength > MaxChunkBytes || uncompressedLength > MaxChunkBytes)
+            throw new InvalidDataException("Steam manifest contains an invalid or oversized Chunk record.");
 
-        return new ChunkInfo(Convert.ToHexString(sha), checksum, offset, compressedLength, uncompressedLength);
+        return new SteamDepotManifestChunk(Convert.ToHexString(sha), sha, checksum, offset,
+            compressedLength, uncompressedLength);
     }
+
+    private static Dictionary<string, SteamDepotManifestChunk> UniqueChunks(
+        IReadOnlyList<SteamDepotManifestFile> files)
+    {
+        var chunks = new Dictionary<string, SteamDepotManifestChunk>(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            foreach (var chunk in file.Chunks)
+            {
+                if (chunks.TryGetValue(chunk.Id, out var existing))
+                {
+                    if (existing.Checksum != chunk.Checksum ||
+                        existing.CompressedLength != chunk.CompressedLength ||
+                        existing.UncompressedLength != chunk.UncompressedLength)
+                        throw new InvalidDataException("Steam manifest reuses a Chunk ID with conflicting content metadata.");
+                }
+                else
+                {
+                    if (chunks.Count >= MaxChunks)
+                        throw new InvalidDataException("Steam manifest contains too many unique chunks.");
+                    chunks.Add(chunk.Id, chunk);
+                }
+            }
+        }
+        return chunks;
+    }
+
+    private static string SanitizeManifestString(string value) =>
+        value.Trim(character => character <= ' ' || character == '\0');
 
     private sealed class ProtoReader(byte[] bytes)
     {
@@ -354,17 +449,14 @@ internal static class SteamDepotManifestParser
             switch (wire)
             {
                 case 0: _ = ReadVarint(); break;
-                case 1:
-                    Advance(8);
-                    break;
+                case 1: Advance(8); break;
                 case 2:
                     ulong length = ReadVarint();
-                    if (length > int.MaxValue) throw new InvalidDataException("Steam manifest protobuf field is too large.");
+                    if (length > int.MaxValue)
+                        throw new InvalidDataException("Steam manifest protobuf field is too large.");
                     Advance((int)length);
                     break;
-                case 5:
-                    Advance(4);
-                    break;
+                case 5: Advance(4); break;
                 default:
                     throw new InvalidDataException("Steam manifest contains an unsupported protobuf wire type.");
             }
