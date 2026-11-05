@@ -285,7 +285,7 @@ internal static class SupplyStationContentChecks
             WriteVarintField(writer, 3, 123456);
             WriteVarintField(writer, 4, 1);
             WriteVarintField(writer, 5, 4);
-            WriteVarintField(writer, 6, RawChunk.Length);
+            WriteVarintField(writer, 6, (ulong)RawChunk.Length);
             WriteVarintField(writer, 7, 1);
             WriteVarintField(writer, 8, 0x12345678);
             WriteVarintField(writer, 9, 0x12345678);
