@@ -464,6 +464,17 @@ public partial class MainWindow
   {
    busy=false;
    if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+   else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
+   {
+    string folder=currentVisit.Key["mod:".Length..];
+    if(modInventory?.Mods.Any(m=>m.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
+    {
+     string detailToast=toast.Text;
+     ShowModDetail(folder);
+     toast.Text=detailToast;
+    }
+    else ShowMods();
+   }
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
   }
