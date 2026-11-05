@@ -364,8 +364,10 @@ internal static class ModEnvironmentSnapshots
     static void ValidateMetadata(string root, string folder, ModEnvironmentSnapshot snapshot)
     {
         if (snapshot.SchemaVersion != Schema ||
+            !IdPattern.IsMatch(snapshot.Id) ||
             !snapshot.Id.Equals(Path.GetFileName(folder), StringComparison.OrdinalIgnoreCase) ||
             !snapshot.GameRoot.Equals(NormalizeRoot(root), StringComparison.OrdinalIgnoreCase) ||
+            snapshot.CreatedAt == default ||
             snapshot.Files is null || snapshot.Directories is null ||
             snapshot.Files.Length > MaxFiles || snapshot.Directories.Length > MaxDirectories ||
             snapshot.TotalBytes < 0 || snapshot.TotalBytes > MaxBytes ||
@@ -378,7 +380,9 @@ internal static class ModEnvironmentSnapshots
         foreach (var file in snapshot.Files)
         {
             ValidateTreeAndRelativePath(folder, file.Tree, file.RelativePath);
-            if (file.Length < 0 || !HashPattern.IsMatch(file.Sha256) ||
+            if (file.Length < 0 || file.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
+                file.LastWriteUtcTicks > DateTime.MaxValue.Ticks ||
+                !HashPattern.IsMatch(file.Sha256) ||
                 !fileKeys.Add(file.Tree + "\0" + file.RelativePath))
                 throw new InvalidDataException("快照文件清单存在重复路径或无效摘要。");
             total = checked(total + file.Length);
@@ -389,7 +393,9 @@ internal static class ModEnvironmentSnapshots
         foreach (var directory in snapshot.Directories)
         {
             ValidateTreeAndRelativePath(folder, directory.Tree, directory.RelativePath);
-            if (!directoryKeys.Add(directory.Tree + "\0" + directory.RelativePath))
+            if (directory.LastWriteUtcTicks < DateTime.MinValue.Ticks ||
+                directory.LastWriteUtcTicks > DateTime.MaxValue.Ticks ||
+                !directoryKeys.Add(directory.Tree + "\0" + directory.RelativePath))
                 throw new InvalidDataException("快照目录清单存在重复路径。");
             bool treePresent = directory.Tree == "mods" ? snapshot.ModsPresent : snapshot.DisabledPresent;
             if (!treePresent) throw new InvalidDataException("快照目录属于未记录的目录。");
@@ -435,6 +441,17 @@ internal static class ModEnvironmentSnapshots
 
     static void VerifySnapshotPayload(string folder, ModEnvironmentSnapshot snapshot)
     {
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "snapshot.json" };
+        if (snapshot.ModsPresent) allowed.Add("mods");
+        if (snapshot.DisabledPresent) allowed.Add("disabled");
+        foreach (string entry in Directory.EnumerateFileSystemEntries(folder))
+        {
+            string name = Path.GetFileName(entry);
+            if (!allowed.Contains(name))
+                throw new InvalidDataException("快照目录包含索引之外的文件或目录：" + name);
+            GameEnvironment.NoLinks(entry);
+        }
+
         foreach (var expected in SnapshotTrees(snapshot))
         {
             string payload = PayloadPath(folder, expected.Name);
@@ -544,7 +561,7 @@ internal static class ModEnvironmentSnapshots
                 entries.Add(new(id, new DateTimeOffset(Directory.GetLastWriteTimeUtc(folder), TimeSpan.Zero), "无法读取", 0, 0, false, error.Message));
             }
         }
-        return entries.ToArray();
+        return entries.OrderByDescending(entry => entry.CreatedAt).ToArray();
     }
 
     internal static ModEnvironmentSnapshotRestoreResult Restore(
@@ -567,6 +584,7 @@ internal static class ModEnvironmentSnapshots
             Directory.CreateDirectory(previousRoot);
 
             bool success = false;
+            bool preserveStage = false;
             try
             {
                 CheckFreeSpace(root, snapshot.TotalBytes);
@@ -579,6 +597,10 @@ internal static class ModEnvironmentSnapshots
 
                 // A complete safety snapshot is committed before the first live directory move.
                 var safety = CreateLocked(root, dataRoot, "恢复前自动保护");
+                var afterSafety = PreviewLocked(root, dataRoot, snapshotId);
+                if (!afterSafety.Token.Equals(expectedToken, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("创建恢复前保护快照期间，当前 MOD 环境发生变化。已保留保护快照，请重新预览。");
+
                 string[] trees = ["mods", "disabled"];
                 var movedOld = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var movedNew = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -640,9 +662,12 @@ internal static class ModEnvironmentSnapshots
                     catch (Exception error) { rollbackError = error; }
 
                     if (rollbackError is not null)
+                    {
+                        preserveStage = true;
                         throw new IOException("环境恢复失败，自动回滚也未能完成。请保留此目录并勿手动删除：" +
                             stageRoot + "。恢复错误：" + restoreError.Message + "；回滚错误：" + rollbackError.Message,
                             new AggregateException(restoreError, rollbackError));
+                    }
                     throw;
                 }
 
@@ -653,9 +678,7 @@ internal static class ModEnvironmentSnapshots
             }
             finally
             {
-                if (success) TryDeleteTree(stageRoot);
-                else if (Directory.Exists(stageRoot) && !Directory.EnumerateFileSystemEntries(stageRoot).Any())
-                    TryDeleteTree(stageRoot);
+                if (success || !preserveStage) TryDeleteTree(stageRoot);
             }
         });
     }
