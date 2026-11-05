@@ -54,6 +54,14 @@ public partial class MainWindow
             DependencyMetric(report.Cycles.Length.ToString(), "循环依赖")), padding: 14));
         Space(root, 12);
 
+        if (modInventoryDirty)
+        {
+            root.Children.Add(Card(V(
+                T("MOD 文件发生变化，当前依赖图可能已过期", 14, gold, true),
+                T("此页基于上一次稳定扫描结果。点击「重新扫描」后，才会使用最新的本地 MOD 清单重新分析。", 12, muted)), padding: 14));
+            Space(root, 10);
+        }
+
         root.Children.Add(Card(V(
             T("分析范围与限制", 14, ink, true),
             T("仅读取本地 MOD 清单中的必需 dependencies，以及修复补丁库中明确声明的必需 MOD。optional 前置不会作为阻断项。未声明的运行时依赖、加载顺序要求和作者文档中的隐含条件无法仅凭清单推断。", 12, muted),
@@ -80,11 +88,19 @@ public partial class MainWindow
         }
         root.Children.Add(filters);
 
-        if (report.Cycles.Length > 0)
+        var visibleCycles = report.Cycles.Where(cycle => filter switch
+        {
+            "仅显示已满足" => false,
+            "仅显示启用 MOD 异常" => report.Edges.Any(edge =>
+                edge.IsCycle && edge.IsActiveIssue &&
+                cycle.ModIds.Contains(edge.Dependent.Id, StringComparer.OrdinalIgnoreCase)),
+            _ => true
+        }).ToArray();
+        if (visibleCycles.Length > 0)
         {
             var cyclePanel = V(T("循环依赖", 16, ink, true),
                 T("以下 MOD 形成闭环。管理器不会擅自决定应该移除哪一条依赖。", 12, muted));
-            foreach (var cycle in report.Cycles)
+            foreach (var cycle in visibleCycles)
             {
                 cyclePanel.Children.Add(Card(V(
                     T(string.Join("  ↔  ", cycle.Names), 14, gold, true),
