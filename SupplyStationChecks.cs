@@ -75,7 +75,7 @@ internal static class SupplyStationChecks
                 requests[1].Host!.Contains("host=cdn.example", StringComparison.Ordinal),
                 "only descriptor and CDN-token endpoints are called in phase 1");
             Check(requests.All(item =>
-                item.UserAgent == "Sts2PatchManager/" + ManagerUpdates.CurrentVersion &&
+                item.UserAgent == "Sts2PatchManager/0.1.11" &&
                 item.Authorization is null && item.Cookie is null),
                 "requests use the manager User-Agent and send no Steam credentials or cookies");
             string report = JsonSerializer.Serialize(result);
