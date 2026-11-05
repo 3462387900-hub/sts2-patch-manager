@@ -49,12 +49,10 @@ internal sealed class WorkshopModInstaller : IDisposable
     private const long MaxPayloadBytes = 300L * 1024 * 1024;
     private static readonly char[] InvalidWindowsCharacters = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
-    private readonly string dataRoot;
     private readonly HttpMessageHandler? handler;
 
-    public WorkshopModInstaller(string dataRoot, HttpMessageHandler? handler = null)
+    public WorkshopModInstaller(HttpMessageHandler? handler = null)
     {
-        this.dataRoot = Path.GetFullPath(dataRoot);
         this.handler = handler;
     }
 
@@ -150,7 +148,9 @@ internal sealed class WorkshopModInstaller : IDisposable
             throw new InvalidOperationException("请先完全退出游戏，再下载并准备 MOD。");
 
         InventorySnapshot initialInventory = CaptureInventory(root);
-        string stagingRoot = Path.Combine(dataRoot, "尖塔修补站_创意工坊暂存");
+        // Keep the final install payload on the same volume as the game so the
+        // reviewed directory swap remains atomic even when the game is on D:/E:.
+        string stagingRoot = GameEnvironment.Child(root, "尖塔修补站_创意工坊暂存");
         Directory.CreateDirectory(stagingRoot);
         GameEnvironment.NoLinks(stagingRoot);
 
@@ -494,7 +494,11 @@ internal sealed class WorkshopModInstaller : IDisposable
             if (!Directory.Exists(workspace))
                 return;
             GameEnvironment.NoLinks(workspace);
+            string? parent = Path.GetDirectoryName(Path.GetFullPath(workspace));
             Directory.Delete(workspace, recursive: true);
+            if (parent is not null && Directory.Exists(parent) &&
+                !Directory.EnumerateFileSystemEntries(parent).Any())
+                Directory.Delete(parent);
         }
         catch (IOException)
         {
