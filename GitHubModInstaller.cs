@@ -384,8 +384,8 @@ internal sealed class GitHubModInstaller : IDisposable
      }catch(JsonException){return false;}
     }).ToArray();
    Require(manifests.Length==1,"备份 MOD 的 ID 不匹配，或没有唯一的顶层 MOD 清单。");
-   string manifestVersion;bool requiresDll,requiresPck;
-   ManifestId(manifests[0],out manifestVersion,out requiresDll,out requiresPck);
+   bool requiresDll,requiresPck;
+   ManifestId(manifests[0],out _,out requiresDll,out requiresPck);
    var backupPaths=Directory.GetFiles(backup,"*",SearchOption.AllDirectories);
    Require((!requiresDll||backupPaths.Any(path=>path.EndsWith(".dll",StringComparison.OrdinalIgnoreCase)))&&
     (!requiresPck||backupPaths.Any(path=>path.EndsWith(".pck",StringComparison.OrdinalIgnoreCase))),
