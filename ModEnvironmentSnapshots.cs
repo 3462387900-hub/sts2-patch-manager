@@ -537,34 +537,38 @@ internal static class ModEnvironmentSnapshots
     internal static ModEnvironmentSnapshotEntry[] List(string gameRoot, string dataRoot)
     {
         string root = GameEnvironment.Root(gameRoot);
-        string store = SnapshotStore(root, dataRoot);
-        if (!Directory.Exists(store)) return [];
-        GameEnvironment.NoLinks(store);
-        var entries = new List<ModEnvironmentSnapshotEntry>();
-        foreach (string folder in Directory.EnumerateDirectories(store)
-            .OrderByDescending(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
+        return GameEnvironment.WithLock(root, () =>
         {
-            string id = Path.GetFileName(folder);
-            if (!IdPattern.IsMatch(id)) continue;
-            try
+            string store = SnapshotStore(root, dataRoot);
+            if (!Directory.Exists(store)) return [];
+            GameEnvironment.NoLinks(store);
+            var entries = new List<ModEnvironmentSnapshotEntry>();
+            foreach (string folder in Directory.EnumerateDirectories(store)
+                .OrderByDescending(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
             {
-                GameEnvironment.NoLinks(folder);
-                string metadataPath = BundleInstaller.Child(folder, "snapshot.json");
-                if (!File.Exists(metadataPath) || new FileInfo(metadataPath).Length > MaxMetadataBytes)
-                    throw new InvalidDataException("快照索引缺失或超过安全大小。");
-                var snapshot = JsonSerializer.Deserialize<ModEnvironmentSnapshot>(File.ReadAllText(metadataPath))
-                    ?? throw new InvalidDataException("快照索引无法读取。");
-                ValidateMetadata(root, folder, snapshot);
-                entries.Add(new(id, snapshot.CreatedAt, snapshot.Purpose, snapshot.Files.Length,
-                    snapshot.TotalBytes, true, null));
+                string id = Path.GetFileName(folder);
+                if (!IdPattern.IsMatch(id)) continue;
+                try
+                {
+                    GameEnvironment.NoLinks(folder);
+                    string metadataPath = BundleInstaller.Child(folder, "snapshot.json");
+                    if (!File.Exists(metadataPath) || new FileInfo(metadataPath).Length > MaxMetadataBytes)
+                        throw new InvalidDataException("快照索引缺失或超过安全大小。");
+                    var snapshot = JsonSerializer.Deserialize<ModEnvironmentSnapshot>(File.ReadAllText(metadataPath))
+                        ?? throw new InvalidDataException("快照索引无法读取。");
+                    ValidateMetadata(root, folder, snapshot);
+                    entries.Add(new(id, snapshot.CreatedAt, snapshot.Purpose, snapshot.Files.Length,
+                        snapshot.TotalBytes, true, null));
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or
+                                               InvalidDataException or InvalidOperationException or ArgumentException or OverflowException)
+                {
+                    entries.Add(new(id, new DateTimeOffset(Directory.GetLastWriteTimeUtc(folder), TimeSpan.Zero),
+                        "无法读取", 0, 0, false, error.Message));
+                }
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or
-                                           InvalidDataException or InvalidOperationException or ArgumentException or OverflowException)
-            {
-                entries.Add(new(id, new DateTimeOffset(Directory.GetLastWriteTimeUtc(folder), TimeSpan.Zero), "无法读取", 0, 0, false, error.Message));
-            }
-        }
-        return entries.OrderByDescending(entry => entry.CreatedAt).ToArray();
+            return entries.OrderByDescending(entry => entry.CreatedAt).ToArray();
+        });
     }
 
     internal static ModEnvironmentSnapshotRestoreResult Restore(
