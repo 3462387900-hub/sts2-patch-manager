@@ -520,6 +520,7 @@ public partial class MainWindow
     }
     else ShowMods();
    }
+   else if(page=="模组管理"&&currentVisit?.Key=="mod-dependencies")ShowDependencyGraph();
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
   }
@@ -990,10 +991,12 @@ public partial class MainWindow
   var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
   var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
   workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
-  header.Children.Add(H(refresh,workshopDownload,Btn("打开模组目录",()=>{
-   string directory=Path.Combine(selectedInstallRoot,"mods");
-   if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
-  },"Ghost")));
+  header.Children.Add(H(refresh,workshopDownload,
+   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost"),
+   Btn("打开模组目录",()=>{
+    string directory=Path.Combine(selectedInstallRoot,"mods");
+    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
+   },"Ghost")));
   Space(header,4);
   header.Children.Add(T(modStatus,12,muted));Space(header,7);
   if(modInventoryDirty)
@@ -1071,7 +1074,7 @@ public partial class MainWindow
   var shownCount=T("",12,muted);shownCount.VerticalAlignment=VerticalAlignment.Center;
   DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
   var filters=new WrapPanel();
-  foreach(var name in new[]{"全部","启用","停用","有更新","有问题"})
+  foreach(var name in new[]{"全部","启用","停用","有更新","有问题","依赖异常"})
   {
    string selected=name;
    var button=Btn(name,()=>{CaptureModListOffset();modListOffset=0;modFilter=selected;ShowMods();},
@@ -1096,6 +1099,7 @@ public partial class MainWindow
   }
   header.Children.Add(selectionBar);
 
+  var dependencyReport=modInventory==null?null:ModDependencyGraph.Analyze(modInventory);
   var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
    if(ModPresentation.IsIndependentPatch(mod))return "";
    var context=new List<string>();
@@ -1121,7 +1125,8 @@ public partial class MainWindow
     context.Add(workshopResult==null?"创意工坊：已关联 · 待检查":"创意工坊："+workshopResult.Status);
    }
    return string.Join(" · ",context);
-  });
+  },mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
+   mod=>dependencyReport?.Summary(mod.Id).HasIssue??false);
   ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
@@ -1166,7 +1171,7 @@ public partial class MainWindow
     .Count(r=>chosenModFolders.Contains(r.Mod.Folder));
    selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
-   foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch})
+   foreach(var button in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch,enableBatch,disableBatch,clearBatch})
     button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
    bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&WorkshopSources().Get(m.Id).HasValue);
    bool hasWorkshopUpdate=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
@@ -1314,7 +1319,34 @@ public partial class MainWindow
     Space(root,18);
    }
   }
-  root.Children.Add(T("声明的前置模组",17,ink,true));Space(root,8);root.Children.Add(T(mod.Dependencies.Length==0?"清单未声明前置；这不代表一定没有其他依赖。":string.Join("\n",mod.Dependencies.Select(d=>d.Id+(d.Minimum.Length>0?" ≥ "+d.Minimum:"")+(d.Maximum.Length>0?" ≤ "+d.Maximum:""))),13,muted));Space(root,20);
+  var dependencyReport=ModDependencyGraph.Analyze(modInventory!);
+  var dependencySummary=dependencyReport.Summary(mod.Id);
+  root.Children.Add(T("依赖关系",17,ink,true));Space(root,8);
+  root.Children.Add(T(dependencySummary.Label,13,dependencySummary.HasIssue?gold:muted,true));
+  if(dependencyReport.Edges.Any(edge=>edge.Dependent.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)))
+  {
+   foreach(var edge in dependencyReport.Edges.Where(edge=>edge.Dependent.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)))
+   {
+    string status=edge.IsCycle?"循环依赖":ModDependencyGraphPresentation.Status(edge.Status);
+    root.Children.Add(T(edge.DependencyId+" · "+status+"\n"+edge.Message,12,edge.IsIssue?gold:muted));
+   }
+  }
+  else root.Children.Add(T("清单未声明必需前置；这不代表一定没有其他运行时依赖。",12,muted));
+  var incomingDependencies=dependencyReport.Edges.Where(edge=>
+   edge.DependencyId.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)).ToArray();
+  Space(root,7);
+  root.Children.Add(T("依赖此 MOD 的其他项目",14,ink,true));
+  if(incomingDependencies.Length==0)
+   root.Children.Add(T("没有在当前清单或修复补丁规则中发现其他 MOD 依赖它。",12,muted));
+  else
+  {
+   root.Children.Add(T("共 "+incomingDependencies.Length+" 条依赖关系；停用前请特别留意仍处于启用状态的项目。",12,muted));
+   foreach(var edge in incomingDependencies)
+    root.Children.Add(T(edge.Dependent.Name+" · "+(edge.Dependent.Enabled?"已启用":"已停用")+
+     (edge.FromPatchRule?" · 修复补丁兼容规则":" · MOD 清单声明"),12,
+     edge.Dependent.Enabled?gold:muted));
+  }
+  root.Children.Add(Btn("查看完整依赖关系图",()=>ShowDependencyGraph(),"Ghost"));Space(root,20);
   if(ModPresentation.IsIndependentPatch(mod))
   {
    root.Children.Add(H(Badge("健康："+LifecycleTag(mod.Id),muted),

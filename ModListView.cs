@@ -5,7 +5,7 @@ using System.Windows.Media;
 namespace SpirePatch;
 
 // Immutable, UI-only data. Safe enable/disable still goes through ModManager.Preview/Apply.
-internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason,string GitHubText="")
+internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason,string GitHubText="",string DependencyText="",bool DependencyIssue=false)
 {
  public bool Selected{get;set;}
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
@@ -19,17 +19,21 @@ internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReas
 
 internal static class ModListView
 {
- internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,Func<ManagedMod,string>? github=null)=>
+ internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,
+  Func<ManagedMod,string>? github=null,Func<ManagedMod,string>? dependency=null,
+  Func<ManagedMod,bool>? dependencyIssue=null)=>
   inventory.Mods.Select(mod=>new ModListRow(mod,
    ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
-   ModManager.BlockReason(root,mod,inventory),github?.Invoke(mod)??""))
+   ModManager.BlockReason(root,mod,inventory),github?.Invoke(mod)??"",
+   dependency?.Invoke(mod)??"未分析",dependencyIssue?.Invoke(mod)??false))
   .OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
 
  internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query)=>
   rows.Where(row=>row.IsFix==(section=="修复补丁")&&
    (state=="全部"||(state=="启用"&&row.Mod.Enabled)||(state=="停用"&&!row.Mod.Enabled)||
    (state=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
-   (state=="有问题"&&row.BlockReason!=null))&&
+   (state=="有问题"&&row.BlockReason!=null)||
+   (state=="依赖异常"&&row.DependencyIssue))&&
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
   .ToArray();
 
@@ -166,9 +170,9 @@ public sealed class ModRowControl : Border
   health.Text=item.HealthText;
   health.Visibility=item.IsFix?Visibility.Visible:Visibility.Collapsed;
   health.ToolTip=item.HealthText;
-  context.Text=string.Join("  ·  ",new[]{item.WarningText,item.GitHubText}.Where(t=>!string.IsNullOrWhiteSpace(t)));
-  context.ToolTip=item.BlockReason??(string.IsNullOrWhiteSpace(item.GitHubText)?null:item.GitHubText);
-  context.Foreground=item.BlockReason!=null&&!item.IsDependencyProtection?Paint("#F0C47C"):Paint("#A8BCD4");
+  context.Text=string.Join("  ·  ",new[]{item.WarningText,item.GitHubText,item.DependencyText}.Where(t=>!string.IsNullOrWhiteSpace(t)));
+  context.ToolTip=string.Join("\n",new[]{item.BlockReason,item.GitHubText,item.DependencyText}.Where(t=>!string.IsNullOrWhiteSpace(t)));
+  context.Foreground=(item.BlockReason!=null&&!item.IsDependencyProtection)||item.DependencyIssue?Paint("#F0C47C"):Paint("#A8BCD4");
   context.Visibility=context.Text.Length==0?Visibility.Collapsed:Visibility.Visible;
  }
 }
