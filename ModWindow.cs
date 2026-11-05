@@ -1463,7 +1463,7 @@ public partial class MainWindow
   }
   catch(Exception e)
   {
-   modInventoryDirty=true;
+   modInventoryDirty=imported;
    modStatus=imported?"ZIP 已导入，但后续处理失败："+e.Message:"MOD 导入未完成："+e.Message;
    toast.Text=modStatus;
   }
