@@ -56,6 +56,12 @@ internal sealed class WorkshopModSources
             ? id
             : null;
 
+    public string? ModIdFor(ulong workshopId)
+    {
+        string value = workshopId.ToString(CultureInfo.InvariantCulture);
+        return bindings.FirstOrDefault(pair => pair.Value == value).Key;
+    }
+
     public void Bind(string modId, ulong workshopId)
     {
         if (string.IsNullOrWhiteSpace(modId) || modId.Length > 256)
