@@ -34,8 +34,12 @@ jobs:
             '.\SpireSupplyStationProbe.exe 3737335127 "$env:TEMP\spire-supply-station-3737335127.json"'
             'Get-Content "$env:TEMP\spire-supply-station-3737335127.json" -Raw'
             ''
+            '第二阶段 A：仅下载并解析 Manifest，不下载 Chunk：'
+            '.\SpireSupplyStationProbe.exe --manifest-check 3737335127 "$env:TEMP\spire-supply-station-manifest-3737335127.json"'
+            'Get-Content "$env:TEMP\spire-supply-station-manifest-3737335127.json" -Raw'
+            ''
             '工具会使用 Sts2PatchManager/{VERSION} 作为 User-Agent。'
-            '仅验证下载描述与 UGC CDN token，不下载 MOD、不修改游戏目录。'
+            'Manifest 模式只请求授权 CDN Manifest，不下载 MOD Chunk、不修改游戏目录。'
             '无论成功失败，都会尝试生成 JSON 报告。'
           ) -join [Environment]::NewLine
           $instructions = $instructions.Replace('{VERSION}', $managerVersion)
