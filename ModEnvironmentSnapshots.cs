@@ -96,11 +96,18 @@ internal static class ModEnvironmentSnapshots
         catch (DirectoryNotFoundException) { return false; }
     }
 
-    static TreeScan ScanTree(string root, string tree)
+    static TreeScan ScanTree(string root, string tree) =>
+        ScanDirectory(tree, TreePath(root, tree));
+
+    static TreeScan ScanPayloadTree(string folder, string tree) =>
+        ScanDirectory(tree, PayloadPath(folder, tree));
+
+    static TreeScan ScanDirectory(string tree, string source)
     {
-        string source = TreePath(root, tree);
         if (!Exists(source))
             return new(tree, false, [], []);
+        if ((File.GetAttributes(source) & FileAttributes.Directory) == 0)
+            throw new InvalidDataException("MOD 目录位置被同名文件占用：" + source);
 
         var directories = new List<ModEnvironmentSnapshotDirectory>();
         var files = new List<ModEnvironmentSnapshotFile>();
@@ -292,7 +299,7 @@ internal static class ModEnvironmentSnapshots
             // Verify the copied payload before publishing the snapshot metadata.
             foreach (var scan in scans)
             {
-                var copied = ScanTree(temporary, scan.Name);
+                var copied = ScanPayloadTree(temporary, scan.Name);
                 if (!SameTree(scan, copied))
                     throw new InvalidDataException("快照复制后的目录结构或文件校验不一致：" + scan.Name);
             }
@@ -439,7 +446,7 @@ internal static class ModEnvironmentSnapshots
             }
             if (!Directory.Exists(payload))
                 throw new InvalidDataException("快照内容目录缺失：" + expected.Name);
-            var actual = ScanTree(folder, expected.Name);
+            var actual = ScanPayloadTree(folder, expected.Name);
             if (!SameTree(expected, actual))
                 throw new InvalidDataException("快照内容与索引不一致或已损坏：" + expected.Name);
         }
@@ -532,9 +539,9 @@ internal static class ModEnvironmentSnapshots
                     snapshot.TotalBytes, true, null));
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or
-                                           InvalidDataException or ArgumentException or OverflowException)
+                                           InvalidDataException or InvalidOperationException or ArgumentException or OverflowException)
             {
-                entries.Add(new(id, Directory.GetLastWriteTimeUtc(folder), "无法读取", 0, 0, false, error.Message));
+                entries.Add(new(id, new DateTimeOffset(Directory.GetLastWriteTimeUtc(folder), TimeSpan.Zero), "无法读取", 0, 0, false, error.Message));
             }
         }
         return entries.ToArray();
@@ -670,12 +677,20 @@ internal static class ModEnvironmentSnapshots
 
     static void TryDeleteTree(string path)
     {
+        try { DeleteTree(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    static void DeleteTree(string path)
+    {
         if (!Directory.Exists(path)) return;
         GameEnvironment.NoLinks(path);
         foreach (string entry in Directory.EnumerateFileSystemEntries(path))
         {
             GameEnvironment.NoLinks(entry);
-            if (Directory.Exists(entry)) TryDeleteTree(entry);
+            if (Directory.Exists(entry)) DeleteTree(entry);
             else
             {
                 try { File.SetAttributes(entry, FileAttributes.Normal); } catch (IOException) { }
