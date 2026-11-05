@@ -60,7 +60,7 @@ try
         Console.WriteLine($"MOD 标题：{assembly.Title}");
         Console.WriteLine($"Manifest ID：{assembly.ManifestId}");
         Console.WriteLine($"Chunk 校验：{assembly.ProcessedChunks}/{assembly.ChunkCount}");
-        Console.WriteLine($"文件 SHA-1 校验：{assembly.FileCount}/{assembly.FileCount}");
+        Console.WriteLine($"文件 SHA-1 校验：{(assembly.FileSha1Verified ? "全部通过" : "未通过")}");
         Console.WriteLine($"还原文件总大小：{assembly.TotalFileBytes:N0} 字节");
         Console.WriteLine($"独立输出目录：{assembly.OutputDirectory}");
         Console.WriteLine("Manifest 签名验证：未执行；游戏分支验证：未执行；安装到游戏目录：未执行");
