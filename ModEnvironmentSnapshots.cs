@@ -302,6 +302,9 @@ internal static class ModEnvironmentSnapshots
                 var copied = ScanPayloadTree(temporary, scan.Name);
                 if (!SameTree(scan, copied))
                     throw new InvalidDataException("快照复制后的目录结构或文件校验不一致：" + scan.Name);
+                var sourceAfterCopy = ScanTree(root, scan.Name);
+                if (!SameTree(scan, sourceAfterCopy))
+                    throw new InvalidDataException("创建快照期间源 MOD 目录发生变化，已取消并保留原文件：" + scan.Name);
             }
 
             var snapshot = new ModEnvironmentSnapshot(
