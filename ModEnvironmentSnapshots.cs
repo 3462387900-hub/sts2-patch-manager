@@ -49,6 +49,8 @@ internal static class ModEnvironmentSnapshots
     static readonly Regex IdPattern = new(@"\A[0-9a-f]{32}\z", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static readonly Regex HashPattern = new(@"\A[0-9a-f]{64}\z", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    static string? recoveryNotice;
+    internal static string? TakeRecoveryNotice() => Interlocked.Exchange(ref recoveryNotice, null);
 
     sealed record TreeScan(
         string Name, bool Present,
@@ -732,7 +734,12 @@ internal static class ModEnvironmentSnapshots
                     continue;
                 }
 
-                try { RecoverStage(root, dataRoot, stageRoot, journal); }
+                try
+                {
+                    RecoverStage(root, dataRoot, stageRoot, journal);
+                    Interlocked.Exchange(ref recoveryNotice,
+                        "检测到上次 MOD 环境恢复中断，已自动回滚到恢复前环境。");
+                }
                 catch (Exception error)
                 {
                     throw new IOException("检测到上次 MOD 环境恢复未完成，自动回滚未能完成。请保留此目录，不要手动删除：" +
