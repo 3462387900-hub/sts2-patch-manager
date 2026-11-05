@@ -27,7 +27,7 @@ internal sealed record ModEnvironmentSnapshotPreview(
     string SnapshotId, DateTimeOffset CreatedAt, string Purpose,
     int CurrentFiles, int TargetFiles, int AddedFiles, int ChangedFiles,
     int RemovedFiles, int AddedDirectories, int RemovedDirectories,
-    long TargetBytes, string Token);
+    long TargetBytes, string Token, bool CurrentModsPresent, bool CurrentDisabledPresent);
 
 internal sealed record ModEnvironmentSnapshotRestoreResult(
     string SafetySnapshotId, int RestoredFiles, int RemovedFiles,
@@ -54,6 +54,13 @@ internal static class ModEnvironmentSnapshots
         string Name, bool Present,
         ModEnvironmentSnapshotDirectory[] Directories,
         ModEnvironmentSnapshotFile[] Files);
+
+    sealed record ModEnvironmentRestoreJournal(
+        int SchemaVersion, string GameRoot, string StageId,
+        string SnapshotId, string SafetySnapshotId,
+        bool OldModsPresent, bool OldDisabledPresent,
+        bool TargetModsPresent, bool TargetDisabledPresent,
+        string Status, DateTimeOffset StartedAt);
 
     static string NormalizeRoot(string root) => Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
     static string RootKey(string root) =>
@@ -528,7 +535,9 @@ internal static class ModEnvironmentSnapshots
         return new(id, snapshot.CreatedAt, snapshot.Purpose,
             current.Files.Length, snapshot.Files.Length, added, changed, removed,
             addedDirectories, removedDirectories, snapshot.TotalBytes,
-            Token(root, id, metadataHash, current));
+            Token(root, id, metadataHash, current),
+            current.Trees.Single(tree => tree.Name == "mods").Present,
+            current.Trees.Single(tree => tree.Name == "disabled").Present);
     }
 
     internal static ModEnvironmentSnapshotPreview PreviewRestore(string gameRoot, string dataRoot, string id)
