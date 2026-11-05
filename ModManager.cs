@@ -80,7 +80,9 @@ public static class ModManager
  public static string[] DisabledIds(string root)=>Stored(root).Select(x=>x.Record.ModId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
  public static ModInventory Scan(string path)
  {
-  string root=GameEnvironment.Root(path);var mods=new List<ManagedMod>();var issues=new List<string>();
+  string root=GameEnvironment.Root(path);
+   ModEnvironmentSnapshots.RecoverInterrupted(root,Path.Combine(AppContext.BaseDirectory,"数据"));
+   var mods=new List<ManagedMod>();var issues=new List<string>();
   void Read(string directory,bool enabled,string? slot=null,string? original=null){
    try{foreach(var file in Files(directory).Where(f=>f.EndsWith(".json",StringComparison.OrdinalIgnoreCase))){try{var mod=ReadManifest(file,enabled,slot,original);if(mod!=null)mods.Add(mod);}catch(Exception e)when(e is InvalidDataException or IOException or JsonException or InvalidOperationException or UnauthorizedAccessException){issues.Add("无法核对清单 "+file+"："+e.Message);}}}
    catch(Exception e)when(e is InvalidDataException or IOException or InvalidOperationException or UnauthorizedAccessException){issues.Add(e.Message);}

@@ -333,7 +333,7 @@ internal sealed class GitHubModInstaller : IDisposable
   });
  }
  public async Task<GitHubModInstallResult> InstallAsync(string gameRoot,ManagedMod mod,
-  GitHubModPackage package,CancellationToken ct=default)
+  GitHubModPackage package,CancellationToken ct=default,Func<Task>? beforeCommit=null)
  {
   ValidatePackage(package);
   Require(IsNewer(package.Tag,mod.Version),"只允许安装高于本地版本的正式版本。");
@@ -351,6 +351,8 @@ internal sealed class GitHubModInstaller : IDisposable
    await DownloadAsync(package,archive,ct);
    ct.ThrowIfCancellationRequested();
    string payload=ExtractAndVerify(archive,Path.Combine(workspace,"extract"),mod.Id,package.Tag);
+   ct.ThrowIfCancellationRequested();
+   if(beforeCommit is not null)await beforeCommit();
    ct.ThrowIfCancellationRequested();
    return Commit(root,mod,payload,package.Tag,snapshot);
   }

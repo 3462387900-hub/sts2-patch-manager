@@ -222,8 +222,16 @@ public partial class MainWindow
     throw new InvalidOperationException("游戏目录已切换，已取消本次安装。");
    transactionWriting=true;
    WorkshopModInstallResult result;
+   string? safetySnapshotId=null;
    try
    {
+    if(!prepared.IsUnchanged)
+    {
+     toast.Text="正在创建安装前完整环境快照…";
+     var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+      gameRoot,installer.DataRoot,"更新前自动保护"));
+     safetySnapshotId=safety.Id;
+    }
     toast.Text=prepared.IsUpdate?"正在备份旧版本并安装创意工坊 MOD…":"正在安装创意工坊 MOD…";
     result=await Task.Run(()=>WorkshopModInstaller.Commit(gameRoot,prepared));
    }
@@ -250,7 +258,8 @@ public partial class MainWindow
      :"已从创意工坊更新 "+result.ModName+"。旧版本备份："+result.BackupFolder;
     toast.Text=(result.BackupFolder==null
      ?"创意工坊 MOD 安装成功："+result.ModName
-     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。")+(sourceSaveWarning??"");
+     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。")+
+     (safetySnapshotId==null?"":"；更新前环境快照："+safetySnapshotId)+(sourceSaveWarning??"");
     InvalidateLifecycle("创意工坊 MOD 已安装或更新，现有修复补丁健康结果需要重新检查。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    }
@@ -336,11 +345,19 @@ public partial class MainWindow
    try
    {
     toast.Text="正在下载、验证并安装："+selected.FileName;
-    var result=await installerSource.InstallAsync(gameRoot,mod,selected);
+    string? safetySnapshotId=null;
+    var result=await installerSource.InstallAsync(gameRoot,mod,selected,
+     beforeCommit:async()=>{
+      toast.Text="安装包已校验，正在创建更新前完整环境快照…";
+      var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+       gameRoot,installer.DataRoot,"更新前自动保护"));
+      safetySnapshotId=safety.Id;
+      toast.Text="更新前环境已保存，正在替换 MOD…";
+     });
     changed=true;
     orphanPatchNotice="已更新 "+mod.Name+" 至 "+result.Version+
-     "。旧版本备份："+result.BackupFolder+"；可以在 MOD 详情中恢复。";
-    toast.Text="MOD 更新成功："+mod.Name+" → "+result.Version;
+     "。旧版本备份："+result.BackupFolder+"；环境快照："+safetySnapshotId+"。";
+    toast.Text="MOD 更新成功："+mod.Name+" → "+result.Version+"；更新前快照："+safetySnapshotId;
     InvalidateLifecycle("MOD 已更新，现有修复补丁健康结果需要重新检查。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    }
@@ -437,6 +454,7 @@ public partial class MainWindow
   if(selectedInstallRoot==null){LocateGame();return;}
   string root=selectedInstallRoot;
   int watchVersion=modChangeVersion;
+  string? recoveryNotice=null;
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
   if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
   try
@@ -449,6 +467,7 @@ public partial class MainWindow
     return;
    }
    if(modInventoryDirty)githubDiscovery?.ClearCache();
+   recoveryNotice=ModEnvironmentSnapshots.TakeRecoveryNotice();
    modInventory=inventory;modInventoryDirty=false;
    modStatus=$"共 {inventory.Mods.Count} 项 · {inventory.Mods.Count(m=>m.Enabled)} 项启用 · {inventory.Mods.Count(m=>!m.Enabled)} 项停用";
    // Only a complete, stable inventory is eligible for orphan-patch automation.
@@ -508,6 +527,8 @@ public partial class MainWindow
   finally
   {
    busy=false;
+   if(recoveryNotice!=null&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+    toast.Text=recoveryNotice;
    if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
@@ -521,6 +542,7 @@ public partial class MainWindow
     else ShowMods();
    }
    else if(page=="模组管理"&&currentVisit?.Key=="mod-dependencies")ShowDependencyGraph();
+   else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
   }
@@ -794,8 +816,16 @@ public partial class MainWindow
 
      transactionWriting=true;
      WorkshopModInstallResult result;
+     string? safetySnapshotId=null;
      try
      {
+      if(!prepared.IsUnchanged)
+      {
+       toast.Text="正在为 "+mod.Name+" 创建更新前完整环境快照…";
+       var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+        root,installer.DataRoot,"更新前自动保护"));
+       safetySnapshotId=safety.Id;
+      }
       toast.Text=prepared.IsUnchanged?"正在核对本地 MOD 并刷新版本基线…":"正在备份旧版本并更新："+mod.Name;
       result=await Task.Run(()=>WorkshopModInstaller.Commit(root,prepared));
      }
@@ -818,7 +848,8 @@ public partial class MainWindow
      {
       updated++;changed=true;completed++;
       progress.Record(mod.Name,"成功",
-       "已更新至 "+result.Version+"；旧版本备份："+(result.BackupFolder??"未返回备份路径")+sourceSaveWarning,completed);
+       "已更新至 "+result.Version+"；旧版本备份："+(result.BackupFolder??"未返回备份路径")+
+        (safetySnapshotId==null?"":"；环境快照："+safetySnapshotId)+sourceSaveWarning,completed);
      }
      else
      {
@@ -992,7 +1023,9 @@ public partial class MainWindow
   var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
   workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
   header.Children.Add(H(refresh,workshopDownload,
-   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost"),
+   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost")));
+  header.Children.Add(H(
+   Btn("环境快照",ShowModEnvironmentSnapshots,"Ghost"),
    Btn("打开模组目录",()=>{
     string directory=Path.Combine(selectedInstallRoot,"mods");
     if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";

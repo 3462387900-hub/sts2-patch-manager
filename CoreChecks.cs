@@ -50,6 +50,64 @@ public static class CoreChecks
   var duplicate=Path.Combine(root,"mods","duplicate");Directory.CreateDirectory(duplicate);File.Copy(Path.Combine(mod,"manifest.json"),Path.Combine(duplicate,"manifest.json"));Check(Catalog.Scan(root).Issues.Any(i=>i.Contains("重复")),"duplicate mod IDs are reported");
   Check(File.ReadAllText(Path.Combine(mod,"Act4FinalAscent.dll"))=="unknown build","scanner leaves game files unchanged");
   var settings=Path.Combine(root,"manager-data");
+  string disabledSlot=Path.Combine(root,ModManager.StorageName,"fixture-slot");
+  Directory.CreateDirectory(Path.Combine(disabledSlot,"内容"));
+  File.WriteAllText(Path.Combine(disabledSlot,"记录.json"),"""{"ModId":"fixture.disabled","Original":"mods/fixture-disabled","Files":{},"Status":"disabled"}""");
+  File.WriteAllText(Path.Combine(disabledSlot,"内容","disabled.dat"),"disabled payload");
+  var environmentSnapshot=ModEnvironmentSnapshots.Create(root,settings,"CoreChecks 快照");
+  string dllPath=Path.Combine(mod,"Act4FinalAscent.dll");
+  File.WriteAllText(dllPath,"modified after snapshot");
+  string extraPath=Path.Combine(mod,"extra-after-snapshot.txt");
+  File.WriteAllText(extraPath,"temporary extra file");
+  File.Delete(Path.Combine(disabledSlot,"记录.json"));
+  var restorePreview=ModEnvironmentSnapshots.PreviewRestore(root,settings,environmentSnapshot.Id);
+  Check(restorePreview.ChangedFiles>=1&&restorePreview.AddedFiles>=1&&restorePreview.RemovedFiles>=1,
+   "environment snapshot preview detects changed, missing and extra files");
+  File.WriteAllText(dllPath,"changed again after preview");
+  bool stalePreviewRejected=false;
+  try{ModEnvironmentSnapshots.Restore(root,settings,environmentSnapshot.Id,restorePreview.Token);}
+  catch(InvalidOperationException){stalePreviewRejected=true;}
+  Check(stalePreviewRejected&&File.ReadAllText(dllPath)=="changed again after preview"&&File.Exists(extraPath),
+   "environment restore refuses a stale preview without changing live MOD files");
+  File.WriteAllText(dllPath,"modified after snapshot");
+  var freshRestorePreview=ModEnvironmentSnapshots.PreviewRestore(root,settings,environmentSnapshot.Id);
+  var restoreResult=ModEnvironmentSnapshots.Restore(root,settings,environmentSnapshot.Id,freshRestorePreview.Token);
+  Check(File.ReadAllText(dllPath)=="unknown build"&&!File.Exists(extraPath)&&
+   File.Exists(Path.Combine(disabledSlot,"记录.json"))&&
+   File.ReadAllText(Path.Combine(disabledSlot,"内容","disabled.dat"))=="disabled payload",
+   "environment restore replaces active and disabled MOD trees with the exact snapshot contents");
+  var snapshotEntries=ModEnvironmentSnapshots.List(root,settings);
+  Check(snapshotEntries.Length==2&&snapshotEntries.Any(entry=>entry.Id==restoreResult.SafetySnapshotId&&
+   entry.Purpose=="恢复前自动保护"),
+   "environment restore automatically snapshots the pre-restore state");
+  var recoverySafety=ModEnvironmentSnapshots.Create(root,settings,"恢复日志测试");
+  string recoveryStageId=Guid.NewGuid().ToString("N");
+  string recoveryStage=Path.Combine(root,"尖塔修补站_环境恢复暂存",recoveryStageId);
+  string recoveryPrevious=Path.Combine(recoveryStage,"previous");
+  Directory.CreateDirectory(recoveryPrevious);
+  Directory.Move(Path.Combine(root,"mods"),Path.Combine(recoveryPrevious,"mods"));
+  Directory.CreateDirectory(Path.Combine(root,"mods"));
+  string partialTarget=Path.Combine(root,"mods","partial-target.txt");
+  File.WriteAllText(partialTarget,"interrupted target tree");
+  var recoveryJournal=new ModEnvironmentSnapshots.ModEnvironmentRestoreJournal(
+   1,Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar),recoveryStageId,
+   environmentSnapshot.Id,recoverySafety.Id,true,true,true,true,"new-moved-mods",DateTimeOffset.UtcNow);
+  ModEnvironmentSnapshots.WriteRestoreJournal(recoveryStage,recoveryJournal);
+  ModEnvironmentSnapshots.RecoverInterrupted(root,settings);
+  Check(File.ReadAllText(dllPath)=="unknown build"&&!File.Exists(partialTarget)&&!Directory.Exists(recoveryStage),
+   "interrupted environment restore is rolled back before MOD scanning");
+  string snapshotStore=Directory.GetDirectories(Path.Combine(settings,"MOD环境快照")).Single();
+  string snapshotPayload=Path.Combine(snapshotStore,environmentSnapshot.Id,"mods","renamed folder","Act4FinalAscent.dll");
+  File.WriteAllText(snapshotPayload,"tampered snapshot payload");
+  bool tamperedRejected=false;
+  try{ModEnvironmentSnapshots.PreviewRestore(root,settings,environmentSnapshot.Id);}
+  catch(InvalidDataException){tamperedRejected=true;}
+  Check(tamperedRejected,"environment restore rejects a snapshot whose payload hash no longer matches");
+  ModEnvironmentSnapshots.Delete(root,settings,environmentSnapshot.Id);
+  ModEnvironmentSnapshots.Delete(root,settings,restoreResult.SafetySnapshotId);
+  ModEnvironmentSnapshots.Delete(root,settings,recoverySafety.Id);
+  Check(ModEnvironmentSnapshots.List(root,settings).Length==0,
+   "environment snapshots can be explicitly deleted without touching live MOD files");
   using(var github=new GitHubModUpdates(settings,root))
   {
    Check(GitHubModUpdates.TryNormalize("https://github.com/example/mod/releases",out var normalized)&&normalized=="example/mod","GitHub repository URL normalization");
