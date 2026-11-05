@@ -9,6 +9,7 @@ public partial class MainWindow
  ModInventory? modInventory;
  string? orphanPatchNotice;
  ModTogglePlan? modTogglePreview;
+ WorkshopZipPlan? zipImportPreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
  GitHubModUpdates? githubModUpdates;
@@ -1023,7 +1024,8 @@ public partial class MainWindow
   var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
   workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
   header.Children.Add(H(refresh,workshopDownload,
-   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost")));
+   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost"),
+   Btn("导入本地 ZIP",ChooseWorkshopZip,"Ghost")));
   header.Children.Add(H(
    Btn("环境快照",ShowModEnvironmentSnapshots,"Ghost"),
    Btn("打开模组目录",()=>{
@@ -1389,6 +1391,63 @@ public partial class MainWindow
   string? blocked=ModManager.BlockReason(selectedInstallRoot!,mod,modInventory!);var toggle=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Primary");toggle.IsEnabled=!busy&&blocked==null;root.Children.Add(H(toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost")));Space(root,10);if(blocked!=null)root.Children.Add(T(blocked,13,gold));
   SetPage("模组管理",root,"mod:"+folder,()=>ShowModDetail(folder));toast.Text="启用或停用前会重新核对文件及声明的前置模组。";
  }
+ async void ChooseWorkshopZip()
+ {
+  if(busy||transactionWriting||selectedInstallRoot==null)return;
+  var dialog=new Microsoft.Win32.OpenFileDialog{
+   Title="选择已下载的 MOD ZIP（不会连接第三方下载服务）",
+   Filter="ZIP 压缩包 (*.zip)|*.zip",CheckFileExists=true,Multiselect=false};
+  if(dialog.ShowDialog(this)!=true)return;
+  string root=selectedInstallRoot,zip=dialog.FileName;
+  busy=true;zipImportPreview=null;
+  try
+  {
+   var plan=await Task.Run(()=>WorkshopZipImport.Preview(root,zip));
+   if(selectedInstallRoot!=root||modInventoryDirty)
+    throw new InvalidOperationException("游戏目录或 MOD 文件发生变化，请重新选择 ZIP。");
+   zipImportPreview=plan;ShowWorkshopZipConfirmation();
+  }
+  catch(Exception e){toast.Text="ZIP 预检未通过："+e.Message;ShowMods();}
+  finally{busy=false;}
+ }
+ void ShowWorkshopZipConfirmation()
+ {
+  if(zipImportPreview==null){ShowMods();return;}
+  var plan=zipImportPreview;
+  var root=V(Header("IMPORT LOCAL MOD ZIP","确认导入 MOD",plan.ModName));
+  Space(root,18);
+  root.Children.Add(Card(V(
+   T("仅导入已有 ZIP，不会联网下载、不执行文件，也不会覆盖已存在的 MOD。",14,ink,true),
+   T("MOD ID："+plan.ModId+"\n文件数量："+plan.FileCount+
+    "\n解压总大小："+(plan.Bytes/1024d/1024d).ToString("F2")+" MiB"+
+    "\nZIP 来源："+plan.ZipPath+"\n目标目录："+plan.Destination,12,muted),
+   T("声明前置："+(plan.Dependencies.Length==0?"未声明":string.Join("、",plan.Dependencies)),12,muted),
+   T("来自浏览器或第三方站点的 ZIP 未经过 Steam 官方身份验证，需自行确认来源与兼容性。",12,gold),
+   H(Btn("确认导入",ApplyWorkshopZip,"Primary"),
+     Btn("取消",()=>{zipImportPreview=null;ShowMods();},"Ghost")))));
+  SetPage("模组管理",root,"mod-zip-confirm",ShowWorkshopZipConfirmation);
+ }
+ async void ApplyWorkshopZip()
+ {
+  if(busy||transactionWriting||zipImportPreview==null||selectedInstallRoot!=zipImportPreview.Root)return;
+  var plan=zipImportPreview;zipImportPreview=null;busy=true;transactionWriting=true;
+  try
+  {
+   var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+    plan.Root,installer.DataRoot,"本地 ZIP 导入前自动保护"));
+   await Task.Run(()=>WorkshopZipImport.Apply(plan));
+   InvalidateLifecycle("导入了新的 MOD，请重新检查补丁健康状态。");
+   report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+   modInventoryDirty=true;
+   modStatus="成功导入 "+plan.ModName+"；请检查依赖与游戏兼容性。";
+   modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));
+   modInventoryDirty=false;
+   toast.Text=modStatus+"；导入前环境快照："+safety.Id;
+  }
+  catch(Exception e){modInventoryDirty=true;modStatus="MOD 导入未完成："+e.Message;toast.Text=modStatus;}
+  finally{busy=false;transactionWriting=false;ShowMods();}
+ }
+
  async void PrepareModToggle(ManagedMod mod)
  {
   if(busy||selectedInstallRoot==null)return;busy=true;modTogglePreview=null;
