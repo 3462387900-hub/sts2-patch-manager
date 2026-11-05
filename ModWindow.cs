@@ -222,9 +222,9 @@ public partial class MainWindow
     throw new InvalidOperationException("游戏目录已切换，已取消本次安装。");
    transactionWriting=true;
    WorkshopModInstallResult result;
+   string? safetySnapshotId=null;
    try
    {
-    string? safetySnapshotId=null;
     if(!prepared.IsUnchanged)
     {
      toast.Text="正在创建安装前完整环境快照…";
@@ -812,9 +812,9 @@ public partial class MainWindow
 
      transactionWriting=true;
      WorkshopModInstallResult result;
+     string? safetySnapshotId=null;
      try
      {
-      string? safetySnapshotId=null;
       if(!prepared.IsUnchanged)
       {
        toast.Text="正在为 "+mod.Name+" 创建更新前完整环境快照…";
