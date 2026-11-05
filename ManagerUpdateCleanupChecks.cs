@@ -24,9 +24,13 @@ internal static class ManagerUpdateCleanupChecks
    string job=Path.Combine(jobs,Guid.NewGuid().ToString("N"));
    Directory.CreateDirectory(job);Directory.CreateDirectory(Path.Combine(job,"backup"));
    Directory.CreateDirectory(Path.Combine(job,"payload"));
-   File.WriteAllText(Path.Combine(job,"backup","SpirePatch.dll"),"old binary "+version);
-   File.WriteAllText(Path.Combine(job,"payload","SpirePatch.dll"),"new binary "+version);
-   File.WriteAllText(Path.Combine(job,"request.json"),JsonSerializer.Serialize(new{Root=app,FromVersion="0.11.5",ToVersion=version,Files=new[]{new{Path="SpirePatch.dll",OldHash="old",NewHash="new"}}}));
+   string backupFile=Path.Combine(job,"backup","SpirePatch.dll");
+   string payloadFile=Path.Combine(job,"payload","SpirePatch.dll");
+   File.WriteAllText(backupFile,"old binary "+version);
+   File.WriteAllText(payloadFile,"new binary "+version);
+   File.WriteAllText(Path.Combine(job,"request.json"),JsonSerializer.Serialize(new{
+    Root=app,FromVersion="0.11.5",ToVersion=version,
+    Files=new[]{new{Path="SpirePatch.dll",OldHash=Catalog.Hash(backupFile),NewHash=Catalog.Hash(payloadFile)}}}));
    File.WriteAllText(Path.Combine(job,"result.json"),JsonSerializer.Serialize(new{status,job,version,message="test"}));
    File.WriteAllText(Path.Combine(job,"UpdateWorker.ps1"),"test");
    File.WriteAllText(Path.Combine(job,"恢复上一版.cmd"),"test");
@@ -43,6 +47,8 @@ internal static class ManagerUpdateCleanupChecks
    var userNotes=Job("complete","0.11.7",now.AddDays(-11));
    File.WriteAllText(Path.Combine(userNotes,"do-not-delete-notes.txt"),"user notes");
    var recent=Job("complete","0.11.8",now.AddMinutes(-2));
+   var nestedNotes=Job("complete","0.11.7",now.AddDays(-10));
+   File.WriteAllText(Path.Combine(nestedNotes,"backup","do-not-delete.txt"),"user data inside backup");
    // A newer completed job is the preserved rollback, even if it hasn't aged out yet.
    var youngest=Job("complete","0.11.9",now.AddMinutes(-1));
    string zip=Path.Combine(downloads,"SpirePatch-v0.11.7-win-x64.zip");
@@ -57,13 +63,14 @@ internal static class ManagerUpdateCleanupChecks
    var preview=ManagerUpdateCleanup.Preview(app,now,"0.11.9");
    Check(preview.Jobs==2&&preview.Downloads==2,"preview includes only stale completed task and known ZIP caches");
    Check(preview.Items.Any(i=>i.Path==old)&&preview.Items.Any(i=>i.Path==zip)&&preview.Items.Any(i=>i.Path==currentZip),"preview identifies precise eligible paths");
-   Check(!preview.Items.Any(i=>i.Path==youngest||i.Path==unfinished||i.Path==uncertain||i.Path==userNotes||i.Path==recent),"latest, recent, failed and unproven jobs stay protected");
+   Check(!preview.Items.Any(i=>i.Path==youngest||i.Path==unfinished||i.Path==uncertain||i.Path==userNotes||i.Path==recent||i.Path==nestedNotes),"latest, recent, failed, unproven and user-modified jobs stay protected");
    long bytes=preview.Bytes;
    var result=ManagerUpdateCleanup.Clean(app,preview,now,"0.11.9");
    Check(result.Removed==4&&result.Errors.Length==0&&result.FreedBytes==bytes,"approved cleanup removes only four eligible items");
    Check(!Directory.Exists(old)&&!File.Exists(zip)&&!File.Exists(currentZip)&&Directory.Exists(youngest),"cleanup removes stale artifacts but keeps newest rollback");
-   Check(!Directory.Exists(latest)&&Directory.Exists(recent)&&Directory.Exists(unfinished)&&Directory.Exists(uncertain)&&Directory.Exists(userNotes)&&
-    File.Exists(unknownZip)&&File.Exists(part)&&File.ReadAllText(personal)=="user preferences"&&File.ReadAllText(mod)=="player mod",
+   Check(!Directory.Exists(latest)&&Directory.Exists(recent)&&Directory.Exists(unfinished)&&Directory.Exists(uncertain)&&Directory.Exists(userNotes)&&Directory.Exists(nestedNotes)&&
+    File.Exists(Path.Combine(nestedNotes,"backup","do-not-delete.txt"))&&File.Exists(unknownZip)&&File.Exists(part)&&
+    File.ReadAllText(personal)=="user preferences"&&File.ReadAllText(mod)=="player mod",
     "user files, MOD files, unsupported records and unfinished downloads survive cleanup");
    Check(ManagerUpdateCleanup.Preview(app,now,"0.11.9").Items.Length==0,"cleanup is idempotent");
    var stale=Path.Combine(downloads,"SpirePatch-v0.11.6-win-x64.zip");File.WriteAllText(stale,"before");
