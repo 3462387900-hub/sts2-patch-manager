@@ -930,7 +930,7 @@ internal static class ModEnvironmentSnapshots
                 File.Delete(entry);
             }
         }
-        try { Directory.SetAttributes(path, FileAttributes.Normal); } catch (IOException) { }
+        try { File.SetAttributes(path, FileAttributes.Normal); } catch (IOException) { }
         Directory.Delete(path, false);
     }
 }
