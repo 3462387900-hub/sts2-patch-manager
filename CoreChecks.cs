@@ -63,7 +63,15 @@ public static class CoreChecks
   var restorePreview=ModEnvironmentSnapshots.PreviewRestore(root,settings,environmentSnapshot.Id);
   Check(restorePreview.ChangedFiles>=1&&restorePreview.AddedFiles>=1&&restorePreview.RemovedFiles>=1,
    "environment snapshot preview detects changed, missing and extra files");
-  var restoreResult=ModEnvironmentSnapshots.Restore(root,settings,environmentSnapshot.Id,restorePreview.Token);
+  File.WriteAllText(dllPath,"changed again after preview");
+  bool stalePreviewRejected=false;
+  try{ModEnvironmentSnapshots.Restore(root,settings,environmentSnapshot.Id,restorePreview.Token);}
+  catch(InvalidOperationException){stalePreviewRejected=true;}
+  Check(stalePreviewRejected&&File.ReadAllText(dllPath)=="changed again after preview"&&File.Exists(extraPath),
+   "environment restore refuses a stale preview without changing live MOD files");
+  File.WriteAllText(dllPath,"modified after snapshot");
+  var freshRestorePreview=ModEnvironmentSnapshots.PreviewRestore(root,settings,environmentSnapshot.Id);
+  var restoreResult=ModEnvironmentSnapshots.Restore(root,settings,environmentSnapshot.Id,freshRestorePreview.Token);
   Check(File.ReadAllText(dllPath)=="unknown build"&&!File.Exists(extraPath)&&
    File.Exists(Path.Combine(disabledSlot,"记录.json"))&&
    File.ReadAllText(Path.Combine(disabledSlot,"内容","disabled.dat"))=="disabled payload",
