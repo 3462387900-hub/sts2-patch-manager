@@ -25,6 +25,9 @@ internal static class ModCardList
   style.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0)));
   style.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(0)));
   style.Setters.Add(new Setter(Control.BackgroundProperty,Brushes.Transparent));
+  // ListBoxItem selection is not part of MOD management; keep it from recycling a card when a child checkbox changes.
+  style.Setters.Add(new Setter(Control.FocusableProperty,false));
+  style.Setters.Add(new Setter(System.Windows.Input.KeyboardNavigation.IsTabStopProperty,false));
   list.ItemContainerStyle=style;
   list.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
   var factory=new FrameworkElementFactory(typeof(ModCardGroupControl));
@@ -36,7 +39,6 @@ internal static class ModCardList
   list.AddHandler(ModCardControl.MoreEvent,new RoutedEventHandler((_,e)=>{
    if(e.OriginalSource is ModCardControl card&&card.DataContext is ModListRow row)more(row,card.MoreButton);
   }));
-  list.SelectionChanged+=(_,_)=>list.SelectedItem=null;
   return list;
  }
  internal static void SetItems(ListBox list,IReadOnlyList<ModListRow> rows,int columns)
