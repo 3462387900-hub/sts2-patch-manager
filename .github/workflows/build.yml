@@ -17,6 +17,9 @@ jobs:
       - name: Build and test without touching a game
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly
+      - name: Build standalone Supply Station probe
+        shell: pwsh
+        run: dotnet publish ./tools/SupplyStationProbe/SupplyStationProbe.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./artifacts/SpireSupplyStationProbe
       - name: Verify release ZIP excludes runtime data
         shell: pwsh
         run: ./scripts/验证发布清理.ps1
