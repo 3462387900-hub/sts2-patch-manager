@@ -55,7 +55,7 @@ internal static class ModEnvironmentSnapshots
         ModEnvironmentSnapshotDirectory[] Directories,
         ModEnvironmentSnapshotFile[] Files);
 
-    sealed record ModEnvironmentRestoreJournal(
+    internal sealed record ModEnvironmentRestoreJournal(
         int SchemaVersion, string GameRoot, string StageId,
         string SnapshotId, string SafetySnapshotId,
         bool OldModsPresent, bool OldDisabledPresent,
@@ -583,7 +583,7 @@ internal static class ModEnvironmentSnapshots
         });
     }
 
-    static void WriteRestoreJournal(string stageRoot, ModEnvironmentRestoreJournal journal)
+    internal static void WriteRestoreJournal(string stageRoot, ModEnvironmentRestoreJournal journal)
     {
         string path = BundleInstaller.Child(stageRoot, "restore.json");
         string temporary = path + ".tmp";
@@ -755,7 +755,6 @@ internal static class ModEnvironmentSnapshots
             string stageRoot = GameEnvironment.Child(root, RestoreStageFolder + "/" + stageId);
             string nextRoot = BundleInstaller.Child(stageRoot, "next");
             string previousRoot = BundleInstaller.Child(stageRoot, "previous");
-            string failedRoot = BundleInstaller.Child(stageRoot, "failed-new");
             Directory.CreateDirectory(nextRoot);
             Directory.CreateDirectory(previousRoot);
 
@@ -766,6 +765,12 @@ internal static class ModEnvironmentSnapshots
                 CheckFreeSpace(root, snapshot.TotalBytes);
                 CopyTreeFromSnapshot(snapshotFolder, BundleInstaller.Child(nextRoot, "mods"), snapshot, "mods");
                 CopyTreeFromSnapshot(snapshotFolder, BundleInstaller.Child(nextRoot, "disabled"), snapshot, "disabled");
+                foreach (var expected in SnapshotTrees(snapshot))
+                {
+                    var staged = ScanDirectory(expected.Name, BundleInstaller.Child(nextRoot, expected.Name));
+                    if (!SameTree(expected, staged))
+                        throw new InvalidDataException("恢复暂存目录校验失败：" + expected.Name);
+                }
 
                 var rechecked = PreviewLocked(root, dataRoot, snapshotId);
                 if (!rechecked.Token.Equals(expectedToken, StringComparison.OrdinalIgnoreCase))
