@@ -139,6 +139,31 @@ internal static class SupplyStationChecks
                 "DIRECT mode rejects non-HTTPS download addresses");
         }
 
+        int directRefreshCalls = 0;
+        using (var client = new SpireSupplyStationClient(new Handler(request =>
+        {
+            directRefreshCalls++;
+            return Json(request, DirectDescriptor(
+                directRefreshCalls == 1
+                    ? "https://cdn.example/ancient.zip?signature=old"
+                    : "https://cdn.example/ancient.zip?signature=new",
+                directRefreshCalls == 1 ? "2000-01-01T00:00:00Z" : Future));
+        })))
+        {
+            var result = await client.ProbeAsync(AppId, ItemId);
+            Check(directRefreshCalls == 2 && result.Mode == "DIRECT",
+                "expired DIRECT descriptor can refresh a rotating signed URL without changing content identity");
+        }
+
+        using (var client = new SpireSupplyStationClient(new Handler(request =>
+            Json(request, UgcDescriptor(depotKey: Convert.ToBase64String(new byte[31]))))))
+        {
+            await ExpectFailure(
+                () => client.ProbeAsync(AppId, ItemId),
+                Check,
+                "UGC descriptor with a Depot Key of the wrong length is rejected");
+        }
+
         int descriptorCalls = 0;
         bool sawRefresh = false;
         using (var client = new SpireSupplyStationClient(new Handler(request =>
@@ -195,7 +220,7 @@ internal static class SupplyStationChecks
             await action();
             check(false, description);
         }
-        catch (Exception error) when (error is InvalidDataException or InvalidOperationException or
+        catch (Exception error) when (error is ArgumentException or InvalidDataException or InvalidOperationException or
                                       HttpRequestException or TimeoutException)
         {
             check(true, description);
@@ -241,7 +266,7 @@ internal static class SupplyStationChecks
         });
     }
 
-    static string DirectDescriptor(string directUrl) =>
+    static string DirectDescriptor(string directUrl, string expiresAt = Future) =>
         JsonSerializer.Serialize(new
         {
             mode = "DIRECT",
@@ -257,7 +282,7 @@ internal static class SupplyStationChecks
             requestCode = (string?)null,
             endpoints = Array.Empty<object>(),
             depotKeyBase64 = (string?)null,
-            expiresAt = Future
+            expiresAt
         });
 
     static string Token(string origin, string query) =>
