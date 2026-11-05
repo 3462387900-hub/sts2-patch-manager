@@ -22,6 +22,7 @@ internal sealed record SupplyStationProbeResult(
     bool CdnTokenValidated,
     bool ContentDownloaded,
     string Source,
+    string SourceDisplayName,
     string RequestedBranch,
     bool GameBranchVerified,
     string Note);
@@ -32,6 +33,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
     internal const uint SupportedAppId = 2868840;
     internal const string BaseUrl = "https://workshop.apricityx.top";
     internal const string Source = "spire_supply_station";
+    internal const string SourceDisplayName = "尖塔补给站（Apricityx）";
     internal const string DefaultBranchNamespace = "supply-station-default";
     const string ApiHost = "workshop.apricityx.top";
     const int MaxJsonBytes = 1024 * 1024;
@@ -101,6 +103,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
             tokenValidated,
             false,
             Source,
+            SourceDisplayName,
             DefaultBranchNamespace,
             false,
             "已验证下载描述信息" + (tokenValidated ? "及 CDN 授权接口" : "") +
