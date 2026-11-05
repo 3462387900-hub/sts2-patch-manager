@@ -597,6 +597,40 @@ internal sealed class WorkshopModInstaller : IDisposable
         if (!hasDll && !hasPck)
             return null;
 
+        if (root.TryGetProperty("dependencies", out JsonElement dependencies))
+        {
+            if (dependencies.ValueKind != JsonValueKind.Array)
+                return null;
+            foreach (JsonElement dependency in dependencies.EnumerateArray())
+            {
+                if (dependency.ValueKind == JsonValueKind.String)
+                {
+                    if (string.IsNullOrWhiteSpace(dependency.GetString()))
+                        return null;
+                    continue;
+                }
+                if (dependency.ValueKind != JsonValueKind.Object)
+                    return null;
+                if (dependency.TryGetProperty("optional", out JsonElement optional))
+                {
+                    if (optional.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        return null;
+                    if (optional.ValueKind == JsonValueKind.True)
+                        continue;
+                }
+                if (!dependency.TryGetProperty("id", out JsonElement dependencyId) ||
+                    dependencyId.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(dependencyId.GetString()))
+                    return null;
+                foreach (string versionField in new[] { "min_version", "max_version" })
+                {
+                    if (dependency.TryGetProperty(versionField, out JsonElement versionValue) &&
+                        versionValue.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                        return null;
+                }
+            }
+        }
+
         string payloadDirectory = Path.GetDirectoryName(Path.GetFullPath(path))!;
         return new ModManifestCandidate(
             path,
