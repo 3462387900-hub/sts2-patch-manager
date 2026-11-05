@@ -46,12 +46,12 @@ public partial class MainWindow
             edge.Status is ModDependencyStatus.VersionMismatch or
                 ModDependencyStatus.VersionUnknown or ModDependencyStatus.InvalidConstraint);
         root.Children.Add(Card(H(
-            Metric(report.Edges.Length.ToString(), "依赖关系"),
-            Metric(report.ActiveIssueCount.ToString(), "启用 MOD 异常"),
-            Metric(missing.ToString(), "缺失前置"),
-            Metric(disabled.ToString(), "前置已停用"),
-            Metric(versionProblems.ToString(), "版本问题"),
-            Metric(report.Cycles.Length.ToString(), "循环依赖")), padding: 14));
+            DependencyMetric(report.Edges.Length.ToString(), "依赖关系"),
+            DependencyDependencyMetric(report.ActiveIssueCount.ToString(), "启用异常关系"),
+            DependencyMetric(missing.ToString(), "缺失前置"),
+            DependencyMetric(disabled.ToString(), "前置已停用"),
+            DependencyMetric(versionProblems.ToString(), "版本问题"),
+            DependencyMetric(report.Cycles.Length.ToString(), "循环依赖")), padding: 14));
         Space(root, 12);
 
         root.Children.Add(Card(V(
@@ -188,7 +188,7 @@ public partial class MainWindow
         SetPage("模组管理", root, "mod-dependencies", () => ShowDependencyGraph(filter));
     }
 
-    StackPanel Metric(string value, string label)
+    StackPanel DependencyMetric(string value, string label)
     {
         var panel = V(T(value, 21, ink, true), T(label, 11, muted));
         panel.Margin = new Thickness(0, 0, 18, 0);
