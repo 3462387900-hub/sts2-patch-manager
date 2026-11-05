@@ -38,8 +38,12 @@ jobs:
             '.\SpireSupplyStationProbe.exe --manifest-check 3737335127 "$env:TEMP\spire-supply-station-manifest-3737335127.json"'
             'Get-Content "$env:TEMP\spire-supply-station-manifest-3737335127.json" -Raw'
             ''
+            '第二阶段 B：下载原始 Chunk（不会解密、解压或组装 MOD）：'
+            '.\SpireSupplyStationProbe.exe --chunk-check 3737335127 "$env:TEMP\spire-base-lib-3737335127-chunks" "$env:TEMP\spire-supply-station-chunks-3737335127.json"'
+            'Get-Content "$env:TEMP\spire-supply-station-chunks-3737335127.json" -Raw'
+            ''
             '工具会使用 Sts2PatchManager/{VERSION} 作为 User-Agent。'
-            'Manifest 模式只请求授权 CDN Manifest，不下载 MOD Chunk、不修改游戏目录。'
+            'Chunk 模式只下载 Manifest 列出的原始数据块，输出到单独目录；不会解密、解压、组装 MOD 或修改游戏目录。'
             '无论成功失败，都会尝试生成 JSON 报告。'
           ) -join [Environment]::NewLine
           $instructions = $instructions.Replace('{VERSION}', $managerVersion)
