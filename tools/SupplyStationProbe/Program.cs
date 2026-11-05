@@ -5,16 +5,18 @@ using SpirePatch;
 const uint appId = SpireSupplyStationClient.SupportedAppId;
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
 bool manifestMode = args.Length > 0 && args[0].Equals("--manifest-check", StringComparison.Ordinal);
-int workshopArg = manifestMode ? 1 : 0;
-int reportArg = manifestMode ? 2 : 1;
+bool chunkMode = args.Length > 0 && args[0].Equals("--chunk-check", StringComparison.Ordinal);
+int workshopArg = manifestMode || chunkMode ? 1 : 0;
+int reportArg = manifestMode ? 2 : chunkMode ? 3 : 1;
 
-if (args.Length != (manifestMode ? 3 : 2) ||
+if (args.Length != (manifestMode ? 3 : chunkMode ? 4 : 2) ||
     !ulong.TryParse(args.ElementAtOrDefault(workshopArg), NumberStyles.None, CultureInfo.InvariantCulture, out var workshopId) ||
     workshopId == 0)
 {
     Console.Error.WriteLine("用法：");
     Console.Error.WriteLine("  SpireSupplyStationProbe.exe <WorkshopID> <报告路径>");
     Console.Error.WriteLine("  SpireSupplyStationProbe.exe --manifest-check <WorkshopID> <报告路径>");
+    Console.Error.WriteLine("  SpireSupplyStationProbe.exe --chunk-check <WorkshopID> <原始Chunk输出目录> <报告路径>");
     return 2;
 }
 
@@ -29,6 +31,8 @@ Console.WriteLine($"Workshop ID：{workshopId}");
 Console.WriteLine($"User-Agent：{SpireSupplyStationClient.RequiredUserAgent}");
 if (manifestMode)
     Console.WriteLine("模式：UGC Manifest 下载与解析（不会下载 Chunk 或 MOD 文件）");
+else if (chunkMode)
+    Console.WriteLine("模式：下载原始 UGC Chunk（不会解密、解压或组装 MOD）");
 else
     Console.WriteLine("模式：下载描述信息与 CDN 授权验证（不会下载 MOD 文件）");
 
@@ -36,7 +40,26 @@ try
 {
     using var client = new SpireSupplyStationClient();
     object result;
-    if (manifestMode)
+    if (chunkMode)
+    {
+        string outputDirectory = Path.GetFullPath(args[2]);
+        var chunks = await client.ProbeChunksAsync(
+            appId,
+            workshopId,
+            outputDirectory,
+            maxConcurrentChunks: 4,
+            progress: Console.WriteLine);
+        result = chunks;
+        Console.WriteLine();
+        Console.WriteLine("原始 Chunk 下载成功。");
+        Console.WriteLine($"MOD 标题：{chunks.Title}");
+        Console.WriteLine($"Manifest ID：{chunks.ManifestId}");
+        Console.WriteLine($"Chunk 数量：{chunks.DownloadedChunks}/{chunks.ChunkCount}");
+        Console.WriteLine($"压缩数据总量：{chunks.TotalCompressedBytes:N0} 字节");
+        Console.WriteLine($"原始 Chunk 目录：{chunks.OutputDirectory}");
+        Console.WriteLine("解密、解压和 MOD 文件组装：未执行");
+    }
+    else if (manifestMode)
     {
         var manifest = await client.ProbeManifestAsync(appId, workshopId);
         result = manifest;
@@ -70,7 +93,7 @@ try
         success = true,
         checkedAt = DateTimeOffset.UtcNow,
         userAgent = SpireSupplyStationClient.RequiredUserAgent,
-        mode = manifestMode ? "manifest" : "descriptor",
+        mode = chunkMode ? "chunks" : manifestMode ? "manifest" : "descriptor",
         result
     };
 
@@ -87,7 +110,7 @@ catch (Exception error)
         appId,
         workshopId = workshopId.ToString(CultureInfo.InvariantCulture),
         userAgent = SpireSupplyStationClient.RequiredUserAgent,
-        mode = manifestMode ? "manifest" : "descriptor",
+        mode = chunkMode ? "chunks" : manifestMode ? "manifest" : "descriptor",
         errorType = error.GetType().Name,
         error = error.Message
     };
