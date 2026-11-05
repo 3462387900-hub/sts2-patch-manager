@@ -121,7 +121,7 @@ internal static class SupplyStationContentChecks
                     return Bytes(request, manifestZip);
                 if (request.RequestUri.Host == "cdn.example" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
-                    return Redirect(request, "http://cache1-atl3.steamcontent.com" + request.RequestUri.AbsolutePath);
+                    return Redirect(request, "https://cache1-atl3.steamcontent.com" + request.RequestUri.AbsolutePath);
                 if (request.RequestUri.Host == "cache1-atl3.steamcontent.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
                     return Bytes(request, RawChunk);
@@ -132,9 +132,9 @@ internal static class SupplyStationContentChecks
                 var result = await client.ProbeChunksAsync(AppId, ItemId, redirectOutput);
                 var redirected = redirectRequests.Single(item => item.Host == "cache1-atl3.steamcontent.com");
                 Check(result.DownloadedChunks == 1 &&
-                    redirected.Scheme == "http" && redirected.Port == 80 &&
+                    redirected.Scheme == "https" && redirected.Port == 443 &&
                     redirected.Query.Contains("token=redirect-test", StringComparison.Ordinal),
-                    "Steam CDN follows a trusted cross-host HTTP redirect and preserves its temporary authorization query");
+                    "Steam CDN follows a trusted cross-host HTTPS redirect and preserves its temporary authorization query");
                 Check(redirectTokenCalls == 1,
                     "redirected CDN host reuses the authorized request query instead of requesting an unlisted host token");
             }
@@ -165,9 +165,40 @@ internal static class SupplyStationContentChecks
                 {
                     blockedRedirectError = error.Message;
                 }
-                Check(blockedRedirectError?.Contains("受信任的 Steam CDN 主机", StringComparison.Ordinal) == true &&
+                Check(blockedRedirectError?.Contains("主机不在可信 Steam CDN 列表中", StringComparison.Ordinal) == true &&
                     !blockedRedirectRequests.Contains("evil.example", StringComparer.OrdinalIgnoreCase),
                     "untrusted cross-host redirects are blocked and the reason is retained in the error report");
+            }
+
+            var downgradeRequests = new List<string>();
+            string? downgradeError = null;
+            using (var client = new SpireSupplyStationClient(new Handler(request =>
+            {
+                downgradeRequests.Add(request.RequestUri!.Host);
+                if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
+                    return Json(request, Descriptor());
+                if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
+                    return Json(request, Token("http://cdn.example", "token=downgrade-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
+                    return Bytes(request, manifestZip);
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
+                    return Redirect(request, "http://st.dl.eccdnx.com" + request.RequestUri.AbsolutePath);
+                throw new InvalidOperationException("HTTP downgrade destination must never be requested.");
+            })))
+            {
+                try
+                {
+                    await client.ProbeChunksAsync(AppId, ItemId, Path.Combine(root, "downgrade-redirect"));
+                }
+                catch (HttpRequestException error)
+                {
+                    downgradeError = error.Message;
+                }
+                Check(downgradeError?.Contains("只允许 HTTPS 默认端口 443", StringComparison.Ordinal) == true &&
+                    !downgradeRequests.Contains("st.dl.eccdnx.com", StringComparer.OrdinalIgnoreCase),
+                    "even a trusted Steam CDN host cannot receive a temporary authorization query over HTTP");
             }
 
             int refreshTokenCalls = 0;
