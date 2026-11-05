@@ -140,7 +140,7 @@ public partial class MainWindow
   WorkshopModPrepared? prepared=null;
   try
   {
-   using var source=new WorkshopModInstaller(installer.DataRoot);
+   using var source=new WorkshopModInstaller();
    toast.Text="正在准备创意工坊 MOD…";
    prepared=await source.PrepareAsync(gameRoot,workshopId,
     progress:message=>Dispatcher.BeginInvoke(new Action(()=>{
@@ -184,10 +184,11 @@ public partial class MainWindow
    }
    finally{transactionWriting=false;}
 
+   string? sourceSaveWarning=null;
    try{WorkshopSources().Bind(result.ModId,workshopId);}
    catch(Exception sourceError)
    {
-    toast.Text="MOD 文件已安装，但来源记录保存失败："+sourceError.Message;
+    sourceSaveWarning="（来源记录保存失败："+sourceError.Message+"）";
    }
 
    changed=result.Changed;
@@ -196,15 +197,15 @@ public partial class MainWindow
     orphanPatchNotice=result.BackupFolder==null
      ?"已从创意工坊新增 "+result.ModName+"（"+result.ModId+"）。"
      :"已从创意工坊更新 "+result.ModName+"。旧版本备份："+result.BackupFolder;
-    toast.Text=result.BackupFolder==null
+    toast.Text=(result.BackupFolder==null
      ?"创意工坊 MOD 安装成功："+result.ModName
-     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。";
+     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。")+(sourceSaveWarning??"");
     InvalidateLifecycle("创意工坊 MOD 已安装或更新，现有修复补丁健康结果需要重新检查。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    }
    else
    {
-    toast.Text="创意工坊内容与本地文件一致，无需更新："+result.ModName;
+    toast.Text="创意工坊内容与本地文件一致，无需更新："+result.ModName+(sourceSaveWarning??"");
    }
   }
   catch(Exception ex){toast.Text="创意工坊 MOD 安装未完成："+ex.Message;}
