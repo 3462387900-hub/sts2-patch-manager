@@ -25,6 +25,20 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($managerVersion)) { throw "SpirePatch.csproj is missing the manager Version." }
           dotnet publish ./tools/SupplyStationProbe/SupplyStationProbe.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=$managerVersion" -o ./artifacts/SpireSupplyStationProbe
           if ($LASTEXITCODE -ne 0) { throw "Standalone Supply Station probe publish failed." }
+          @'
+尖塔补给站真实接口探测工具
+管理器版本：$managerVersion
+测试 Workshop ID：3737335127
+
+在此文件夹地址栏输入 powershell，然后执行：
+.\SpireSupplyStationProbe.exe 3737335127 "$env:TEMP\spire-supply-station-3737335127.json"
+Get-Content "$env:TEMP\spire-supply-station-3737335127.json" -Raw
+
+工具会使用 Sts2PatchManager/$managerVersion 作为 User-Agent。
+仅验证下载描述与 UGC CDN token，不下载 MOD、不修改游戏目录。
+无论成功失败，都会尝试生成 JSON 报告。
+'@ | Set-Content ./artifacts/SpireSupplyStationProbe/使用说明.txt -Encoding utf8
+          Compress-Archive -Path ./artifacts/SpireSupplyStationProbe/* -DestinationPath ./artifacts/SpireSupplyStationProbe-win-x64.zip -CompressionLevel Optimal -Force
       - name: Verify release ZIP excludes runtime data
         shell: pwsh
         run: ./scripts/验证发布清理.ps1
