@@ -146,9 +146,30 @@ internal sealed class SpireSupplyStationClient : IDisposable
             !ulong.TryParse(descriptor.RequestCode, NumberStyles.None, CultureInfo.InvariantCulture, out var requestCode))
             throw new InvalidDataException("UGC 下载描述缺少有效的 Manifest、Depot 或请求码。");
 
-        var endpoint = descriptor.Endpoints[0];
         string path = $"depot/{descriptor.DepotId.Value}/manifest/{manifestId}/5/{requestCode}";
-        byte[] archiveBytes = await GetCdnBytesAsync(request, descriptor, endpoint, path, cancellationToken);
+        byte[]? archiveBytes = null;
+        Exception? lastCdnError = null;
+        foreach (var endpoint in descriptor.Endpoints)
+        {
+            try
+            {
+                archiveBytes = await GetCdnBytesAsync(request, descriptor, endpoint, path, cancellationToken);
+                break;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception error) when (error is HttpRequestException or InvalidDataException or
+                                          InvalidOperationException or TimeoutException)
+            {
+                lastCdnError = error;
+            }
+        }
+
+        if (archiveBytes is null)
+            throw new HttpRequestException("所有授权 CDN 节点均无法提供 Manifest。", lastCdnError);
+
         var manifest = SteamDepotManifestParser.ParseZip(archiveBytes);
 
         if (manifest.DepotId != descriptor.DepotId.Value || manifest.ManifestId != manifestId)
@@ -288,7 +309,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
                 continue;
             }
 
-            if ((int)response.StatusCode is 401 or 403 && !refreshedAfterAuthorizationFailure)
+            if (((int)response.StatusCode is 401 or 403) && !refreshedAfterAuthorizationFailure)
             {
                 tokenQuery = await GetCdnTokenAsync(
                     request,
