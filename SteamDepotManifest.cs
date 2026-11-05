@@ -40,7 +40,7 @@ internal sealed record SteamDepotManifestData(
     SteamDepotManifestSummary Summary,
     IReadOnlyList<SteamDepotManifestFile> Files)
 {
-    public SteamDepotManifestData DecryptFileNames(ReadOnlySpan<byte> depotKey)
+    public SteamDepotManifestData DecryptFileNames(byte[] depotKey)
     {
         if (!Summary.FileNamesEncrypted)
             return this;
