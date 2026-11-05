@@ -7,6 +7,9 @@ $ErrorActionPreference = 'Stop'
 $source = [IO.Path]::GetFullPath($GameRoot).TrimEnd('\')
 $output = [IO.Path]::GetFullPath($OutputRoot).TrimEnd('\')
 if (!(Test-Path -LiteralPath $source -PathType Container)) { throw "游戏目录不存在：$source" }
+if (([IO.File]::GetAttributes($source) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw '游戏根目录本身是符号链接或目录联接，拒绝创建隔离样本。'
+}
 if (!(Test-Path -LiteralPath (Join-Path $source 'SlayTheSpire2.exe') -PathType Leaf)) {
     throw 'GameRoot 中没有 SlayTheSpire2.exe，请选择游戏安装根目录。'
 }
