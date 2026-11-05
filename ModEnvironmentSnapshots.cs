@@ -603,9 +603,12 @@ internal static class ModEnvironmentSnapshots
         var journal = JsonSerializer.Deserialize<ModEnvironmentRestoreJournal>(File.ReadAllText(path))
             ?? throw new InvalidDataException("恢复事务日志无法读取。");
         if (journal.SchemaVersion != Schema ||
+            string.IsNullOrWhiteSpace(journal.GameRoot) ||
             !journal.GameRoot.Equals(NormalizeRoot(root), StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(journal.StageId) ||
             !journal.StageId.Equals(Path.GetFileName(stageRoot), StringComparison.OrdinalIgnoreCase) ||
-            !IdPattern.IsMatch(journal.SnapshotId) || !IdPattern.IsMatch(journal.SafetySnapshotId) ||
+            string.IsNullOrWhiteSpace(journal.SnapshotId) || !IdPattern.IsMatch(journal.SnapshotId) ||
+            string.IsNullOrWhiteSpace(journal.SafetySnapshotId) || !IdPattern.IsMatch(journal.SafetySnapshotId) ||
             journal.StartedAt == default ||
             journal.Status is not ("prepared" or "old-moved-mods" or "old-moved-disabled" or
                 "new-moved-mods" or "new-moved-disabled" or "completed" or "rolled-back" or "rollback-failed"))
