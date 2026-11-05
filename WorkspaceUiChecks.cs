@@ -155,7 +155,7 @@ public partial class MainWindow
   selectAll.IsChecked=false;await Idle();
   Check(ChosenMods().Length==0,"deselect all removes current filtered selections");
   bool? reviewAccepted=null;
-  Dispatcher.BeginInvoke(new Action(()=>{
+  await Dispatcher.InvokeAsync(new Action(()=>{
    var modal=Application.Current.Windows.OfType<Window>().First(w=>w.Title=="模组批量预览隔离测试");
    var cancel=Controls<Button>(modal).First(b=>b.Content?.ToString()=="取消");
    cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,cancel));
