@@ -167,8 +167,9 @@ internal sealed class WorkshopModSources
             throw new ArgumentException("MOD ID 无效。", nameof(modId));
         if (Get(modId) != workshopId || workshopId == 0)
             throw new InvalidOperationException("Workshop 来源尚未正确关联，不能记录版本基线。");
-        if (!ulong.TryParse(manifestId, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+        if (!ulong.TryParse(manifestId, NumberStyles.None, CultureInfo.InvariantCulture, out ulong manifestNumber))
             throw new ArgumentException("Manifest ID 无效。", nameof(manifestId));
+        manifestId = manifestNumber.ToString(CultureInfo.InvariantCulture);
         if (string.IsNullOrWhiteSpace(localVersion))
             throw new ArgumentException("本地 MOD 版本无效。", nameof(localVersion));
         if (localFiles is null || localFiles.Count == 0)
