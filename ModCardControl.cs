@@ -88,10 +88,11 @@ public sealed class ModCardControl : Border
   const string dep="这些启用项依赖它，请先停用依赖项：";
   depends.Text=row.BlockReason?.StartsWith(dep,StringComparison.Ordinal)==true?
    row.BlockReason[dep.Length..].Split('、',StringSplitOptions.RemoveEmptyEntries).Length+" 项已启用 MOD 依赖此模组":
+   row.DependencyText.Length>0?row.DependencyText:
    row.Mod.Dependencies.Length==0?"未声明前置模组":"已声明 "+row.Mod.Dependencies.Length+" 项前置模组";
   if(row.BlockReason!=null&&!row.BlockReason.StartsWith(dep,StringComparison.Ordinal))depends.Text=row.BlockReason;
-  depends.ToolTip=row.BlockReason??depends.Text;
-  depends.Foreground=row.BlockReason!=null?Brushes.Khaki:Brushes.White;
+  depends.ToolTip=string.Join("\n",new[]{row.BlockReason,row.DependencyText}.Where(value=>!string.IsNullOrWhiteSpace(value)));
+  depends.Foreground=row.BlockReason!=null||row.DependencyIssue?Brushes.Khaki:Brushes.White;
   toggle.Content=row.Mod.Enabled?"停用模组":"启用模组";
   toggle.IsEnabled=row.BlockReason==null;toggle.ToolTip=row.BlockReason;
   update.Content=row.IsFix?"查看健康":row.GitHubText.Contains("有更新")?"下载并更新":"检查更新";
