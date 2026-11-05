@@ -155,13 +155,14 @@ public partial class MainWindow
   selectAll.IsChecked=false;await Idle();
   Check(ChosenMods().Length==0,"deselect all removes current filtered selections");
   bool? reviewAccepted=null;
-  await Dispatcher.InvokeAsync(new Action(()=>{
+  var cancelOperation=Dispatcher.BeginInvoke(new Action(()=>{
    var modal=Application.Current.Windows.OfType<Window>().First(w=>w.Title=="模组批量预览隔离测试");
    var cancel=Controls<Button>(modal).First(b=>b.Content?.ToString()=="取消");
    cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,cancel));
   }),DispatcherPriority.ApplicationIdle);
   reviewAccepted=ModBatchDialogs.Confirm(this,"模组批量预览隔离测试",
    "仅展示预览，不涉及文件修改。",[new ModBatchReview("TestSolo","可处理","测试预览")]);
+  await cancelOperation.Task;
   Check(reviewAccepted==false,"batch review can be cancelled before any file operation");
   var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();
