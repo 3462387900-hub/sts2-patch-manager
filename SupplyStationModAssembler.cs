@@ -401,6 +401,8 @@ internal static class SupplyStationModAssembler
             progress?.Invoke($"文件重组并校验成功：{item.RelativePath}（{file.Size:N0} 字节）。");
         }
 
+        if (results.Count == 0)
+            throw new InvalidDataException("Manifest 中没有可组装的普通文件。");
         return results;
     }
 
