@@ -202,8 +202,10 @@ internal static class SteamDepotManifestParser
                 {
                     if (chunks.TryGetValue(chunk.Id, out var existing))
                     {
-                        if (existing != chunk)
-                            throw new InvalidDataException("Steam manifest reuses a Chunk ID with conflicting metadata.");
+                        if (existing.Checksum != chunk.Checksum ||
+                            existing.CompressedLength != chunk.CompressedLength ||
+                            existing.UncompressedLength != chunk.UncompressedLength)
+                            throw new InvalidDataException("Steam manifest reuses a Chunk ID with conflicting content metadata.");
                     }
                     else
                     {
