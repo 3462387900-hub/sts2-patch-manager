@@ -248,7 +248,10 @@ internal sealed class WorkshopModInstaller : IDisposable
                 : "下载内容包含多个 MOD 清单；当前阶段只允许安装单个 MOD，已停止以避免误装整合包。");
 
         ModManifestCandidate candidate = candidates[0];
-        string[] sourceFiles = SafeFiles(candidate.PayloadDirectory);
+        string[] sourceFiles = SafeFiles(candidate.PayloadDirectory)
+            .Where(path => !(candidate.PayloadDirectory.Equals(assembledRoot, StringComparison.OrdinalIgnoreCase) &&
+                Path.GetFileName(path).Equals("assembly-manifest.json", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
         if (sourceFiles.Length == 0)
             throw new InvalidDataException("MOD 内容目录为空。");
 
@@ -332,7 +335,9 @@ internal sealed class WorkshopModInstaller : IDisposable
         }
         else
         {
-            string folderName = SafeFolderName(Path.GetFileName(candidate.PayloadDirectory));
+            string folderName = candidate.PayloadDirectory.Equals(assembledRoot, StringComparison.OrdinalIgnoreCase)
+                ? ""
+                : SafeFolderName(Path.GetFileName(candidate.PayloadDirectory));
             if (folderName.Length == 0)
                 folderName = SafeFolderName(candidate.Name);
             if (folderName.Length == 0)
@@ -562,19 +567,22 @@ internal sealed class WorkshopModInstaller : IDisposable
         JsonElement root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object ||
             !root.TryGetProperty("id", out JsonElement idField) ||
-            idField.ValueKind != JsonValueKind.String ||
-            !root.TryGetProperty("has_dll", out JsonElement dllField) ||
-            !root.TryGetProperty("has_pck", out JsonElement pckField))
+            idField.ValueKind != JsonValueKind.String)
+            return null;
+
+        bool hasDllProperty = root.TryGetProperty("has_dll", out JsonElement dllField);
+        bool hasPckProperty = root.TryGetProperty("has_pck", out JsonElement pckField);
+        if (!hasDllProperty && !hasPckProperty)
             return null;
 
         string id = idField.GetString() ?? "";
         if (string.IsNullOrWhiteSpace(id) || id.Length > 256 ||
-            dllField.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
-            pckField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            (hasDllProperty && dllField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) ||
+            (hasPckProperty && pckField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)))
             return null;
 
-        bool hasDll = dllField.ValueKind == JsonValueKind.True;
-        bool hasPck = pckField.ValueKind == JsonValueKind.True;
+        bool hasDll = hasDllProperty && dllField.ValueKind == JsonValueKind.True;
+        bool hasPck = hasPckProperty && pckField.ValueKind == JsonValueKind.True;
         if (!hasDll && !hasPck)
             return null;
 
