@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../SpireSupplyStationClient.cs" Link="SpireSupplyStationClient.cs" />
+    <Compile Include="../../SteamDepotManifest.cs" Link="SteamDepotManifest.cs" />
   </ItemGroup>
 </Project>
