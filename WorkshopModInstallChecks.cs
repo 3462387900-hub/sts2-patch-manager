@@ -48,6 +48,11 @@ public static class WorkshopModInstallChecks
                 "https://example.com/mod/2868840/3737335127", out _),
                 "insecure, wrong-AppID and untrusted Workshop URLs are rejected");
 
+            Check(WorkshopModInstaller.TryCompareVersions("v1.2.0", "1.1.9", out int versionOrder) &&
+                versionOrder > 0 &&
+                !WorkshopModInstaller.TryCompareVersions("nightly", "1.0.0", out _),
+                "Workshop version comparison handles v-prefixed numeric versions and safely marks unknown formats");
+
             string assembledV1 = Path.Combine(root, "assembled-v1");
             CreateAssembled(assembledV1, "BaseLib", "BaseLib", "1.0.0", "old dll", "old pck");
             string workspaceV1 = Path.Combine(root, "workspace-v1");
@@ -102,11 +107,61 @@ public static class WorkshopModInstallChecks
             WorkshopModInstaller.Cleanup(preparedV2);
 
             ManagedMod current = ModManager.Scan(root).Mods.Single();
+            string backupDll = Path.Combine(installedV2.BackupFolder!, "BaseLib.dll");
+            File.Delete(backupDll);
+            try
+            {
+                GitHubModInstaller.Restore(root, current, installedV2.BackupFolder!);
+                throw new InvalidOperationException("a backup missing its required DLL was restored");
+            }
+            catch (InvalidDataException error) when (error.Message.Contains("缺少", StringComparison.Ordinal))
+            {
+            }
+            Check(ModManager.Scan(root).Mods.Single().Version == "1.1.0" &&
+                File.ReadAllText(Path.Combine(root, "mods", "BaseLib", "BaseLib.dll")) == "new dll",
+                "an incomplete backup is rejected without touching the current MOD");
+            File.WriteAllText(backupDll, "old dll");
+
             string restored = GitHubModInstaller.Restore(root, current, installedV2.BackupFolder!);
             Check(ModManager.Scan(root).Mods.Single().Version == "1.0.0" &&
                 File.ReadAllText(Path.Combine(root, "mods", "BaseLib", "BaseLib.dll")) == "old dll" &&
                 Directory.Exists(restored),
                 "the existing MOD backup restore workflow also restores Workshop manifests with custom JSON names");
+
+            string assembledRollback = Path.Combine(root, "assembled-rollback");
+            CreateAssembled(assembledRollback, "BaseLib", "BaseLib", "1.1.0", "failed dll", "failed pck");
+            var preparedRollback = WorkshopModInstaller.PrepareAssembled(
+                root, workshopId, "BaseLib", "1005",
+                assembledRollback, Path.Combine(root, "workspace-rollback"));
+            try
+            {
+                WorkshopModInstaller.Commit(root, preparedRollback,
+                    () => throw new IOException("simulated payload move failure"));
+                throw new InvalidOperationException("simulated update failure was not observed");
+            }
+            catch (IOException error) when (error.Message.Contains("已自动恢复旧版本", StringComparison.Ordinal))
+            {
+            }
+            Check(ModManager.Scan(root).Mods.Single().Version == "1.0.0" &&
+                File.ReadAllText(Path.Combine(root, "mods", "BaseLib", "BaseLib.dll")) == "old dll" &&
+                GitHubModInstaller.Backups(root, ModManager.Scan(root).Mods.Single()).Length == 0,
+                "a failed Workshop replacement restores the original MOD and leaves no partial backup");
+            WorkshopModInstaller.Cleanup(preparedRollback);
+
+            string assembledDowngrade = Path.Combine(root, "assembled-downgrade");
+            CreateAssembled(assembledDowngrade, "BaseLib", "BaseLib", "0.9.0", "old dll", "old pck");
+            try
+            {
+                WorkshopModInstaller.PrepareAssembled(
+                    root, workshopId, "BaseLib", "1006",
+                    assembledDowngrade, Path.Combine(root, "workspace-downgrade"));
+                throw new InvalidOperationException("a lower Workshop MOD version was accepted");
+            }
+            catch (InvalidOperationException error) when (error.Message.Contains("低于本地版本", StringComparison.Ordinal))
+            {
+            }
+            Check(ModManager.Scan(root).Mods.Single().Version == "1.0.0",
+                "a comparable older Workshop version is rejected before installation");
 
             string assembledSame = Path.Combine(root, "assembled-same");
             CreateAssembled(assembledSame, "BaseLib", "BaseLib", "1.0.0", "old dll", "old pck");
