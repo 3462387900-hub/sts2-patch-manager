@@ -179,5 +179,30 @@ public partial class MainWindow
    updates.Cached(m.Id)?.Status=="有更新"||workshopUpdates.Cached(m.Id)?.Status=="有更新")??normal[0]);
   else right.Children.Add(Card(T("当前没有可管理的普通 MOD。",13,muted)));
   SetPage("更新中心",root,restore:ShowModUpdatesCenter);
+  DateTimeOffset now=DateTimeOffset.UtcNow;
+  bool needsAutoCheck=normal.Any(mod=>
+  {
+   var githubRepo=updates.Repository(mod.Id);
+   if(githubRepo!=null)
+   {
+    var result=updates.Cached(mod.Id);
+    if(result==null||now-result.CheckedAt>=TimeSpan.FromMinutes(30))return true;
+   }
+   if(workshopSources.Get(mod.Id)!=null)
+   {
+    var result=workshopUpdates.Cached(mod.Id);
+    if(result==null||now-result.CheckedAt>=TimeSpan.FromMinutes(15))return true;
+   }
+   return false;
+  });
+  if(needsAutoCheck&&!busy&&!transactionWriting&&!updateCenterAutoCheckQueued)
+  {
+   updateCenterAutoCheckQueued=true;
+   Dispatcher.BeginInvoke(new Action(()=>
+   {
+    updateCenterAutoCheckQueued=false;
+    if(page=="更新中心"&&!busy&&!transactionWriting)CheckAllModUpdates();
+   }),System.Windows.Threading.DispatcherPriority.Background);
+  }
  }
 }
