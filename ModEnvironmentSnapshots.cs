@@ -778,6 +778,12 @@ internal static class ModEnvironmentSnapshots
                     throw new InvalidOperationException("创建恢复前保护快照期间，当前 MOD 环境发生变化。已保留保护快照，请重新预览。");
 
                 string[] trees = ["mods", "disabled"];
+                var journal = new ModEnvironmentRestoreJournal(
+                    Schema, NormalizeRoot(root), stageId, snapshotId, safety.Id,
+                    afterSafety.CurrentModsPresent, afterSafety.CurrentDisabledPresent,
+                    snapshot.ModsPresent, snapshot.DisabledPresent,
+                    "prepared", DateTimeOffset.UtcNow);
+                WriteRestoreJournal(stageRoot, journal);
                 var movedOld = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var movedNew = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 try
@@ -792,6 +798,8 @@ internal static class ModEnvironmentSnapshots
                             string backup = BundleInstaller.Child(previousRoot, tree);
                             Directory.Move(live, backup);
                             movedOld.Add(tree);
+                            journal = journal with { Status = tree == "mods" ? "old-moved-mods" : "old-moved-disabled" };
+                            WriteRestoreJournal(stageRoot, journal);
                         }
                     }
 
@@ -803,6 +811,8 @@ internal static class ModEnvironmentSnapshots
                         string live = TreePath(root, tree);
                         Directory.Move(staged, live);
                         movedNew.Add(tree);
+                        journal = journal with { Status = tree == "mods" ? "new-moved-mods" : "new-moved-disabled" };
+                        WriteRestoreJournal(stageRoot, journal);
                     }
 
                     foreach (var expected in SnapshotTrees(snapshot))
@@ -811,6 +821,8 @@ internal static class ModEnvironmentSnapshots
                         if (!SameTree(expected, actual))
                             throw new InvalidDataException("恢复后的目录校验失败：" + expected.Name);
                     }
+                    journal = journal with { Status = "completed" };
+                    WriteRestoreJournal(stageRoot, journal);
                 }
                 catch (Exception restoreError)
                 {
@@ -821,10 +833,7 @@ internal static class ModEnvironmentSnapshots
                         {
                             if (!movedNew.Contains(tree)) continue;
                             string live = TreePath(root, tree);
-                            if (!Directory.Exists(live)) continue;
-                            string failed = BundleInstaller.Child(failedRoot, tree);
-                            Directory.CreateDirectory(Path.GetDirectoryName(failed)!);
-                            Directory.Move(live, failed);
+                            MoveLiveToRecovery(stageRoot, tree, live);
                         }
                         foreach (string tree in trees.Reverse())
                         {
@@ -834,16 +843,21 @@ internal static class ModEnvironmentSnapshots
                             if (Directory.Exists(backup) && !Exists(live))
                                 Directory.Move(backup, live);
                         }
+                        VerifySafetySnapshot(root, dataRoot, safety.Id);
                     }
                     catch (Exception error) { rollbackError = error; }
 
                     if (rollbackError is not null)
                     {
                         preserveStage = true;
+                        try { WriteRestoreJournal(stageRoot, journal with { Status = "rollback-failed" }); }
+                        catch (Exception) { }
                         throw new IOException("环境恢复失败，自动回滚也未能完成。请保留此目录并勿手动删除：" +
                             stageRoot + "。恢复错误：" + restoreError.Message + "；回滚错误：" + rollbackError.Message,
                             new AggregateException(restoreError, rollbackError));
                     }
+                    try { WriteRestoreJournal(stageRoot, journal with { Status = "rolled-back" }); }
+                    catch (Exception) { }
                     throw;
                 }
 
