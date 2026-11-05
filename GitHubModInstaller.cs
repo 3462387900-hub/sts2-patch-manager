@@ -376,10 +376,14 @@ internal sealed class GitHubModInstaller : IDisposable
    // Refuse backup payloads containing links or replaced files.
    var backupFiles=ModManager.FileSnapshot(backup);
    Require(backupFiles.Count>0,"备份目录没有可恢复的文件。");
-   var manifest=Directory.EnumerateFiles(backup,"*.json",SearchOption.TopDirectoryOnly)
-    .FirstOrDefault(path=>Path.GetFileName(path) is "mod_manifest.json" or "manifest.json");
-   Require(manifest!=null&&ManifestId(manifest,out _,out _,out _).Equals(mod.Id,StringComparison.OrdinalIgnoreCase),
-    "备份 MOD 的 ID 不匹配。");
+   var manifests=Directory.EnumerateFiles(backup,"*.json",SearchOption.TopDirectoryOnly)
+    .Where(path=>{
+     try{
+      string id=ManifestId(path,out _,out bool dll,out bool pck);
+      return (dll||pck)&&id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase);
+     }catch(JsonException){return false;}
+    }).ToArray();
+   Require(manifests.Length==1,"备份 MOD 的 ID 不匹配，或没有唯一的顶层 MOD 清单。");
    var current=Path.Combine(backupRoot,DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff")+"-restore-"+Guid.NewGuid().ToString("N"));
    Directory.Move(mod.Folder,current);
    try{Directory.Move(backup,mod.Folder);}
