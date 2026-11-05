@@ -100,6 +100,76 @@ internal static class SupplyStationContentChecks
                     "raw Chunk probe explicitly reports that MOD files were not assembled");
             }
 
+            var redirectRequests = new List<(string Host, string Scheme, int Port, string Query)>();
+            int redirectTokenCalls = 0;
+            using (var client = new SpireSupplyStationClient(new Handler(request =>
+            {
+                redirectRequests.Add((
+                    request.RequestUri!.Host,
+                    request.RequestUri.Scheme,
+                    request.RequestUri.Port,
+                    request.RequestUri.Query));
+                if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
+                    return Json(request, Descriptor());
+                if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
+                {
+                    redirectTokenCalls++;
+                    return Json(request, Token("http://cdn.example", "token=redirect-test&expiration_time=4102444800"));
+                }
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
+                    return Bytes(request, manifestZip);
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
+                    return Redirect(request, "http://cache1-atl3.steamcontent.com" + request.RequestUri.AbsolutePath);
+                if (request.RequestUri.Host == "cache1-atl3.steamcontent.com" &&
+                    request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
+                    return Bytes(request, RawChunk);
+                throw new InvalidOperationException("Unexpected Steam CDN redirect test request.");
+            })))
+            {
+                string redirectOutput = Path.Combine(root, "redirect-chunks");
+                var result = await client.ProbeChunksAsync(AppId, ItemId, redirectOutput);
+                var redirected = redirectRequests.Single(item => item.Host == "cache1-atl3.steamcontent.com");
+                Check(result.DownloadedChunks == 1 &&
+                    redirected.Scheme == "http" && redirected.Port == 80 &&
+                    redirected.Query.Contains("token=redirect-test", StringComparison.Ordinal),
+                    "Steam CDN follows a trusted cross-host HTTP redirect and preserves its temporary authorization query");
+                Check(redirectTokenCalls == 1,
+                    "redirected CDN host reuses the authorized request query instead of requesting an unlisted host token");
+            }
+
+            var blockedRedirectRequests = new List<string>();
+            string? blockedRedirectError = null;
+            using (var client = new SpireSupplyStationClient(new Handler(request =>
+            {
+                blockedRedirectRequests.Add(request.RequestUri!.Host);
+                if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
+                    return Json(request, Descriptor());
+                if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
+                    return Json(request, Token("http://cdn.example", "token=blocked-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
+                    return Bytes(request, manifestZip);
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
+                    return Redirect(request, "https://evil.example" + request.RequestUri.AbsolutePath);
+                throw new InvalidOperationException("Untrusted redirect destination must never be requested.");
+            })))
+            {
+                try
+                {
+                    await client.ProbeChunksAsync(AppId, ItemId, Path.Combine(root, "blocked-redirect"));
+                }
+                catch (HttpRequestException error)
+                {
+                    blockedRedirectError = error.Message;
+                }
+                Check(blockedRedirectError?.Contains("not trusted", StringComparison.OrdinalIgnoreCase) == true &&
+                    !blockedRedirectRequests.Contains("evil.example", StringComparer.OrdinalIgnoreCase),
+                    "untrusted cross-host redirects are blocked and the reason is retained in the error report");
+            }
+
             int refreshTokenCalls = 0;
             int chunkAttempts = 0;
             using (var client = new SpireSupplyStationClient(new Handler(request =>
@@ -238,6 +308,16 @@ internal static class SupplyStationContentChecks
             Content = new ByteArrayContent(body),
             RequestMessage = request
         };
+
+    static HttpResponseMessage Redirect(HttpRequestMessage request, string location)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Redirect)
+        {
+            RequestMessage = request
+        };
+        response.Headers.Location = new Uri(location, UriKind.Absolute);
+        return response;
+    }
 
     static string Descriptor() =>
         JsonSerializer.Serialize(new
