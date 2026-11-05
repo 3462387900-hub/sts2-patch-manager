@@ -5,6 +5,9 @@
     <Version>0.12.4</Version><ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Keep the standalone console probe isolated from the WPF application's default compile glob. -->
     <Compile Remove="tools/**/*.cs" />
   </ItemGroup>
