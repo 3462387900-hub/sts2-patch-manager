@@ -207,7 +207,10 @@ internal static class ModDependencyGraph
         string normalized = value.Trim();
         if (normalized.StartsWith('v') || normalized.StartsWith('V'))
             normalized = normalized[1..];
-        return Version.TryParse(normalized, out version!);
+        if (!Version.TryParse(normalized, out var parsed) || parsed is null)
+            return false;
+        version = parsed;
+        return true;
     }
 
     static ModDependencyCycle[] FindCycles(
