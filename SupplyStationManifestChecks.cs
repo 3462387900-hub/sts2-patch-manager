@@ -1,3 +1,5 @@
+using System.IO;
+using System.Net.Http;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Net;
