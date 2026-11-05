@@ -500,22 +500,24 @@ internal sealed class SpireSupplyStationClient : IDisposable
         bool refresh = false)
     {
         string host = NormalizeCdnOrigin(endpoint.Origin).Host;
+        string cacheKey = request.AppId.ToString(CultureInfo.InvariantCulture) + ":" +
+            request.PublishedFileId.ToString(CultureInfo.InvariantCulture) + ":" + host;
         if (!refresh &&
-            cdnTokenCache.TryGetValue(host, out var cached) &&
+            cdnTokenCache.TryGetValue(cacheKey, out var cached) &&
             cached.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30))
             return cached.Query;
 
-        var gate = cdnTokenLocks.GetOrAdd(host, _ => new SemaphoreSlim(1, 1));
+        var gate = cdnTokenLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken);
         try
         {
             if (!refresh &&
-                cdnTokenCache.TryGetValue(host, out cached) &&
+                cdnTokenCache.TryGetValue(cacheKey, out cached) &&
                 cached.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30))
                 return cached.Query;
 
             string query = await GetCdnTokenAsync(request, endpoint, cancellationToken, refresh);
-            cdnTokenCache[host] = new CachedCdnToken(query, ReadTokenExpiration(query));
+            cdnTokenCache[cacheKey] = new CachedCdnToken(query, ReadTokenExpiration(query));
             return query;
         }
         finally
