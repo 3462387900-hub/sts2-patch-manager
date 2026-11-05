@@ -51,7 +51,10 @@ internal sealed class WorkshopModUpdates
                 "该 MOD 在版本基线功能加入前已关联来源。首次核验会完整下载并对比文件；确认一致后才建立基线。",
                 now));
 
-        if (!sources.IsBaselineCurrent(mod, workshopId))
+        bool baselineCurrent = await Task.Run(
+            () => sources.IsBaselineCurrent(mod, workshopId),
+            cancellationToken);
+        if (!baselineCurrent)
             return Store(mod.Id, new WorkshopModUpdateResult(
                 workshopId, mod.Version, "", "", "", "本地文件已变化",
                 "本地版本或文件内容与上次验证时不同。需要重新下载并核对文件，不能直接判断线上是否有更新。",
