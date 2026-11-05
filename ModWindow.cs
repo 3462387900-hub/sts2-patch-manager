@@ -940,11 +940,25 @@ public partial class MainWindow
    root.Children.Add(T(workshopId.HasValue
     ?"已关联 Workshop ID："+workshopId.Value
     :"尚未关联创意工坊来源；下载时可输入 Workshop ID。",12,muted));
-   var workshopActions=new List<UIElement>
+   var workshopStatus=workshopId.HasValue?WorkshopUpdates().Cached(mod.Id):null;
+   if(workshopStatus!=null)
    {
-    Btn(workshopId.HasValue?"从创意工坊重新下载 / 更新":"从创意工坊下载并关联",
-     ()=>DownloadWorkshopMod(mod),"Ghost")
-   };
+    Space(root,5);
+    root.Children.Add(T("创意工坊状态："+workshopStatus.Status+" · "+workshopStatus.Message,11,
+     workshopStatus.Status=="有更新"?gold:muted));
+   }
+   var workshopActions=new List<UIElement>();
+   if(workshopId.HasValue)
+    workshopActions.Add(Btn("检查创意工坊更新",()=>CheckWorkshopMod(mod),"Ghost"));
+   string workshopActionLabel=workshopId is null?"从创意工坊下载并关联":
+    workshopStatus?.Status switch
+    {
+     "待首次核验"=>"首次核验并建立基线",
+     "本地文件已变化"=>"重新核验本地文件",
+     "有更新"=>"获取更新并预览",
+     _=>"从创意工坊重新下载 / 更新"
+    };
+   workshopActions.Add(Btn(workshopActionLabel,()=>DownloadWorkshopMod(mod),"Ghost"));
    if(workshopId.HasValue)
     workshopActions.Add(Btn("解除来源关联",()=>{
      try{WorkshopSources().Unbind(mod.Id);WorkshopUpdates().Invalidate(mod.Id);ShowModDetail(mod.Folder);}
