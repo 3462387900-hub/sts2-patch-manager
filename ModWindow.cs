@@ -17,6 +17,18 @@ public partial class MainWindow
  string? githubRoot;
  WorkshopModSources? workshopModSources;
  string? workshopSourceRoot;
+ WorkshopModUpdates? workshopModUpdates;
+ string? workshopUpdatesRoot;
+ WorkshopModUpdates WorkshopUpdates()
+ {
+  if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
+  if(workshopModUpdates==null||!string.Equals(workshopUpdatesRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+  {
+   workshopModUpdates=new WorkshopModUpdates();
+   workshopUpdatesRoot=selectedInstallRoot;
+  }
+  return workshopModUpdates;
+ }
  WorkshopModSources WorkshopSources()
  {
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
@@ -82,18 +94,39 @@ public partial class MainWindow
   catch(Exception e){toast.Text="查找失败："+e.Message;}
   finally{busy=false;ShowModDetail(mod.Folder);}
  }
- async void CheckGitHubMods()
+ async void CheckAllModUpdates()
  {
   if(busy||modInventory==null||selectedInstallRoot==null)return;
+  if(modInventoryDirty){toast.Text="本地 MOD 清单尚未稳定，请刷新后重试。";return;}
   busy=true;
   try
   {
-   var updates=GitHubUpdates();
-   var count=await updates.CheckAllAsync(modInventory.Mods);
-   modStatus=$"已检查 {count} 个绑定 GitHub 的普通 MOD；检测结果仅供参考，不会修改游戏文件。";
+   int githubCount=await GitHubUpdates().CheckAllAsync(modInventory.Mods);
+   int workshopCount=await WorkshopUpdates().CheckAllAsync(modInventory.Mods,WorkshopSources());
+   int githubNew=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    GitHubUpdates().Cached(m.Id)?.Status=="有更新");
+   int workshopNew=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    WorkshopUpdates().Cached(m.Id)?.Status=="有更新");
+   int workshopNeedsReview=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    WorkshopUpdates().Cached(m.Id)?.Status is "待首次核验" or "本地文件已变化");
+   modStatus=$"检查完成：GitHub {githubCount} 项（有更新 {githubNew}）；创意工坊 {workshopCount} 项（有更新 {workshopNew}，待核验 {workshopNeedsReview}）。仅检测来源内容，不会自动下载或修改游戏文件。";
   }
-  catch(Exception e){modStatus="GitHub 检查未完成："+e.Message;}
+  catch(Exception e){modStatus="MOD 更新检查未完成："+e.Message;}
   finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
+ }
+ async void CheckWorkshopMod(ManagedMod mod)
+ {
+  if(busy||modInventoryDirty||selectedInstallRoot==null)return;
+  ulong? workshopId=WorkshopSources().Get(mod.Id);
+  if(workshopId is null){toast.Text="此 MOD 尚未关联创意工坊来源。";return;}
+  busy=true;
+  try
+  {
+   var result=await WorkshopUpdates().CheckAsync(mod,workshopId.Value,WorkshopSources(),force:true);
+   toast.Text=mod.Name+" · 创意工坊："+result.Status+" · "+result.Message;
+  }
+  catch(Exception e){toast.Text="创意工坊检查失败："+e.Message;}
+  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  void BindGitHubMod(ManagedMod mod)
  {
@@ -194,10 +227,16 @@ public partial class MainWindow
    finally{transactionWriting=false;}
 
    string? sourceSaveWarning=null;
-   try{WorkshopSources().Bind(result.ModId,workshopId);}
+   try
+   {
+    var sources=WorkshopSources();
+    sources.Bind(result.ModId,workshopId);
+    sources.RecordBaseline(result.ModId,workshopId,prepared.ManifestId,result.Version,prepared.PayloadSnapshot);
+    WorkshopUpdates().Invalidate(result.ModId);
+   }
    catch(Exception sourceError)
    {
-    sourceSaveWarning="（来源记录保存失败："+sourceError.Message+"）";
+    sourceSaveWarning="（来源或版本基线保存失败："+sourceError.Message+"）";
    }
 
    changed=result.Changed;
@@ -376,7 +415,10 @@ public partial class MainWindow
    try
    {
     var previous=GitHubModInstaller.Restore(root,mod,latest);
-    toast.Text="已恢复 MOD 备份；恢复前的版本保存在："+previous;
+    string baselineNote="";
+    try{WorkshopSources().ClearBaseline(mod.Id);WorkshopUpdates().Invalidate(mod.Id);}
+    catch(Exception baselineError){baselineNote="（版本基线清理未完成："+baselineError.Message+"；下次检查会要求重新核验本地文件。）";}
+    toast.Text="已恢复 MOD 备份；恢复前的版本保存在："+previous+baselineNote;
     InvalidateLifecycle("MOD 备份已恢复，现有修复补丁健康结果需要重新检查。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    }
@@ -905,7 +947,7 @@ public partial class MainWindow
    };
    if(workshopId.HasValue)
     workshopActions.Add(Btn("解除来源关联",()=>{
-     try{WorkshopSources().Unbind(mod.Id);ShowModDetail(mod.Folder);}
+     try{WorkshopSources().Unbind(mod.Id);WorkshopUpdates().Invalidate(mod.Id);ShowModDetail(mod.Folder);}
      catch(Exception e){toast.Text="解除关联失败："+e.Message;}
     },"Ghost"));
    root.Children.Add(H(workshopActions.ToArray()));Space(root,18);
