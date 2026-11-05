@@ -195,33 +195,28 @@ internal static class SteamDepotCrypto
 
         byte[] key = depotKey.ToArray();
         byte[] encryptedIv = encrypted[..16].ToArray();
-        byte[] iv;
+        byte[]? iv = null;
         try
         {
-            using var aesEcb = Aes.Create();
-            aesEcb.Key = key;
-            aesEcb.Mode = CipherMode.ECB;
-            aesEcb.Padding = PaddingMode.None;
-            using var decryptor = aesEcb.CreateDecryptor();
-            iv = decryptor.TransformFinalBlock(encryptedIv, 0, encryptedIv.Length);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(encryptedIv);
-        }
+            using (var aesEcb = Aes.Create())
+            {
+                aesEcb.Key = key;
+                aesEcb.Mode = CipherMode.ECB;
+                aesEcb.Padding = PaddingMode.None;
+                using var decryptor = aesEcb.CreateDecryptor();
+                iv = decryptor.TransformFinalBlock(encryptedIv, 0, encryptedIv.Length);
+            }
 
-        try
-        {
             using var aesCbc = Aes.Create();
             aesCbc.Key = key;
             aesCbc.IV = iv;
             aesCbc.Mode = CipherMode.CBC;
             aesCbc.Padding = PaddingMode.PKCS7;
-            using var decryptor = aesCbc.CreateDecryptor();
+            using var cbcDecryptor = aesCbc.CreateDecryptor();
             byte[] ciphertext = encrypted[16..].ToArray();
             try
             {
-                return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
+                return cbcDecryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
             }
             finally
             {
@@ -230,7 +225,9 @@ internal static class SteamDepotCrypto
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(iv);
+            CryptographicOperations.ZeroMemory(encryptedIv);
+            if (iv is not null)
+                CryptographicOperations.ZeroMemory(iv);
             CryptographicOperations.ZeroMemory(key);
         }
     }
