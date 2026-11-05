@@ -19,6 +19,7 @@ public partial class MainWindow
  string? workshopSourceRoot;
  WorkshopModUpdates? workshopModUpdates;
  string? workshopUpdatesRoot;
+ bool updateCenterAutoCheckQueued;
  WorkshopModUpdates WorkshopUpdates()
  {
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
@@ -99,6 +100,7 @@ public partial class MainWindow
   if(busy||modInventory==null||selectedInstallRoot==null)return;
   if(modInventoryDirty){toast.Text="本地 MOD 清单尚未稳定，请刷新后重试。";return;}
   busy=true;
+  toast.Text="正在检查 GitHub 与创意工坊来源…";
   try
   {
    int githubCount=await GitHubUpdates().CheckAllAsync(modInventory.Mods);
