@@ -34,7 +34,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
     internal const string BaseUrl = "https://workshop.apricityx.top";
     internal const string Source = "spire_supply_station";
     internal const string SourceDisplayName = "尖塔补给站（Apricityx）";
-    internal const string RequiredUserAgent = "Sts2PatchManager/0.1.11";
+    // Keep the application identifier stable; the suffix tracks the actual manager version.
+    internal static string RequiredUserAgent => "Sts2PatchManager/" + ManagerUpdates.CurrentVersion;
     internal const string DefaultBranchNamespace = "supply-station-default";
     const string ApiHost = "workshop.apricityx.top";
     const int MaxJsonBytes = 1024 * 1024;
