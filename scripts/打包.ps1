@@ -14,7 +14,7 @@ dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64
 if ($LASTEXITCODE -ne 0) { throw '发布构建失败。' }
 $testRoot = Join-Path $runRoot '验证记录'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
-foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','online-self-test','github-mod-install-self-test','github-mod-discovery-self-test','github-network-self-test', 'supply-station-self-test', 'supply-station-manifest-self-test','supply-station-content-self-test','workshop-mod-install-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test','patch-organizer-self-test','patch-lifecycle-self-test','workspace-integration-self-test')) {
+foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','online-self-test','github-mod-install-self-test','github-mod-discovery-self-test','github-network-self-test', 'supply-station-self-test', 'supply-station-manifest-self-test','supply-station-content-self-test','workshop-mod-install-self-test','workshop-mod-update-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test','patch-organizer-self-test','patch-lifecycle-self-test','workspace-integration-self-test')) {
     $result = Join-Path $testRoot ($mode + '.txt')
     $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--' + $mode, ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $result)) {
