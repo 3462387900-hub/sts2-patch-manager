@@ -172,7 +172,7 @@ public sealed class ModRowControl : Border
   health.ToolTip=item.HealthText;
   context.Text=string.Join("  ·  ",new[]{item.WarningText,item.GitHubText,item.DependencyText}.Where(t=>!string.IsNullOrWhiteSpace(t)));
   context.ToolTip=string.Join("\n",new[]{item.BlockReason,item.GitHubText,item.DependencyText}.Where(t=>!string.IsNullOrWhiteSpace(t)));
-  context.Foreground=item.BlockReason!=null&&!item.IsDependencyProtection?Paint("#F0C47C"):Paint("#A8BCD4");
+  context.Foreground=(item.BlockReason!=null&&!item.IsDependencyProtection)||item.DependencyIssue?Paint("#F0C47C"):Paint("#A8BCD4");
   context.Visibility=context.Text.Length==0?Visibility.Collapsed:Visibility.Visible;
  }
 }
