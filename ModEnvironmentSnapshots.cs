@@ -583,6 +583,163 @@ internal static class ModEnvironmentSnapshots
         });
     }
 
+    static void WriteRestoreJournal(string stageRoot, ModEnvironmentRestoreJournal journal)
+    {
+        string path = BundleInstaller.Child(stageRoot, "restore.json");
+        string temporary = path + ".tmp";
+        try
+        {
+            File.WriteAllText(temporary, JsonSerializer.Serialize(journal, JsonOptions), new UTF8Encoding(false));
+            File.Move(temporary, path, true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    static ModEnvironmentRestoreJournal ReadRestoreJournal(string root, string stageRoot)
+    {
+        string path = BundleInstaller.Child(stageRoot, "restore.json");
+        if (!File.Exists(path) || new FileInfo(path).Length > 64 * 1024)
+            throw new InvalidDataException("恢复事务日志缺失或超过安全大小。");
+        var journal = JsonSerializer.Deserialize<ModEnvironmentRestoreJournal>(File.ReadAllText(path))
+            ?? throw new InvalidDataException("恢复事务日志无法读取。");
+        if (journal.SchemaVersion != Schema ||
+            !journal.GameRoot.Equals(NormalizeRoot(root), StringComparison.OrdinalIgnoreCase) ||
+            !journal.StageId.Equals(Path.GetFileName(stageRoot), StringComparison.OrdinalIgnoreCase) ||
+            !IdPattern.IsMatch(journal.SnapshotId) || !IdPattern.IsMatch(journal.SafetySnapshotId) ||
+            journal.StartedAt == default ||
+            journal.Status is not ("prepared" or "old-moved-mods" or "old-moved-disabled" or
+                "new-moved-mods" or "new-moved-disabled" or "completed" or "rolled-back" or "rollback-failed"))
+            throw new InvalidDataException("恢复事务日志中的游戏目录、编号或状态无效。");
+        return journal;
+    }
+
+    static void MoveLiveToRecovery(string stageRoot, string tree, string live)
+    {
+        if (File.Exists(live))
+            throw new IOException("恢复事务期间 MOD 目录位置出现同名文件，无法自动回滚：" + live);
+        if (!Directory.Exists(live)) return;
+        string failedRoot = BundleInstaller.Child(stageRoot, "failed-new");
+        Directory.CreateDirectory(failedRoot);
+        string destination = BundleInstaller.Child(failedRoot, tree + "-" + Guid.NewGuid().ToString("N"));
+        Directory.Move(live, destination);
+    }
+
+    static void VerifySafetySnapshot(string root, string dataRoot, string safetySnapshotId)
+    {
+        var safety = ReadSnapshot(root, dataRoot, safetySnapshotId, out var folder);
+        VerifySnapshotPayload(folder, safety);
+        foreach (var expected in SnapshotTrees(safety))
+        {
+            var actual = ScanTree(root, expected.Name);
+            if (!SameTree(expected, actual))
+                throw new InvalidDataException("自动保护快照与回滚后的目录不一致：" + expected.Name);
+        }
+    }
+
+    static void RecoverStage(string root, string dataRoot, string stageRoot, ModEnvironmentRestoreJournal journal)
+    {
+        if (GameEnvironment.Running(root))
+            throw new InvalidOperationException("检测到上次 MOD 环境恢复未完成。请先退出游戏，再重新打开管理器执行自动回滚。");
+
+        string previousRoot = BundleInstaller.Child(stageRoot, "previous");
+        string nextRoot = BundleInstaller.Child(stageRoot, "next");
+        string[] trees = ["mods", "disabled"];
+
+        foreach (string tree in trees.Reverse())
+        {
+            bool oldPresent = tree == "mods" ? journal.OldModsPresent : journal.OldDisabledPresent;
+            bool targetPresent = tree == "mods" ? journal.TargetModsPresent : journal.TargetDisabledPresent;
+            string live = TreePath(root, tree);
+            string previous = BundleInstaller.Child(previousRoot, tree);
+            string staged = BundleInstaller.Child(nextRoot, tree);
+            bool previousExists = Directory.Exists(previous);
+            bool stagedExists = Directory.Exists(staged);
+            bool liveExists = Directory.Exists(live);
+
+            if (File.Exists(live))
+                throw new IOException("检测到 MOD 目录位置被同名文件占用，自动回滚已停止：" + live);
+
+            if (oldPresent)
+            {
+                if (previousExists)
+                {
+                    if (liveExists) MoveLiveToRecovery(stageRoot, tree, live);
+                    Directory.Move(previous, live);
+                }
+                else if (!liveExists)
+                {
+                    throw new IOException("原始 MOD 目录和恢复备份均不存在：" + tree);
+                }
+            }
+            else if (!targetPresent)
+            {
+                if (liveExists)
+                    throw new IOException("恢复前不存在的目录出现了意外内容，自动回滚不会删除它：" + live);
+            }
+            else if (stagedExists)
+            {
+                if (liveExists)
+                    throw new IOException("恢复暂存目录和游戏目录同时存在，无法判断安全的回滚目标：" + tree);
+            }
+            else if (liveExists)
+            {
+                MoveLiveToRecovery(stageRoot, tree, live);
+            }
+        }
+
+        VerifySafetySnapshot(root, dataRoot, journal.SafetySnapshotId);
+        WriteRestoreJournal(stageRoot, journal with { Status = "rolled-back" });
+        TryDeleteTree(stageRoot);
+        if (Directory.Exists(stageRoot))
+            throw new IOException("原始 MOD 环境已回滚，但恢复暂存目录无法清理：" + stageRoot);
+    }
+
+    internal static void RecoverInterrupted(string gameRoot, string dataRoot)
+    {
+        string root = GameEnvironment.Root(gameRoot);
+        GameEnvironment.WithLock(root, () =>
+        {
+            string parent = GameEnvironment.Child(root, RestoreStageFolder);
+            if (!Exists(parent)) return true;
+            if (!Directory.Exists(parent))
+                throw new InvalidDataException("MOD 环境恢复暂存位置被同名文件占用。");
+            GameEnvironment.NoLinks(parent);
+
+            foreach (string stageRoot in Directory.EnumerateDirectories(parent))
+            {
+                string stageId = Path.GetFileName(stageRoot);
+                if (!IdPattern.IsMatch(stageId)) continue;
+                GameEnvironment.NoLinks(stageRoot);
+                string journalPath = BundleInstaller.Child(stageRoot, "restore.json");
+                if (!File.Exists(journalPath))
+                {
+                    // Live directories are never moved until the journal is safely written.
+                    TryDeleteTree(stageRoot);
+                    if (Directory.Exists(stageRoot))
+                        throw new IOException("无法清理未开始提交的恢复暂存目录：" + stageRoot);
+                    continue;
+                }
+
+                var journal = ReadRestoreJournal(root, stageRoot);
+                if (journal.Status is "completed" or "rolled-back")
+                {
+                    TryDeleteTree(stageRoot);
+                    if (Directory.Exists(stageRoot))
+                        throw new IOException("无法清理已完成的恢复暂存目录：" + stageRoot);
+                    continue;
+                }
+
+                try { RecoverStage(root, dataRoot, stageRoot, journal); }
+                catch (Exception error)
+                {
+                    throw new IOException("检测到上次 MOD 环境恢复未完成，自动回滚未能完成。请保留此目录，不要手动删除：" +
+                        stageRoot + "。原因：" + error.Message, error);
+                }
+            }
+            return true;
+        });
+    }
+
     internal static ModEnvironmentSnapshotRestoreResult Restore(
         string gameRoot, string dataRoot, string snapshotId, string expectedToken)
     {
