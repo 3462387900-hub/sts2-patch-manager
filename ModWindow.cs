@@ -224,6 +224,14 @@ public partial class MainWindow
    WorkshopModInstallResult result;
    try
    {
+    string? safetySnapshotId=null;
+    if(!prepared.IsUnchanged)
+    {
+     toast.Text="正在创建安装前完整环境快照…";
+     var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+      gameRoot,installer.DataRoot,"更新前自动保护"));
+     safetySnapshotId=safety.Id;
+    }
     toast.Text=prepared.IsUpdate?"正在备份旧版本并安装创意工坊 MOD…":"正在安装创意工坊 MOD…";
     result=await Task.Run(()=>WorkshopModInstaller.Commit(gameRoot,prepared));
    }
@@ -250,7 +258,8 @@ public partial class MainWindow
      :"已从创意工坊更新 "+result.ModName+"。旧版本备份："+result.BackupFolder;
     toast.Text=(result.BackupFolder==null
      ?"创意工坊 MOD 安装成功："+result.ModName
-     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。")+(sourceSaveWarning??"");
+     :"创意工坊 MOD 更新成功："+result.ModName+"；旧版本已备份。")+
+     (safetySnapshotId==null?"":"；更新前环境快照："+safetySnapshotId)+(sourceSaveWarning??"");
     InvalidateLifecycle("创意工坊 MOD 已安装或更新，现有修复补丁健康结果需要重新检查。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    }
@@ -805,6 +814,14 @@ public partial class MainWindow
      WorkshopModInstallResult result;
      try
      {
+      string? safetySnapshotId=null;
+      if(!prepared.IsUnchanged)
+      {
+       toast.Text="正在为 "+mod.Name+" 创建更新前完整环境快照…";
+       var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
+        root,installer.DataRoot,"更新前自动保护"));
+       safetySnapshotId=safety.Id;
+      }
       toast.Text=prepared.IsUnchanged?"正在核对本地 MOD 并刷新版本基线…":"正在备份旧版本并更新："+mod.Name;
       result=await Task.Run(()=>WorkshopModInstaller.Commit(root,prepared));
      }
@@ -827,7 +844,8 @@ public partial class MainWindow
      {
       updated++;changed=true;completed++;
       progress.Record(mod.Name,"成功",
-       "已更新至 "+result.Version+"；旧版本备份："+(result.BackupFolder??"未返回备份路径")+sourceSaveWarning,completed);
+       "已更新至 "+result.Version+"；旧版本备份："+(result.BackupFolder??"未返回备份路径")+
+        (safetySnapshotId==null?"":"；环境快照："+safetySnapshotId)+sourceSaveWarning,completed);
      }
      else
      {
