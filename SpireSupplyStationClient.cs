@@ -709,7 +709,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
         if (reasons.Count != 0)
             throw new InvalidDataException(
-                $"Steam CDN 重定向目标校验失败：{uri.Scheme}://{uri.Host}:{uri.Port}（{string.Join("；", reasons)}）。");
+                $"Steam CDN 重定向目标校验失败：{uri.Scheme}://{uri.Host}:{uri.Port} （{string.Join("；", reasons)}）。");
     }
 
     static bool IsTrustedSteamCdnRedirectHost(string host)
