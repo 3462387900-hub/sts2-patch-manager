@@ -561,7 +561,7 @@ internal static class ModEnvironmentSnapshots
                         snapshot.TotalBytes, true, null));
                 }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or
-                                               InvalidDataException or InvalidOperationException or ArgumentException or OverflowException)
+                                               InvalidOperationException or ArgumentException or OverflowException)
                 {
                     entries.Add(new(id, new DateTimeOffset(Directory.GetLastWriteTimeUtc(folder), TimeSpan.Zero),
                         "无法读取", 0, 0, false, error.Message));
