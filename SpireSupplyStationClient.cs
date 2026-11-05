@@ -605,13 +605,13 @@ internal sealed class SpireSupplyStationClient : IDisposable
             }
 
             if (!response.IsSuccessStatusCode)
-                throw new HttpRequestException("Steam CDN Manifest 请求失败（HTTP " + (int)response.StatusCode + "）。");
+                throw new HttpRequestException("Steam CDN 内容请求失败（HTTP " + (int)response.StatusCode + "）。");
 
             var finalUri = response.RequestMessage?.RequestUri ?? currentUri;
             ValidateCdnUri(finalUri, endpoints);
 
             if (response.Content.Headers.ContentLength is long length &&
-                (length > maxResponseBytes || (expectedLength is long expected && length != expected)))
+                (length > maxResponseBytes || (expectedLength is long declaredExpected && length != declaredExpected)))
                 throw new InvalidDataException("Steam CDN 响应长度与安全限制或 Manifest 声明不一致。");
 
             await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
@@ -621,7 +621,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
             while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), timeout.Token)) > 0)
             {
                 if (output.Length + read > maxResponseBytes ||
-                    (expectedLength is long expected && output.Length + read > expected))
+                    (expectedLength is long maximumExpected && output.Length + read > maximumExpected))
                     throw new InvalidDataException("Steam CDN 响应超过允许的内容长度。");
                 await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
             }
