@@ -601,6 +601,273 @@ public partial class MainWindow
   }
   finally{busy=false;progress.Finish(modStatus);ShowMods();}
  }
+
+ async void BatchCheckWorkshop()
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  var selected=ChosenMods();
+  var sources=WorkshopSources();
+  var eligible=selected.Where(m=>!ModPresentation.IsIndependentPatch(m)&&sources.Get(m.Id).HasValue).ToArray();
+  var eligibleFolders=eligible.Select(m=>m.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  var reviews=selected.Select(m=>new ModBatchReview(m.Name,
+   eligibleFolders.Contains(m.Folder)?"可处理":"跳过",
+   eligibleFolders.Contains(m.Folder)?"只读取已关联的创意工坊 Manifest，不下载 MOD 文件。":
+   ModPresentation.IsIndependentPatch(m)?"独立修复补丁不适用。":"尚未关联创意工坊来源。")).ToArray();
+  if(!ModBatchDialogs.Confirm(this,"批量检查创意工坊更新",
+   "只检查已关联来源的普通 MOD。仅读取远端内容身份，不下载 Chunk、不修改游戏文件；首次核验和本地文件变化会单独标记。",reviews))return;
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+
+  busy=true;
+  int checkedCount=0,updateCount=0,failed=0,completed=0;
+  var progress=new ModBatchProgressWindow(this,"批量检查创意工坊更新",selected.Length);
+  progress.Show();
+  try
+  {
+   foreach(var mod in selected)
+   {
+    if(progress.CancelRequested)break;
+    progress.Current(mod.Name,completed+1,selected.Length);
+    if(!eligibleFolders.Contains(mod.Folder))
+    {
+     completed++;
+     progress.Record(mod.Name,"跳过",
+      ModPresentation.IsIndependentPatch(mod)?"独立修复补丁不适用。":"尚未关联创意工坊来源。",completed);
+     continue;
+    }
+    try
+    {
+     ulong workshopId=sources.Get(mod.Id)??throw new InvalidOperationException("创意工坊来源关联已变化。");
+     var result=await WorkshopUpdates().CheckAsync(mod,workshopId,sources,force:true);
+     if(result.Status is "检查失败" or "暂不支持")failed++;
+     else checkedCount++;
+     if(result.Status=="有更新")updateCount++;
+     completed++;
+     progress.Record(mod.Name,result.Status,result.Message,completed);
+    }
+    catch(Exception e)
+    {
+     failed++;completed++;
+     progress.Record(mod.Name,"失败",e.Message,completed);
+    }
+   }
+   while(completed<selected.Length)
+   {
+    var mod=selected[completed++];
+    progress.Record(mod.Name,"未执行","用户停止了剩余检查。",completed);
+   }
+   modStatus=$"创意工坊批量检查结束：完成 {checkedCount} 项，发现更新 {updateCount} 项，失败 {failed} 项；未关联来源或修复补丁已跳过。";
+  }
+  finally
+  {
+   busy=false;
+   progress.Finish(modStatus);
+   ShowMods();
+  }
+ }
+
+ async void BatchUpdateWorkshop()
+ {
+  if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
+  string root=selectedInstallRoot;
+  var selected=ChosenMods();
+  var sources=WorkshopSources();
+  var eligible=selected.Where(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
+   sources.Get(m.Id).HasValue&&WorkshopUpdates().Cached(m.Id)?.Status=="有更新").ToArray();
+  var eligibleFolders=eligible.Select(m=>m.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  var reviews=selected.Select(m=>
+  {
+   if(eligibleFolders.Contains(m.Folder))
+    return new ModBatchReview(m.Name,"可处理","已关联创意工坊来源，且最近一次检查发现新 Manifest。");
+   if(ModPresentation.IsIndependentPatch(m))
+    return new ModBatchReview(m.Name,"跳过","独立修复补丁不适用。");
+   if(!m.Enabled)
+    return new ModBatchReview(m.Name,"跳过","当前 MOD 已停用；批量更新只处理已启用的独立 MOD。");
+   if(!sources.Get(m.Id).HasValue)
+    return new ModBatchReview(m.Name,"跳过","尚未关联创意工坊来源。");
+   var status=WorkshopUpdates().Cached(m.Id)?.Status;
+   return new ModBatchReview(m.Name,"跳过",status==null?"尚未检查创意工坊更新。":"当前状态："+status+"，没有待处理的更新。");
+  }).ToArray();
+  if(!ModBatchDialogs.Confirm(this,"批量更新创意工坊 MOD",
+   "只处理已选中、已关联来源且检查结果为「有更新」的启用 MOD。每项都会重新下载并显示详细预览；选择“是”更新、“否”跳过、“取消”停止剩余任务。每项独立备份，失败自动回滚并停止后续更新。",reviews))return;
+  if(busy||transactionWriting||modInventoryDirty||!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+
+  busy=true;
+  int updated=0,unchanged=0,failed=0,skipped=0,completed=0;
+  bool changed=false,stopAfterFailure=false;
+  var progress=new ModBatchProgressWindow(this,"批量更新创意工坊 MOD",selected.Length);
+  progress.Show();
+  try
+  {
+   for(int index=0;index<selected.Length;index++)
+   {
+    var mod=selected[index];
+    if(progress.CancelRequested)break;
+    progress.Current(mod.Name,completed+1,selected.Length);
+    if(!eligibleFolders.Contains(mod.Folder))
+    {
+     skipped++;completed++;
+     progress.Record(mod.Name,"跳过",reviews[index].Explanation,completed);
+     continue;
+    }
+
+    WorkshopModPrepared? prepared=null;
+    try
+    {
+     ulong workshopId=sources.Get(mod.Id)??throw new InvalidOperationException("创意工坊来源关联已变化。");
+     using var source=new WorkshopModInstaller();
+     toast.Text="正在准备创意工坊更新："+mod.Name;
+     prepared=await source.PrepareAsync(root,workshopId,
+      progress:message=>Dispatcher.BeginInvoke(new Action(()=>{
+       if(root==selectedInstallRoot)toast.Text=message;
+      })));
+
+     if(progress.CancelRequested)
+     {
+      skipped++;completed++;
+      progress.Record(mod.Name,"已取消","当前 MOD 已准备完成，但尚未写入游戏目录；后续任务将停止。",completed);
+      break;
+     }
+     if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+      throw new InvalidOperationException("游戏目录已切换，已取消本次批量更新。");
+     if(!prepared.ModId.Equals(mod.Id,StringComparison.OrdinalIgnoreCase))
+      throw new InvalidOperationException("下载内容中的 MOD ID 与所选 MOD 不一致，已停止更新。");
+     if(!prepared.IsUpdate)
+      throw new InvalidOperationException("本地 MOD 已不存在或无法匹配；批量更新不会将其改为新增安装，请刷新列表后重试。");
+
+     string? boundModId=WorkshopSources().ModIdFor(workshopId);
+     if(boundModId!=null&&!boundModId.Equals(prepared.ModId,StringComparison.OrdinalIgnoreCase))
+      throw new InvalidOperationException("该 Workshop ID 已关联到另一个 MOD ID："+boundModId+"；为避免来源错配，未更新。");
+
+     string versionNote="";
+     if(WorkshopModInstaller.TryCompareVersions(
+       prepared.Version,prepared.ExistingVersion??"",out int versionOrder)&&versionOrder==0&&!prepared.IsUnchanged)
+      versionNote="\n注意：版本号相同，但文件内容不同；将按文件内容执行更新。";
+     else if(!WorkshopModInstaller.TryCompareVersions(
+       prepared.Version,prepared.ExistingVersion??"",out _))
+      versionNote="\n注意：版本号格式无法自动比较，请核对来源和版本内容。";
+
+     string review=
+      "来源：尖塔补给站（Apricityx）\n"+
+      "Workshop ID："+prepared.WorkshopId+"\n"+
+      "MOD："+prepared.ModName+"（"+prepared.ModId+"）\n"+
+      "版本："+(prepared.ExistingVersion??"未知")+" → "+prepared.Version+"\n"+
+      "操作："+(prepared.IsUnchanged?"本地文件与创意工坊内容完全一致，不需要替换。":"更新现有 MOD，并先备份旧版本。")+"\n"+
+      "文件数："+prepared.FileCount+" · 总大小："+prepared.TotalBytes.ToString("N0")+" 字节\n"+
+      "目标目录："+prepared.DestinationDirectory+"\n\n"+
+      "安全说明：Chunk 和文件 SHA-1 校验已通过；Manifest 签名验证、游戏分支匹配验证尚未执行。"+
+      versionNote+
+      "\n请仅更新你信任的创意工坊内容。执行前必须退出游戏。";
+
+     if(prepared.IsUnchanged)
+     {
+      MessageBox.Show(this,review+"\n\n下载内容与本地文件完全一致，不会替换文件；确认后只刷新已验证的版本基线。",
+       "创意工坊内容已一致",MessageBoxButton.OK,MessageBoxImage.Information);
+     }
+     else
+     {
+      var choice=MessageBox.Show(this,
+       review+"\n\n选择“是”更新此 MOD；选择“否”跳过此项；选择“取消”停止剩余任务。",
+       "确认更新 "+mod.Name,MessageBoxButton.YesNoCancel,MessageBoxImage.Warning);
+      if(choice==MessageBoxResult.No)
+      {
+       skipped++;completed++;
+       progress.Record(mod.Name,"跳过","用户选择跳过此项；本地 MOD 未修改。",completed);
+       continue;
+      }
+      if(choice!=MessageBoxResult.Yes)
+      {
+       skipped++;completed++;
+       progress.Record(mod.Name,"已取消","用户停止了剩余更新；本地 MOD 未修改。",completed);
+       break;
+      }
+     }
+
+     if(progress.CancelRequested)
+     {
+      skipped++;completed++;
+      progress.Record(mod.Name,"已取消","用户停止了剩余更新；当前 MOD 尚未写入游戏目录。",completed);
+      break;
+     }
+     if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+      throw new InvalidOperationException("游戏目录已切换，已取消本次批量更新。");
+
+     transactionWriting=true;
+     WorkshopModInstallResult result;
+     try
+     {
+      toast.Text=prepared.IsUnchanged?"正在核对本地 MOD 并刷新版本基线…":"正在备份旧版本并更新："+mod.Name;
+      result=await Task.Run(()=>WorkshopModInstaller.Commit(root,prepared));
+     }
+     finally{transactionWriting=false;}
+
+     string sourceSaveWarning="";
+     try
+     {
+      var currentSources=WorkshopSources();
+      currentSources.Bind(result.ModId,workshopId);
+      currentSources.RecordBaseline(result.ModId,workshopId,prepared.ManifestId,result.Version,prepared.PayloadSnapshot);
+     }
+     catch(Exception sourceError)
+     {
+      sourceSaveWarning="（来源或版本基线保存失败："+sourceError.Message+"）";
+     }
+     WorkshopUpdates().Invalidate(result.ModId);
+
+     if(result.Changed)
+     {
+      updated++;changed=true;completed++;
+      progress.Record(mod.Name,"成功",
+       "已更新至 "+result.Version+"；旧版本备份："+(result.BackupFolder??"未返回备份路径")+sourceSaveWarning,completed);
+     }
+     else
+     {
+      unchanged++;completed++;
+      progress.Record(mod.Name,"无需更新","下载内容与本地文件一致，已刷新版本基线。"+sourceSaveWarning,completed);
+     }
+    }
+    catch(Exception e)
+    {
+     failed++;completed++;
+     progress.Record(mod.Name,"失败",e.Message,completed);
+     stopAfterFailure=true;
+     break;
+    }
+    finally
+    {
+     WorkshopModInstaller.Cleanup(prepared);
+    }
+   }
+
+   while(completed<selected.Length)
+   {
+    var mod=selected[completed++];
+    string reason=progress.CancelRequested?"用户停止了剩余任务。":
+     stopAfterFailure?"前一项更新失败，已停止后续任务。":"未执行。";
+    skipped++;
+    progress.Record(mod.Name,progress.CancelRequested?"已取消":"未执行",reason,completed);
+   }
+
+   if(changed)
+   {
+    InvalidateLifecycle("创意工坊批量更新了 MOD，现有修复补丁健康结果需要重新检查。");
+    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+    modInventory=await Task.Run(()=>ModManager.Scan(root));
+    modInventoryDirty=false;
+   }
+   modStatus=$"创意工坊批量更新结束：成功更新 {updated} 项，内容一致 {unchanged} 项，失败 {failed} 项，跳过或未执行 {skipped} 项。";
+  }
+  catch(Exception e)
+  {
+   modStatus="创意工坊批量更新中断："+e.Message;
+  }
+  finally
+  {
+   transactionWriting=false;busy=false;
+   progress.Finish(modStatus);
+   ShowMods();
+  }
+ }
+
  async void BatchToggleMods(bool enable)
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
@@ -818,10 +1085,12 @@ public partial class MainWindow
   selectionBar.Children.Add(checkAll);selectionBar.Children.Add(selectionCount);
   var findBatch=Btn("查找 GitHub 来源",BatchFindGitHub,"Ghost");
   var checkBatch=Btn("检查 GitHub 更新",BatchCheckGitHub,"Ghost");
+  var workshopCheckBatch=Btn("检查创意工坊更新",BatchCheckWorkshop,"Ghost");
+  var workshopUpdateBatch=Btn("批量更新创意工坊",BatchUpdateWorkshop,"Ghost");
   var enableBatch=Btn("批量启用",()=>BatchToggleMods(true),"Ghost");
   var disableBatch=Btn("批量停用",()=>BatchToggleMods(false),"Ghost");
   var clearBatch=Btn("取消选择",()=>{chosenModFolders.Clear();ShowMods();},"Ghost");
-  foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch}){
+  foreach(var button in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch,enableBatch,disableBatch,clearBatch}){
    button.Padding=new Thickness(9,7,9,7);button.Margin=new Thickness(0,0,6,4);
    selectionBar.Children.Add(button);
   }
@@ -829,17 +1098,29 @@ public partial class MainWindow
 
   var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
    if(ModPresentation.IsIndependentPatch(mod))return "";
+   var context=new List<string>();
    var updates=GitHubUpdates();
    if(updates.Repository(mod.Id)==null)
    {
     var candidates=Discovery().Cached(mod);
-    return candidates==null?"":candidates.Candidates.Length>0
-     ?"GitHub："+(candidates.Candidates.Any(c=>c.Verified)?"已核验来源":"疑似来源")+
-      " "+candidates.Candidates.Length+" 个 · 待确认"
-     :candidates.Retryable?"GitHub：查找受限，可重试":"GitHub：暂无来源";
+    if(candidates!=null)
+     context.Add(candidates.Candidates.Length>0
+      ?"GitHub："+(candidates.Candidates.Any(c=>c.Verified)?"已核验来源":"疑似来源")+
+       " "+candidates.Candidates.Length+" 个 · 待确认"
+      :candidates.Retryable?"GitHub：查找受限，可重试":"GitHub：暂无来源");
    }
-   var result=updates.Cached(mod.Id);
-   return result==null?"GitHub：已关联 · 待检查":"GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:"");
+   else
+   {
+    var result=updates.Cached(mod.Id);
+    context.Add(result==null?"GitHub：已关联 · 待检查":
+     "GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:""));
+   }
+   if(WorkshopSources().Get(mod.Id).HasValue)
+   {
+    var workshopResult=WorkshopUpdates().Cached(mod.Id);
+    context.Add(workshopResult==null?"创意工坊：已关联 · 待检查":"创意工坊："+workshopResult.Status);
+   }
+   return string.Join(" · ",context);
   });
   ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
@@ -887,8 +1168,13 @@ public partial class MainWindow
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
    foreach(var button in new[]{findBatch,checkBatch,enableBatch,disableBatch,clearBatch})
     button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
+   bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&WorkshopSources().Get(m.Id).HasValue);
+   bool hasWorkshopUpdate=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
+    WorkshopSources().Get(m.Id).HasValue&&WorkshopUpdates().Cached(m.Id)?.Status=="有更新");
    findBatch.IsEnabled=checkBatch.IsEnabled=enableBatch.IsEnabled=disableBatch.IsEnabled=
     count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
+   workshopCheckBatch.IsEnabled=hasWorkshopSource&&!busy&&!transactionWriting&&!modInventoryDirty;
+   workshopUpdateBatch.IsEnabled=hasWorkshopUpdate&&!busy&&!transactionWriting&&!modInventoryDirty;
    var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
    checkAll.Checked-=OnCheckAll;checkAll.Unchecked-=OnCheckAll;
    checkAll.IsChecked=visible.Length>0&&visible.All(r=>chosenModFolders.Contains(r.Mod.Folder));
