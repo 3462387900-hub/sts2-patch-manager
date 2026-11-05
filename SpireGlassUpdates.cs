@@ -195,7 +195,7 @@ public partial class MainWindow
    }
    return false;
   });
-  if(needsAutoCheck&&!busy&&!transactionWriting&&!updateCenterAutoCheckQueued)
+  if(needsAutoCheck&&!busy&&!transactionWriting&&!modInventoryDirty&&!updateCenterAutoCheckQueued)
   {
    updateCenterAutoCheckQueued=true;
    Dispatcher.BeginInvoke(new Action(()=>
