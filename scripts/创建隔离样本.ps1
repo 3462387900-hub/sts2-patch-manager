@@ -7,6 +7,9 @@ $ErrorActionPreference = 'Stop'
 $source = [IO.Path]::GetFullPath($GameRoot).TrimEnd('\')
 $output = [IO.Path]::GetFullPath($OutputRoot).TrimEnd('\')
 if (!(Test-Path -LiteralPath $source -PathType Container)) { throw "游戏目录不存在：$source" }
+if (!(Test-Path -LiteralPath (Join-Path $source 'SlayTheSpire2.exe') -PathType Leaf)) {
+    throw 'GameRoot 中没有 SlayTheSpire2.exe，请选择游戏安装根目录。'
+}
 if ($source.Equals($output, [StringComparison]::OrdinalIgnoreCase) -or
     $output.StartsWith($source + '\', [StringComparison]::OrdinalIgnoreCase) -or
     $source.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) {
@@ -39,7 +42,6 @@ function Assert-NoReparsePoints([string]$Root) {
 }
 
 function Copy-TreeContents([string]$SourceDirectory, [string]$DestinationDirectory) {
-    Assert-NoReparsePoints $SourceDirectory
     New-Item -ItemType Directory -Path $DestinationDirectory -Force | Out-Null
     foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries($SourceDirectory)) {
         $target = Join-Path $DestinationDirectory ([IO.Path]::GetFileName($entry))
@@ -54,6 +56,8 @@ function Copy-TreeContents([string]$SourceDirectory, [string]$DestinationDirecto
 
 New-Item -ItemType Directory -Path $output | Out-Null
 try {
+    Assert-NoReparsePoints (Join-Path $source 'mods')
+    Assert-NoReparsePoints (Join-Path $source 'data_sts2_windows_x86_64')
     Copy-TreeContents (Join-Path $source 'mods') (Join-Path $output 'mods')
     Copy-TreeContents (Join-Path $source 'data_sts2_windows_x86_64') (Join-Path $output 'data_sts2_windows_x86_64')
     [IO.File]::WriteAllText((Join-Path $output 'SlayTheSpire2.exe'), '')
