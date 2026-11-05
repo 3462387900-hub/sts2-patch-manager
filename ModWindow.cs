@@ -1194,7 +1194,7 @@ public partial class MainWindow
    else CheckGitHubMod(row.Mod);
   },(row,value)=>{
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
-   row.Selected=value;ModCardList.RefreshVisible(list);UpdateSelectionToolbar();
+   row.Selected=value;UpdateSelectionToolbar();
   });
   activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
   var footer=V(empty);
