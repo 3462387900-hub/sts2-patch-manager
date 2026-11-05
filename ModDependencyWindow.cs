@@ -47,7 +47,7 @@ public partial class MainWindow
                 ModDependencyStatus.VersionUnknown or ModDependencyStatus.InvalidConstraint);
         root.Children.Add(Card(H(
             DependencyMetric(report.Edges.Length.ToString(), "依赖关系"),
-            DependencyDependencyMetric(report.ActiveIssueCount.ToString(), "启用异常关系"),
+            DependencyMetric(report.ActiveIssueCount.ToString(), "启用异常关系"),
             DependencyMetric(missing.ToString(), "缺失前置"),
             DependencyMetric(disabled.ToString(), "前置已停用"),
             DependencyMetric(versionProblems.ToString(), "版本问题"),
