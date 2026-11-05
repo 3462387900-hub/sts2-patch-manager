@@ -34,6 +34,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
     internal const string BaseUrl = "https://workshop.apricityx.top";
     internal const string Source = "spire_supply_station";
     internal const string SourceDisplayName = "尖塔补给站（Apricityx）";
+    internal const string RequiredUserAgent = "Sts2PatchManager/0.1.11";
     internal const string DefaultBranchNamespace = "supply-station-default";
     const string ApiHost = "workshop.apricityx.top";
     const int MaxJsonBytes = 1024 * 1024;
@@ -57,8 +58,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
         {
             Timeout = Timeout.InfiniteTimeSpan
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Sts2PatchManager/" + ManagerUpdates.CurrentVersion);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(RequiredUserAgent);
         client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
 
