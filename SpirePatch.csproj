@@ -4,5 +4,9 @@
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>SpirePatch</AssemblyName>
     <Version>0.12.4</Version><ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Keep the standalone console probe isolated from the WPF application's default compile glob. -->
+    <Compile Remove="tools/**/*.cs" />
+  </ItemGroup>
   <ItemGroup><EmbeddedResource Include="catalog-plan.json" /><EmbeddedResource Include="patch-catalog.json" /><EmbeddedResource Include="InstallerBridge.ps1" /><EmbeddedResource Include="SelectionBridge.ps1" /><EmbeddedResource Include="ManagerUpdateWorker.ps1" /></ItemGroup>
 </Project>
