@@ -40,6 +40,29 @@ internal sealed record SteamDepotManifestData(
     SteamDepotManifestSummary Summary,
     IReadOnlyList<SteamDepotManifestFile> Files)
 {
+    public SteamDepotManifestData DecryptFileNames(ReadOnlySpan<byte> depotKey)
+    {
+        if (!Summary.FileNamesEncrypted)
+            return this;
+
+        if (depotKey.Length != 32)
+            throw new InvalidDataException("Steam Depot Key 必须为 32 字节。");
+
+        var decryptedFiles = Files.Select(file => file with
+        {
+            Path = SteamDepotCrypto.DecryptManifestName(file.Path, depotKey),
+            LinkTarget = string.IsNullOrWhiteSpace(file.LinkTarget)
+                ? null
+                : SteamDepotCrypto.DecryptManifestName(file.LinkTarget, depotKey)
+        }).ToArray();
+
+        return this with
+        {
+            Summary = Summary with { FileNamesEncrypted = false },
+            Files = decryptedFiles
+        };
+    }
+
     public IReadOnlyList<SteamDepotManifestChunk> UniqueChunks()
     {
         var chunks = new Dictionary<string, SteamDepotManifestChunk>(StringComparer.Ordinal);
