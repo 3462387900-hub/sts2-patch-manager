@@ -11,5 +11,8 @@
     <Compile Include="../../SpireSupplyStationClient.cs" Link="SpireSupplyStationClient.cs" />
     <Compile Include="../../SteamDepotManifest.cs" Link="SteamDepotManifest.cs" />
     <Compile Include="../../SupplyStationContentChecks.cs" Link="SupplyStationContentChecks.cs" />
+    <Compile Include="../../SteamDepotChunkProcessor.cs" Link="SteamDepotChunkProcessor.cs" />
+    <Compile Include="../../SupplyStationModAssembler.cs" Link="SupplyStationModAssembler.cs" />
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
   </ItemGroup>
 </Project>
