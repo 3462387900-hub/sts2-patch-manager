@@ -1,3 +1,4 @@
+using System.IO;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
@@ -383,8 +384,16 @@ internal static class SteamDepotManifestParser
         return chunks;
     }
 
-    private static string SanitizeManifestString(string value) =>
-        value.Trim(character => character <= ' ' || character == '\0');
+    private static string SanitizeManifestString(string value)
+    {
+        int start = 0;
+        int end = value.Length;
+        while (start < end && (value[start] <= ' ' || value[start] == '\0'))
+            start++;
+        while (end > start && (value[end - 1] <= ' ' || value[end - 1] == '\0'))
+            end--;
+        return value[start..end];
+    }
 
     private sealed class ProtoReader(byte[] bytes)
     {
