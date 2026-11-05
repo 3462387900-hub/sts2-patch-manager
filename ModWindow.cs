@@ -155,15 +155,24 @@ public partial class MainWindow
 
    string action=prepared.IsUnchanged?"本地文件与创意工坊内容完全一致，无需替换。":
     prepared.IsUpdate?"将更新现有 MOD，并先备份旧版本。":"将新增一个 MOD，不会覆盖现有目录。";
+   string versionNote="";
+   if(prepared.IsUpdate&&WorkshopModInstaller.TryCompareVersions(
+      prepared.Version,prepared.ExistingVersion??"",out int versionOrder)&&
+      versionOrder==0&&!prepared.IsUnchanged)
+    versionNote="\n注意：版本号相同，但文件内容不同；将按文件内容执行更新。";
+   else if(prepared.IsUpdate&&!WorkshopModInstaller.TryCompareVersions(
+      prepared.Version,prepared.ExistingVersion??"",out _))
+    versionNote="\n注意：版本号格式无法自动比较，请核对来源和版本内容。";
    string review=
     "来源：尖塔补给站（Apricityx）\n"+
     "Workshop ID："+prepared.WorkshopId+"\n"+
     "MOD："+prepared.ModName+"（"+prepared.ModId+"）\n"+
-    "版本："+prepared.Version+"\n"+
+    "版本："+(prepared.IsUpdate?(prepared.ExistingVersion??"未知")+" → "+prepared.Version:prepared.Version)+"\n"+
     "操作："+action+"\n"+
     "文件数："+prepared.FileCount+" · 总大小："+prepared.TotalBytes.ToString("N0")+" 字节\n"+
     "目标目录："+prepared.DestinationDirectory+"\n\n"+
     "安全说明：Chunk 和文件 SHA-1 校验已通过；Manifest 签名验证、游戏分支匹配验证尚未执行。"+
+    versionNote+
     "请仅安装你信任的创意工坊内容。安装前必须退出游戏。";
    if(prepared.IsUnchanged)
    {
@@ -350,7 +359,7 @@ public partial class MainWindow
   }
   catch(Exception ex){toast.Text="无法列出旧版本备份："+ex.Message;}
  }
- void RestoreGitHubMod(ManagedMod mod)
+ void RestoreModBackup(ManagedMod mod)
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
   var root=selectedInstallRoot;
@@ -934,9 +943,20 @@ public partial class MainWindow
    var update=Btn("下载并更新",()=>UpdateGitHubMod(mod),"Primary");
    update.IsEnabled=repo!=null&&!busy&&!transactionWriting&&!modInventoryDirty&&mod.Enabled&&result?.Status=="有更新";
    root.Children.Add(H(bind,check,update));Space(root,7);
-   if(mod.Enabled&&selectedInstallRoot!=null&&GitHubModInstaller.Backups(selectedInstallRoot,mod).Length>0)
-    root.Children.Add(H(Btn("恢复上次 MOD 备份",()=>RestoreGitHubMod(mod),"Ghost"),Btn("清理旧版本备份",()=>CleanOldModBackups(mod),"Ghost")));
    Space(root,20);
+  }
+  if(mod.Enabled&&selectedInstallRoot!=null)
+  {
+   var backups=GitHubModInstaller.Backups(selectedInstallRoot,mod);
+   if(backups.Length>0)
+   {
+    root.Children.Add(T("MOD 版本备份",17,ink,true));Space(root,8);
+    root.Children.Add(T("当前有 "+backups.Length+" 个历史版本备份。最近一次可用于恢复；清理旧备份时会保留最近一次。",12,muted));Space(root,8);
+    root.Children.Add(H(
+     Btn("恢复最近一次备份",()=>RestoreModBackup(mod),"Ghost"),
+     Btn("管理旧版本备份",()=>CleanOldModBackups(mod),"Ghost")));
+    Space(root,18);
+   }
   }
   root.Children.Add(T("声明的前置模组",17,ink,true));Space(root,8);root.Children.Add(T(mod.Dependencies.Length==0?"清单未声明前置；这不代表一定没有其他依赖。":string.Join("\n",mod.Dependencies.Select(d=>d.Id+(d.Minimum.Length>0?" ≥ "+d.Minimum:"")+(d.Maximum.Length>0?" ≤ "+d.Maximum:""))),13,muted));Space(root,20);
   if(ModPresentation.IsIndependentPatch(mod))
