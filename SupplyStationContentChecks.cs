@@ -5,6 +5,9 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
+using SharpCompress.Compressors.LZMA;
+using SharpCompress.Compressors.ZStandard;
 
 namespace SpirePatch;
 
@@ -17,8 +20,11 @@ internal static class SupplyStationContentChecks
     const string RequestCode = "18446744073709551614";
     const string Future = "2099-01-01T00:00:00Z";
     static readonly byte[] DepotKey = Enumerable.Range(0, 32).Select(value => (byte)(value + 17)).ToArray();
-    static readonly byte[] ChunkId = Enumerable.Repeat((byte)0x11, 20).ToArray();
-    static readonly byte[] RawChunk = [1, 2, 3, 4, 5, 6, 7, 8];
+    static readonly byte[] PlainChunk = Encoding.UTF8.GetBytes("Base");
+    static readonly byte[] RawChunk = EncryptWithEncryptedIv(CreateZipPayload(PlainChunk), DepotKey);
+    static readonly byte[] ChunkId = SHA1.HashData(RawChunk);
+    static readonly byte[] FileSha1 = SHA1.HashData(PlainChunk);
+    static readonly uint ChunkChecksum = SteamDepotChunkProcessor.ComputeSteamAdler32(PlainChunk);
 
     sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
@@ -99,6 +105,42 @@ internal static class SupplyStationContentChecks
                 Check(!result.ModFilesAssembled,
                     "raw Chunk probe explicitly reports that MOD files were not assembled");
             }
+
+            var assemblyRequests = new List<string>();
+            string assembledOutput = Path.Combine(root, "assembled-mod");
+            using (var client = new SpireSupplyStationClient(new Handler(request =>
+            {
+                assemblyRequests.Add(request.RequestUri!.AbsolutePath);
+                if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
+                    return Json(request, Descriptor());
+                if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
+                    return Json(request, Token("http://cdn.example", "token=assembly-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "cdn.example" &&
+                    request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
+                    return Bytes(request, manifestZip);
+                throw new InvalidOperationException("Assembly mode must not redownload raw Chunk bytes.");
+            })))
+            {
+                var assembled = await client.AssembleChunksAsync(
+                    AppId, ItemId, destination, assembledOutput);
+                Check(assembled.ModFilesAssembled &&
+                    assembled.ChunkCount == 1 && assembled.ProcessedChunks == 1 &&
+                    assembled.FileCount == 1 && assembled.FileNamesDecrypted &&
+                    assembled.ChunkChecksumsVerified && assembled.FileSha1Verified,
+                    "assembly mode decrypts the encrypted manifest name and verifies every Chunk and file");
+                Check(File.ReadAllBytes(Path.Combine(assembledOutput, "BaseLib.txt")).SequenceEqual(PlainChunk),
+                    "AES-decrypted ZIP Chunk is reassembled into the exact Manifest file bytes");
+                Check(assemblyRequests.Any(path => path.Contains("/manifest/", StringComparison.Ordinal)) &&
+                    !assemblyRequests.Any(path => path.Contains("/chunk/", StringComparison.Ordinal)),
+                    "assembly re-fetches the current Manifest but reuses local raw Chunks without downloading them again");
+                string assemblyReport = await File.ReadAllTextAsync(Path.Combine(assembledOutput, "assembly-manifest.json"));
+                Check(!assemblyReport.Contains(Convert.ToBase64String(DepotKey), StringComparison.Ordinal) &&
+                    !assemblyReport.Contains(RequestCode, StringComparison.Ordinal) &&
+                    !assemblyReport.Contains("assembly-test", StringComparison.Ordinal),
+                    "assembled output report excludes Depot Key, request code and CDN token");
+            }
+
+            TestChunkProcessorCompressionFormats(Check);
 
             var redirectRequests = new List<(string Host, string Scheme, int Port, string Query)>();
             int redirectTokenCalls = 0;
@@ -358,7 +400,7 @@ internal static class SupplyStationContentChecks
             publishedFileId = ItemId.ToString(),
             title = "ChunkFixture",
             fileName = "ChunkFixture.zip",
-            fileSizeBytes = 4L,
+            fileSizeBytes = (long)PlainChunk.Length,
             contentVersion = "fixture-v1",
             manifestId = ManifestId.ToString(),
             depotId = DepotId,
@@ -376,17 +418,17 @@ internal static class SupplyStationContentChecks
         byte[] chunk = BuildProto(writer =>
         {
             WriteBytes(writer, 1, ChunkId);
-            WriteFixed32(writer, 2, 0x12345678);
+            WriteFixed32(writer, 2, ChunkChecksum);
             WriteVarintField(writer, 3, 0);
-            WriteVarintField(writer, 4, 4);
+            WriteVarintField(writer, 4, (ulong)PlainChunk.Length);
             WriteVarintField(writer, 5, (ulong)RawChunk.Length);
         });
         byte[] file = BuildProto(writer =>
         {
-            WriteString(writer, 1, "ZmlsZQ==");
-            WriteVarintField(writer, 2, 4);
+            WriteString(writer, 1, EncryptManifestName("BaseLib.txt", DepotKey));
+            WriteVarintField(writer, 2, (ulong)PlainChunk.Length);
             WriteVarintField(writer, 3, 0);
-            WriteBytes(writer, 5, new byte[20]);
+            WriteBytes(writer, 5, FileSha1);
             WriteBytes(writer, 6, chunk);
         });
         byte[] payload = BuildProto(writer => WriteBytes(writer, 1, file));
@@ -396,11 +438,11 @@ internal static class SupplyStationContentChecks
             WriteVarintField(writer, 2, ManifestId);
             WriteVarintField(writer, 3, 123456);
             WriteVarintField(writer, 4, 1);
-            WriteVarintField(writer, 5, 4);
+            WriteVarintField(writer, 5, (ulong)PlainChunk.Length);
             WriteVarintField(writer, 6, (ulong)RawChunk.Length);
             WriteVarintField(writer, 7, 1);
-            WriteVarintField(writer, 8, 0x12345678);
-            WriteVarintField(writer, 9, 0x12345678);
+            WriteVarintField(writer, 8, ChunkChecksum);
+            WriteVarintField(writer, 9, ChunkChecksum);
         });
 
         using var manifest = new MemoryStream();
@@ -418,6 +460,118 @@ internal static class SupplyStationContentChecks
             manifest.CopyTo(entryStream);
         }
         return zipBytes.ToArray();
+    }
+
+    static void TestChunkProcessorCompressionFormats(Action<bool, string> check)
+    {
+        foreach (var fixture in new[]
+        {
+            (Name: "VZip/LZMA", Payload: CreateVZipPayload(PlainChunk)),
+            (Name: "VZstd/Zstandard", Payload: CreateVZstdPayload(PlainChunk))
+        })
+        {
+            byte[] raw = EncryptWithEncryptedIv(fixture.Payload, DepotKey);
+            var chunk = new SteamDepotManifestChunk(
+                Convert.ToHexString(SHA1.HashData(raw)),
+                SHA1.HashData(raw),
+                ChunkChecksum,
+                0,
+                (uint)raw.Length,
+                (uint)PlainChunk.Length);
+            byte[] decoded = SteamDepotChunkProcessor.Process(raw, chunk, DepotKey);
+            check(decoded.SequenceEqual(PlainChunk),
+                $"{fixture.Name} encrypted Steam Chunk is decrypted, decompressed and Adler32-verified");
+        }
+    }
+
+    static byte[] CreateZipPayload(byte[] plain)
+    {
+        using var output = new MemoryStream();
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("chunk.bin", CompressionLevel.Optimal);
+            using var stream = entry.Open();
+            stream.Write(plain);
+        }
+        return output.ToArray();
+    }
+
+    static byte[] CreateVZipPayload(byte[] plain)
+    {
+        using var compressed = new MemoryStream();
+        byte[] properties;
+        using (var encoder = LzmaStream.Create(
+                   new LzmaEncoderProperties(false, 1 << 20),
+                   isLzma2: false,
+                   outputStream: compressed))
+        {
+            properties = encoder.Properties.ToArray();
+            encoder.Write(plain, 0, plain.Length);
+        }
+
+        using var output = new MemoryStream();
+        WriteUInt16(output, 0x5A56);
+        output.WriteByte((byte)'a');
+        WriteUInt32(output, 0);
+        output.WriteByte(properties[0]);
+        output.Write(properties, 1, 4);
+        compressed.Position = 0;
+        compressed.CopyTo(output);
+        WriteUInt32(output, 0);
+        WriteUInt32(output, (uint)plain.Length);
+        WriteUInt16(output, 0x767A);
+        return output.ToArray();
+    }
+
+    static byte[] CreateVZstdPayload(byte[] plain)
+    {
+        using var compressor = new Compressor();
+        byte[] compressed = compressor.Wrap(plain).ToArray();
+        using var output = new MemoryStream();
+        output.Write("VSZa"u8);
+        WriteUInt32(output, 0);
+        output.Write(compressed);
+        WriteUInt32(output, 0);
+        WriteUInt32(output, (uint)plain.Length);
+        output.Write(new byte[7]);
+        return output.ToArray();
+    }
+
+    static byte[] EncryptWithEncryptedIv(byte[] plain, byte[] depotKey)
+    {
+        byte[] iv = Enumerable.Range(0, 16).Select(index => (byte)(0xA0 + index)).ToArray();
+        using var ecb = Aes.Create();
+        ecb.Key = depotKey;
+        ecb.Mode = CipherMode.ECB;
+        ecb.Padding = PaddingMode.None;
+        using var ecbEncryptor = ecb.CreateEncryptor();
+        byte[] encryptedIv = ecbEncryptor.TransformFinalBlock(iv, 0, iv.Length);
+
+        using var cbc = Aes.Create();
+        cbc.Key = depotKey;
+        cbc.IV = iv;
+        cbc.Mode = CipherMode.CBC;
+        cbc.Padding = PaddingMode.PKCS7;
+        using var cbcEncryptor = cbc.CreateEncryptor();
+        byte[] encryptedPayload = cbcEncryptor.TransformFinalBlock(plain, 0, plain.Length);
+
+        byte[] result = new byte[encryptedIv.Length + encryptedPayload.Length];
+        Buffer.BlockCopy(encryptedIv, 0, result, 0, encryptedIv.Length);
+        Buffer.BlockCopy(encryptedPayload, 0, result, encryptedIv.Length, encryptedPayload.Length);
+        CryptographicOperations.ZeroMemory(iv);
+        CryptographicOperations.ZeroMemory(encryptedIv);
+        CryptographicOperations.ZeroMemory(encryptedPayload);
+        return result;
+    }
+
+    static string EncryptManifestName(string value, byte[] depotKey) =>
+        Convert.ToBase64String(EncryptWithEncryptedIv(Encoding.UTF8.GetBytes(value), depotKey));
+
+    static void WriteUInt16(Stream stream, ushort value)
+    {
+        Span<byte> bytes = stackalloc byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes, value);
+        stream.Write(bytes);
     }
 
     static byte[] BuildProto(Action<MemoryStream> write)
