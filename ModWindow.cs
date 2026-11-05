@@ -1431,20 +1431,35 @@ public partial class MainWindow
  {
   if(busy||transactionWriting||zipImportPreview==null||selectedInstallRoot!=zipImportPreview.Root)return;
   var plan=zipImportPreview;zipImportPreview=null;busy=true;transactionWriting=true;
+  bool imported=false;
   try
   {
    var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
     plan.Root,installer.DataRoot,"本地 ZIP 导入前自动保护"));
    await Task.Run(()=>WorkshopZipImport.Apply(plan));
+   imported=true;
    InvalidateLifecycle("导入了新的 MOD，请重新检查补丁健康状态。");
    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
    modInventoryDirty=true;
-   modStatus="成功导入 "+plan.ModName+"；请检查依赖与游戏兼容性。";
-   modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));
-   modInventoryDirty=false;
-   toast.Text=modStatus+"；导入前环境快照："+safety.Id;
+   try
+   {
+    modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));
+    modInventoryDirty=false;
+    modStatus="成功导入 "+plan.ModName+"；请检查依赖与游戏兼容性。";
+    toast.Text=modStatus+"；导入前环境快照："+safety.Id;
+   }
+   catch(Exception scanError)
+   {
+    modStatus="ZIP 已写入，但刷新 MOD 清单失败："+scanError.Message;
+    toast.Text=modStatus+"；导入前环境快照："+safety.Id;
+   }
   }
-  catch(Exception e){modInventoryDirty=true;modStatus="MOD 导入未完成："+e.Message;toast.Text=modStatus;}
+  catch(Exception e)
+  {
+   modInventoryDirty=true;
+   modStatus=imported?"ZIP 已导入，但后续处理失败："+e.Message:"MOD 导入未完成："+e.Message;
+   toast.Text=modStatus;
+  }
   finally{busy=false;transactionWriting=false;ShowMods();}
  }
 
