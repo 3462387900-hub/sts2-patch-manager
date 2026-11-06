@@ -1079,6 +1079,7 @@ public partial class MainWindow
    };
    toolsMenu.Items.Add(autoStop);
   }
+  moreTools.ContextMenu=toolsMenu;
   moreTools.Click+=(_,_)=>{toolsMenu.PlacementTarget=moreTools;toolsMenu.IsOpen=true;};
   toolbarActions.Children.Add(moreTools);Grid.SetColumn(toolbarActions,1);titleRow.Children.Add(toolbarActions);
   header.Children.Add(titleRow);
@@ -1159,6 +1160,7 @@ public partial class MainWindow
    var item=new MenuItem{Header=option,IsCheckable=true,IsChecked=modIssueFilter==option};
    attentionMenu.Items.Add(item);
   }
+  attentionButton.ContextMenu=attentionMenu;
   attentionButton.Click+=(_,_)=>{attentionMenu.PlacementTarget=attentionButton;attentionMenu.IsOpen=true;};
   compactFilters.Children.Add(attentionButton);
 
@@ -1190,6 +1192,7 @@ public partial class MainWindow
   workshopUpdateBatch.Click+=(_,_)=>BatchUpdateWorkshop();
   foreach(var item in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch})
    batchMenu.Items.Add(item);
+  moreBatch.ContextMenu=batchMenu;
   moreBatch.Click+=(_,_)=>{batchMenu.PlacementTarget=moreBatch;batchMenu.IsOpen=true;};
   selectionBar.Children.Insert(selectionBar.Children.Count-1,moreBatch);
   var bulkHost=new Border{Background=SpireGlassTheme.GlassPanel("#D5213852"),
