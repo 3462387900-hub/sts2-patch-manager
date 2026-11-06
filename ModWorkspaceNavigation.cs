@@ -20,7 +20,7 @@ public partial class MainWindow
    var tab=Btn(name,open,name==active?"SelectedTab":"Ghost");
    tab.Margin=new Thickness(0,0,8,4);
    tab.Padding=new Thickness(12,8,12,8);
-   tab.IsEnabled=!busy&&!transactionWriting&&name!=active;
+   tab.IsEnabled=!busy&&!transactionWriting;
    tabs.Children.Add(tab);
   }
   return tabs;
