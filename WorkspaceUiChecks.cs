@@ -158,11 +158,27 @@ public partial class MainWindow
   Check(currentVisit?.Key=="mod-snapshots"&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "environment snapshots stay in the shared secondary MOD navigation");
-  Navigate("本地补丁");await Idle();
+  // The fixture's FileSystemWatcher may rescan between the previous
+  // read-only page and this navigation; wait for a stable inventory.
+  for(int attempt=0;attempt<100;attempt++)
+  {
+   await Idle();
+   if(!busy&&!transactionWriting)
+    Navigate("本地补丁");
+   await Idle();
+   if(page=="本地补丁"&&
+    activeModList?.Items.OfType<ModCardGroup>().SelectMany(group=>group.Cards)
+     .Any(row=>row.Mod.Id=="LargeHealDisplayFix")==true&&
+    Controls<ModCardControl>(shell).Any())
+    break;
+   await Task.Delay(60);
+  }
   var patchRows=activeModList?.Items.OfType<ModCardGroup>().SelectMany(group=>group.Cards).ToArray();
-  Check(patchRows?.Length==1&&patchRows[0].Mod.Id=="LargeHealDisplayFix"&&
-   Controls<ModCardControl>(shell).Any(),
-   "independent patch tab shows the known patch ID after layout theme changes");
+  Check(page=="本地补丁"&&patchRows?.Length==1&&
+   patchRows[0].Mod.Id=="LargeHealDisplayFix"&&Controls<ModCardControl>(shell).Any(),
+   "independent patch tab shows the known patch ID after layout changes; page="+page+
+   "; rows="+string.Join(",",patchRows?.Select(r=>r.Mod.Id)??[])+
+   "; busy="+busy+"; inventory="+modInventory?.Mods.Count);
   var patchMore=Controls<ModCardControl>(activeModList!).First().MoreButton;
   patchMore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Idle();
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()>=3,
