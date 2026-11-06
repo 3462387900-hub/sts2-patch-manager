@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
+      # Retried after the two-layout patch-health regression assertion was updated and verified.
       - name: Build and run isolated checks
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly -OutputRoot artifacts
