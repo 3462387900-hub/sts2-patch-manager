@@ -1239,10 +1239,21 @@ public partial class MainWindow
     detailHost.Visibility=Visibility.Collapsed;detailHost.Content=null;return;
    }
    var report=dependencyReport?.Summary(mod.Id);
-   var detail=V(T("模组详情",17,ink,true),T(mod.Name,15,ink,true),
+   var panelHeader=new DockPanel{LastChildFill=true};
+   var close=Btn("✕",()=>{selectedModDetailFolder=null;UpdateDetail();ResizeDetail();},"ModToolbarAction");
+   close.ToolTip="关闭快捷详情（Esc）";close.MinWidth=32;
+   DockPanel.SetDock(close,Dock.Right);panelHeader.Children.Add(close);
+   panelHeader.Children.Add(T("模组详情",17,ink,true));
+   var detail=V(panelHeader,T(mod.Name,16,ink,true),
     T("模组 ID："+mod.Id,12,muted),T("版本号："+mod.Version,12,muted),
     T("作者："+mod.Author,12,muted),T("状态："+(mod.Enabled?"已启用":"已停用"),12,muted),
     T("依赖情况："+(report?.Label??"未分析"),12,report?.HasIssue==true?gold:muted));
+   if(!isFixSection)
+   {
+    var selectedRow=rows.FirstOrDefault(r=>r.Mod.Folder==mod.Folder);
+    if(selectedRow!=null&&!string.IsNullOrWhiteSpace(selectedRow.GitHubText))
+     detail.Children.Add(T("来源与更新："+selectedRow.GitHubText,12,muted));
+   }
    Space(detail,10);
    var actions=new WrapPanel();
    var selected=rows.FirstOrDefault(r=>r.Mod.Folder==mod.Folder);
@@ -1268,8 +1279,7 @@ public partial class MainWindow
    full.Margin=new Thickness(0,0,7,7);actions.Children.Add(full);
    detail.Children.Add(actions);Space(detail,10);
    detail.Children.Add(Btn("打开模组目录",()=>OpenUrl(mod.Folder),"ModToolbarAction"));
-   Space(detail,8);
-   detail.Children.Add(Btn("✕  关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();ResizeDetail();},"ModToolbarAction"));
+   
    detailHost.Content=new Border{
     Background=SpireGlassTheme.GlassPanel("#EE172A43"),
     BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
@@ -1329,6 +1339,12 @@ public partial class MainWindow
    Grid.SetColumn(detailHost,dock?2:0);
   }
   workspace.SizeChanged+=(_,_)=>ResizeDetail();
+  workspace.PreviewKeyDown+=(_,e)=>{
+   if(e.Key==System.Windows.Input.Key.Escape&&selectedModDetailFolder!=null)
+   {
+    selectedModDetailFolder=null;UpdateDetail();ResizeDetail();e.Handled=true;
+   }
+  };
   Grid.SetRow(workspace,1);root.Children.Add(workspace);
   var footer=V(empty,bulkHost);
   Grid.SetRow(footer,2);root.Children.Add(footer);
