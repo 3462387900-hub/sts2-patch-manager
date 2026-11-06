@@ -18,10 +18,10 @@ public partial class MainWindow
   var buttons=new Grid();
   buttons.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   buttons.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-  classicThemeButton=Btn("经典",()=>ChangeUiTheme(UiThemes.Classic),"ModSegment");
+  classicThemeButton=Btn("经典 Beta",()=>ChangeUiTheme(UiThemes.Classic),"ModSegment");
   classicThemeButton.ToolTip="经典 Beta：v0.13.1 风格的按钮与完整信息卡片";
   classicThemeButton.FontSize=12;classicThemeButton.Padding=new Thickness(8,7,8,7);
-  workspaceThemeButton=Btn("新版",()=>ChangeUiTheme(UiThemes.Workspace),"ModSegment");
+  workspaceThemeButton=Btn("新版 Beta",()=>ChangeUiTheme(UiThemes.Workspace),"ModSegment");
   workspaceThemeButton.ToolTip="新版 Beta：轻量标签、组合筛选与浮层详情";
   workspaceThemeButton.FontSize=12;workspaceThemeButton.Padding=new Thickness(8,7,8,7);
   var classic=classicThemeButton;
