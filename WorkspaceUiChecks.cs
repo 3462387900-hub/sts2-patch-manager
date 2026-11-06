@@ -89,6 +89,18 @@ public partial class MainWindow
   Check(page=="补丁健康"&&navButtons["修复补丁"].Background.ToString()==B("#7540668A").ToString()&&
    navButtons["修复补丁"].BorderBrush.ToString()==B("#9A91BDF3").ToString(),
    "patch health keeps the patch-center navigation highlighted");
+  Navigate("更新中心");await Idle();
+  Check(page=="更新中心"&&!busy&&!modUpdateCheckRunning&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("不会在打开页面时自动联网检查")),
+   "opening MOD update center shows cached results without starting network checks or locking navigation");
+  Check(backButton?.IsEnabled==true,
+   "back navigation stays usable when visiting the update center");
+  Navigate("诊断与日志");await Idle();
+  Check(page=="诊断"&&!busy,
+   "update center can be left immediately without forcing the app back");
+  await Click("← 上一步");await Idle();
+  Check(page=="更新中心"&&!modUpdateCheckRunning,
+   "back navigation restores update center without triggering an automatic check");
   Navigate("模组管理");await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装")&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="创意工坊下载")&&
