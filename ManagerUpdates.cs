@@ -19,6 +19,7 @@ public sealed class ManagerUpdates : IDisposable
  public const string RepositoryUrl="https://github.com/"+Repository;
  public const string Api="https://api.github.com/repos/"+Repository;
  public const string FeedUrl="https://raw.githubusercontent.com/"+Repository+"/main/manager-update.json";
+ public const string BetaFeedUrl="https://raw.githubusercontent.com/"+Repository+"/main/manager-beta-update.json";
  public static string CurrentVersion=>Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
  // Beta 1 had no assembly informational suffix; only that known historical build uses this fallback.
  public static string CurrentReleaseVersion
@@ -153,6 +154,21 @@ public sealed class ManagerUpdates : IDisposable
  {
   if(channel==ManagerUpdateChannel.Beta)
   {
+   // Use the public static release manifest first. Anonymous GitHub Releases API
+   // is frequently rate-limited on shared networks; raw content is cacheable.
+   // Invalid/malicious feed data must fail closed rather than be silently skipped.
+   try{return await ReadBetaFeedAsync(ct);}
+   catch(HttpRequestException){return await CheckBetaApiAsync(ct);}
+   catch(OperationCanceledException) when(!ct.IsCancellationRequested){return await CheckBetaApiAsync(ct);}
+  }
+  try{return await ReadReleaseAsync(FeedUrl,ct);}
+  catch(HttpRequestException){return await ReadReleaseAsync(Api+"/releases/latest",ct);}
+  catch(OperationCanceledException)when(!ct.IsCancellationRequested){return await ReadReleaseAsync(Api+"/releases/latest",ct);}
+ }
+ async Task<ManagerRelease> ReadBetaFeedAsync(CancellationToken ct)=>
+  ParseRelease(await ReadTextAsync(BetaFeedUrl,ct,1024*1024),ManagerUpdateChannel.Beta);
+ async Task<ManagerRelease> CheckBetaApiAsync(CancellationToken ct)
+ {
    string json=await ReadTextAsync(Api+"/releases?per_page=30",ct,4*1024*1024);
    using var document=JsonDocument.Parse(json.TrimStart('\uFEFF'));
    Require(document.RootElement.ValueKind==JsonValueKind.Array,"测试通道返回的数据格式错误。");
@@ -167,10 +183,6 @@ public sealed class ManagerUpdates : IDisposable
    }
    Require(candidates.Count>0,"仓库目前没有可用的 Beta 更新包。");
    return candidates.Aggregate((best,item)=>CompareVersions(item.Version,best.Version)>0?item:best);
-  }
-  try{return await ReadReleaseAsync(FeedUrl,ct);}
-  catch(HttpRequestException){return await ReadReleaseAsync(Api+"/releases/latest",ct);}
-  catch(OperationCanceledException)when(!ct.IsCancellationRequested){return await ReadReleaseAsync(Api+"/releases/latest",ct);}
  }
  async Task<ManagerRelease> ReadReleaseAsync(string url,CancellationToken ct)=>
   ParseRelease(await ReadTextAsync(url,ct,1024*1024));
