@@ -157,9 +157,12 @@ public partial class MainWindow
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("本页 10 条")),
    "large dependency graphs show only 10 relation cards per page");
   await Click("下一页 →",true);
-  Check(Controls<TextBlock>(shell).Any(t=>t.Text.Contains("第 2 /"))&&
-   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="← 上一页"&&b.IsEnabled),
-   "dependency page navigation retains filter and enables return action");
+  string[] pageLabels=Controls<TextBlock>(shell).Where(t=>t.Text.Contains("页")).Select(t=>t.Text).Take(12).ToArray();
+  bool previousEnabled=Controls<Button>(shell).Any(b=>b.Content?.ToString()=="← 上一页"&&b.IsEnabled);
+  Check(pageLabels.Any(t=>t.Contains("第 2 /"))&&previousEnabled,
+   "dependency page navigation retains filter and enables return action; labels="+
+   string.Join(" | ",pageLabels)+"; previousEnabled="+previousEnabled+
+   "; currentKey="+currentVisit?.Key);
   modInventory=regularInventory;
   ShowModEnvironmentSnapshots();await Idle();
   Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
