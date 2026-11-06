@@ -103,6 +103,23 @@ public partial class MainWindow
   Check(modIssueFilter=="依赖异常"&&modFilter=="启用",
    "segmented enable filter composes with the attention status dropdown");
   modIssueFilter="所有状态";modFilter="全部";ShowMods();await Idle();
+  // Both beta themes are selectable without restarting or changing MOD files.
+  string themeFixture=Path.Combine(fixtures,"ui-theme-preferences");
+  UiThemes.Save(themeFixture,UiThemes.Classic);
+  Check(UiThemes.Load(themeFixture)==UiThemes.Classic,"classic theme preference persists in isolated config");
+  UiThemes.Save(themeFixture,UiThemes.Workspace);
+  Check(UiThemes.Load(themeFixture)==UiThemes.Workspace,"workspace theme preference persists in isolated config");
+  var themeClassic=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="经典");
+  themeClassic.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeClassic));await Idle();
+  Check(UiThemes.IsClassic&&Controls<ClassicModCardControl>(activeModList!).Any()&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="刷新模组"),
+   "classic beta keeps previous MOD layout and three-action cards");
+  var themeModern=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="新版");
+  themeModern.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeModern));await Idle();
+  Check(UiThemes.IsWorkspace&&Controls<ModCardControl>(activeModList!).Any()&&
+   !Controls<ClassicModCardControl>(activeModList!).Any()&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="所有状态  ▾"),
+   "modern beta restores lightweight filters and compact cards in-place");
   ShowWorkshopPage();await Idle();
   Check(currentVisit?.Key=="mod-workshop"&&
    Controls<TextBox>(shell).Any(x=>System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID"),
