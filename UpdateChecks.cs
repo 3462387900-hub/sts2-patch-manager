@@ -50,14 +50,43 @@ public static class UpdateChecks
    Json(latestBeta,prerelease:true)+","+Json(betaOne,prerelease:true)+"]";
   int betaRequests=0;
   using(var betaSource=new ManagerUpdates(new Handler(request=>{
-   betaRequests++;Check(request.RequestUri!.AbsolutePath.EndsWith("/releases")&&
-    request.RequestUri.Query.Contains("per_page=",StringComparison.Ordinal)&&
-    request.Headers.Authorization==null,"Beta discovery uses unauthenticated official Release list");
-   return Reply(betaList);
+   betaRequests++;
+   Check(request.RequestUri!.Host=="raw.githubusercontent.com"&&
+    request.RequestUri.AbsolutePath.EndsWith("/manager-beta-update.json",StringComparison.Ordinal)&&
+    request.Headers.Authorization==null,
+    "Beta discovery uses anonymous, cacheable static feed instead of GitHub Releases API");
+   return Reply(Json(latestBeta,prerelease:true));
   })))
   {
    Check(await betaSource.CheckAsync(ManagerUpdateChannel.Beta)==latestBeta&&betaRequests==1,
-    "Beta channel chooses the highest valid prerelease version, not stable/latest endpoint");
+    "Beta source succeeds from one static metadata request without hitting rate-limited API");
+  }
+  int betaFallbackRequests=0;
+  using(var betaFallback=new ManagerUpdates(new Handler(request=>{
+   betaFallbackRequests++;
+   if(request.RequestUri!.AbsolutePath.EndsWith("/manager-beta-update.json",StringComparison.Ordinal))
+    return new(HttpStatusCode.Forbidden);
+   Check(request.RequestUri.AbsolutePath.EndsWith("/releases")&&
+    request.RequestUri.Query.Contains("per_page=",StringComparison.Ordinal),
+    "only a failed static feed triggers official GitHub API fallback");
+   return Reply(betaList);
+  })))
+  {
+   Check(await betaFallback.CheckAsync(ManagerUpdateChannel.Beta)==latestBeta&&betaFallbackRequests==2,
+    "Beta fallback still picks numerically latest verified release when static feed is inaccessible");
+  }
+  int unsafeFeedRequests=0;
+  using(var unsafeFeed=new ManagerUpdates(new Handler(request=>{
+   unsafeFeedRequests++;
+   if(request.RequestUri!.AbsolutePath.EndsWith("/manager-beta-update.json",StringComparison.Ordinal))
+    return Reply(Json(latestBeta with{Sha256="not-a-sha"},prerelease:true));
+   throw new InvalidOperationException("invalid public index must not cause API fallback");
+  })))
+  {
+   try{await unsafeFeed.CheckAsync(ManagerUpdateChannel.Beta);throw new Exception("bad beta feed accepted");}
+   catch(InvalidDataException){}
+   Check(unsafeFeedRequests==1,
+    "invalid Beta metadata is rejected rather than silently replaced or trusted");
   }
   string preferenceRoot=Path.Combine(Path.GetDirectoryName(output)!,"channel-fixture-"+Guid.NewGuid().ToString("N"));
   Check(ManagerUpdates.LoadChannel(preferenceRoot)==ManagerUpdateChannel.Stable,
@@ -113,7 +142,9 @@ public partial class MainWindow
   // Test source is injected only into the offscreen window, never the normal app.
   using var source=new ManagerUpdates(new UpdateChecks.Handler(r=>{
    if(failure)return new(System.Net.HttpStatusCode.Forbidden);
-   if(r.RequestUri!.AbsolutePath.EndsWith("/releases"))
+   if(r.RequestUri!.AbsolutePath.EndsWith("/manager-beta-update.json"))
+    return UpdateChecks.Reply(UpdateChecks.Json(UpdateChecks.Sample("0.99.0-beta.1"),prerelease:true));
+   if(r.RequestUri.AbsolutePath.EndsWith("/releases"))
     return UpdateChecks.Reply("["+UpdateChecks.Json(UpdateChecks.Sample("0.99.0-beta.1"),prerelease:true)+"]");
    if(r.RequestUri.AbsolutePath.EndsWith("/latest")||r.RequestUri.AbsolutePath.EndsWith("/manager-update.json"))
     return UpdateChecks.Reply(UpdateChecks.Json(UpdateChecks.Sample(version)));
