@@ -115,7 +115,7 @@ public partial class MainWindow
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
    "independent patch tab filters to known patch records");
-  var patchMore=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="更多");
+  var patchMore=Controls<ModCardControl>(activeModList!).First().MoreButton;
   patchMore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Idle();
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()>=3,
    "on-demand compact patch menu exposes preview toggle and folder action");
@@ -144,10 +144,16 @@ public partial class MainWindow
   Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
    "attaching card actions never recreates visible MOD controls");
   var glassCheckStyle=(Style)FindResource("ModCardCheckBox");
-  var glassActionStyle=(Style)FindResource("ModCardAction");
+  var glassActionStyle=(Style)FindResource("ModToolbarAction");
   Check(ReferenceEquals(cardToSelect.SelectBox.Style,glassCheckStyle)&&
-   Controls<Button>(cardToSelect).Count(b=>ReferenceEquals(b.Style,glassActionStyle))==3,
-   "card checkbox and three buttons share dedicated soft glass controls");
+   Controls<Button>(cardToSelect).Count(b=>ReferenceEquals(b.Style,glassActionStyle))==1&&
+   cardToSelect.MinHeight<=110,
+   "compact MOD cards use one quiet overflow button, not permanent action rows");
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="全部"&&
+   ReferenceEquals(b.Style,FindResource("ModSegmentActive"))),
+   "status filters render as segmented controls instead of six chunky buttons");
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.Visibility==Visibility.Collapsed),
+   "batch actions are not visible until a selection exists");
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
   Check(chosenModFolders.Contains(checkedFolder)&&
@@ -168,6 +174,8 @@ public partial class MainWindow
   selectionSearch.Text="";await Idle();
   await Click("取消选择");await Idle();
   Check(ChosenMods().Length==0,"clear selection resets batch scope without moving MOD files");
+  Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"),
+   "clearing selection removes the floating batch-action rail");
   var selectAll=Controls<CheckBox>(shell).Single(c=>c.Content?.ToString()=="全选当前结果");
   selectAll.IsChecked=true;await Idle();
   Check(ChosenMods().Length==6,"select all targets only six visible regular MODs");
@@ -256,17 +264,16 @@ public partial class MainWindow
   double originalWidth=Width,originalHeight=Height;
   Width=1020;Height=720;await Idle();
   var rowView=Controls<ModCardControl>(virtualList).Single();
-  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用");
   var moreButton=rowView.MoreButton;
   bool Fits(Button button)
   {
    var position=button.TransformToAncestor(virtualList).Transform(new Point(0,0));
-   return button.ActualWidth>=45&&position.X>=0&&position.X+button.ActualWidth<=virtualList.ActualWidth-4;
+   return button.ActualWidth>=30&&position.X>=0&&position.X+button.ActualWidth<=virtualList.ActualWidth-4;
   }
-  Check(Fits(detailsButton)&&Fits(moreButton)&&
+  Check(Fits(moreButton)&&
    rowView.ActualWidth<=virtualList.ActualWidth&&virtualList.ActualWidth>500,
-   "minimum supported window width visibly keeps both MOD actions inside the row");
-  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖情况："));
+   "minimum supported window width keeps the compact overflow action in view");
+  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("被 40 个已启用"));
   Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()?.Contains(longBlock)==true&&
    warningLine.ActualWidth<virtualList.ActualWidth,
    "long dependency warnings are concise but full reasons remain available via tooltip");
