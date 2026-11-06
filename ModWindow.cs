@@ -99,25 +99,50 @@ public partial class MainWindow
  }
  async void CheckAllModUpdates()
  {
-  if(busy||modInventory==null||selectedInstallRoot==null)return;
+  if(busy||transactionWriting||modUpdateCheckRunning||modInventory==null||selectedInstallRoot==null)return;
   if(modInventoryDirty){toast.Text="本地 MOD 清单尚未稳定，请刷新后重试。";return;}
-  busy=true;
-  toast.Text="正在检查 GitHub 与创意工坊来源…";
+  // Capture the read-only scan scope: leaving the page must never redirect
+  // the user back here, and switching game roots must not publish stale results.
+  var inventory=modInventory;
+  string gameRoot=selectedInstallRoot;
+  var github=GitHubUpdates();
+  var workshop=WorkshopUpdates();
+  var sources=WorkshopSources();
+  using var cancellation=new CancellationTokenSource();
+  modUpdateCheckCancellation=cancellation;
+  modUpdateCheckRunning=true;
+  toast.Text="正在后台检查 GitHub 与创意工坊来源，可正常切换页面。";
   if(page=="更新中心")ShowModUpdatesCenter();
   try
   {
-   int githubCount=await GitHubUpdates().CheckAllAsync(modInventory.Mods);
-   int workshopCount=await WorkshopUpdates().CheckAllAsync(modInventory.Mods,WorkshopSources());
-   int githubNew=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    GitHubUpdates().Cached(m.Id)?.Status=="有更新");
-   int workshopNew=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    WorkshopUpdates().Cached(m.Id)?.Status=="有更新");
-   int workshopNeedsReview=modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    WorkshopUpdates().Cached(m.Id)?.Status is "待首次核验" or "本地文件已变化");
+   int githubCount=await github.CheckAllAsync(inventory.Mods,cancellation.Token);
+   int workshopCount=await workshop.CheckAllAsync(inventory.Mods,sources,cancellation.Token);
+   if(cancellation.IsCancellationRequested||gameRoot!=selectedInstallRoot||
+      !ReferenceEquals(inventory,modInventory))return;
+   int githubNew=inventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    github.Cached(m.Id)?.Status=="有更新");
+   int workshopNew=inventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    workshop.Cached(m.Id)?.Status=="有更新");
+   int workshopNeedsReview=inventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
+    workshop.Cached(m.Id)?.Status is "待首次核验" or "本地文件已变化");
    modStatus=$"检查完成：GitHub {githubCount} 项（有更新 {githubNew}）；创意工坊 {workshopCount} 项（有更新 {workshopNew}，待核验 {workshopNeedsReview}）。仅检测来源内容，不会自动下载或修改游戏文件。";
+   toast.Text=modStatus;
   }
-  catch(Exception e){modStatus="MOD 更新检查未完成："+e.Message;}
-  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
+  catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
+  {
+   if(gameRoot==selectedInstallRoot)modStatus="已取消本次更新检查。";
+  }
+  catch(Exception e)
+  {
+   if(gameRoot==selectedInstallRoot)modStatus="MOD 更新检查未完成："+e.Message;
+  }
+  finally
+  {
+   if(ReferenceEquals(modUpdateCheckCancellation,cancellation))modUpdateCheckCancellation=null;
+   modUpdateCheckRunning=false;
+   // A background check never changes the active workspace on completion.
+   if(page=="更新中心"&&IsVisible)ShowModUpdatesCenter();
+  }
  }
  async void CheckWorkshopMod(ManagedMod mod)
  {

@@ -6,6 +6,12 @@ namespace SpirePatch;
 // Spire Glass update workspace: GitHub and Workshop sources share one read-only update overview.
 public partial class MainWindow
 {
+ // Read-only MOD update checks are independent of file-transaction `busy`.
+ // Checking never holds the global navigation lock.
+ bool modUpdateCheckRunning;
+ CancellationTokenSource? modUpdateCheckCancellation;
+ void CancelModUpdateCheck()=>modUpdateCheckCancellation?.Cancel();
+
  void ShowModUpdatesCenter()
  {
   var root=V(Header("MOD UPDATES","更新中心",
@@ -18,18 +24,25 @@ public partial class MainWindow
    SetPage("更新中心",root,restore:ShowModUpdatesCenter);return;
   }
   var bar=new WrapPanel{Margin=new Thickness(0,0,0,12)};
-  void AddButton(string label,Action action,string style="Ghost")
+  void AddButton(string label,Action action,string style="Ghost",bool enabled=true)
   {
-   var button=Btn(label,action,style);button.IsEnabled=!busy&&!transactionWriting;
+   var button=Btn(label,action,style);
+   button.IsEnabled=enabled&&!busy&&!transactionWriting;
    button.Margin=new Thickness(0,0,8,8);bar.Children.Add(button);
   }
   AddButton("检查全部更新",()=>{
    if(modInventory==null||modInventoryDirty){toast.Text="请先刷新本地 MOD 清单。";RefreshMods();return;}
    CheckAllModUpdates();
-  },"Primary");
+  },"Primary",!modUpdateCheckRunning);
+  if(modUpdateCheckRunning)
+   AddButton("取消检查",CancelModUpdateCheck,"Ghost");
   AddButton("查找 GitHub 来源",DiscoverGitHubMods);
   AddButton("刷新本地 MOD",RefreshMods);
   root.Children.Add(bar);
+  root.Children.Add(T(modUpdateCheckRunning?
+   "正在后台检查来源更新 · 不锁定导航，随时可切换页面或取消。":
+   "不会在打开页面时自动联网检查。点击「检查全部更新」后只读取更新信息，不会安装 MOD。",11,muted));
+  Space(root,8);
   if(modInventoryDirty)
   {
    root.Children.Add(Card(V(T("本地 MOD 文件发生变化",14,gold,true),
@@ -179,30 +192,6 @@ public partial class MainWindow
    updates.Cached(m.Id)?.Status=="有更新"||workshopUpdates.Cached(m.Id)?.Status=="有更新")??normal[0]);
   else right.Children.Add(Card(T("当前没有可管理的普通 MOD。",13,muted)));
   SetPage("更新中心",root,restore:ShowModUpdatesCenter);
-  DateTimeOffset now=DateTimeOffset.UtcNow;
-  bool needsAutoCheck=normal.Any(mod=>
-  {
-   var githubRepo=updates.Repository(mod.Id);
-   if(githubRepo!=null)
-   {
-    var result=updates.Cached(mod.Id);
-    if(result==null||now-result.CheckedAt>=TimeSpan.FromMinutes(30))return true;
-   }
-   if(workshopSources.Get(mod.Id)!=null)
-   {
-    var result=workshopUpdates.Cached(mod.Id);
-    if(result==null||now-result.CheckedAt>=TimeSpan.FromMinutes(15))return true;
-   }
-   return false;
-  });
-  if(needsAutoCheck&&!busy&&!transactionWriting&&!modInventoryDirty&&!updateCenterAutoCheckQueued)
-  {
-   updateCenterAutoCheckQueued=true;
-   Dispatcher.BeginInvoke(new Action(()=>
-   {
-    updateCenterAutoCheckQueued=false;
-    if(page=="更新中心"&&!busy&&!transactionWriting)CheckAllModUpdates();
-   }),System.Windows.Threading.DispatcherPriority.Background);
-  }
+
  }
 }
