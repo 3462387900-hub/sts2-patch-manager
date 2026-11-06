@@ -12,6 +12,7 @@ public partial class MainWindow
  WorkshopZipPlan? zipImportPreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
+ string? selectedModDetailFolder;
  GitHubModUpdates? githubModUpdates;
  GitHubModDiscovery? githubDiscovery;
  GitHubModDiscovery Discovery()=>githubDiscovery??=new GitHubModDiscovery();
@@ -1168,8 +1169,38 @@ public partial class MainWindow
   ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
+  var detailHost=new ContentControl{Visibility=Visibility.Collapsed};
+  void UpdateDetail()
+  {
+   var mod=modInventory?.Mods.FirstOrDefault(m=>m.Folder==selectedModDetailFolder);
+   if(mod==null||ModPresentation.IsIndependentPatch(mod)!=isFixSection)
+   {
+    detailHost.Visibility=Visibility.Collapsed;detailHost.Content=null;return;
+   }
+   var report=dependencyReport?.Summary(mod.Id);
+   var detail=V(T("模组详情",17,ink,true),T(mod.Name,15,ink,true),
+    T("模组 ID："+mod.Id,12,muted),T("版本号："+mod.Version,12,muted),
+    T("作者："+mod.Author,12,muted),T("状态："+(mod.Enabled?"已启用":"已停用"),12,muted),
+    T("依赖情况："+(report?.Label??"未分析"),12,report?.HasIssue==true?gold:muted));
+   Space(detail,10);
+   var actions=new WrapPanel();
+   var selected=rows.FirstOrDefault(r=>r.Mod.Folder==mod.Folder);
+   var preview=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Ghost");
+   preview.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty&&selected?.BlockReason==null;
+   preview.ToolTip=selected?.BlockReason;preview.Margin=new Thickness(0,0,7,7);
+   actions.Children.Add(preview);
+   actions.Children.Add(Btn("完整详情",()=>{CaptureModListOffset();ShowModDetail(mod.Folder);},"Primary"));
+   detail.Children.Add(actions);Space(detail,7);
+   detail.Children.Add(Btn("关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();},"Ghost"));
+   detailHost.Content=new Border{
+    Background=SpireGlassTheme.GlassPanel("#C01A2D48"),
+    BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
+    CornerRadius=new CornerRadius(12),Padding=new Thickness(12),
+    Child=new ScrollViewer{Content=detail,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}};
+   detailHost.Visibility=Visibility.Visible;
+  }
   list=ModCardList.Create(row=>{
-   CaptureModListOffset();ShowModDetail(row.Mod.Folder);
+   CaptureModListOffset();selectedModDetailFolder=row.Mod.Folder;UpdateDetail();
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
    var toggle=new MenuItem{Header=row.Mod.Enabled?"预览停用":"预览启用",
@@ -1199,7 +1230,21 @@ public partial class MainWindow
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
    row.Selected=value;UpdateSelectionToolbar();
   });
-  activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
+  activeModList=list;
+  var workspace=new Grid();
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
+  workspace.Children.Add(list);Grid.SetColumn(detailHost,2);workspace.Children.Add(detailHost);
+  void ResizeDetail()
+  {
+   bool show=detailHost.Content!=null&&workspace.ActualWidth>=820;
+   detailHost.Visibility=show?Visibility.Visible:Visibility.Collapsed;
+   workspace.ColumnDefinitions[1].Width=new GridLength(show?12:0);
+   workspace.ColumnDefinitions[2].Width=new GridLength(show?290:0);
+  }
+  workspace.SizeChanged+=(_,_)=>ResizeDetail();
+  Grid.SetRow(workspace,1);root.Children.Add(workspace);
   var footer=V(empty);
   Grid.SetRow(footer,2);root.Children.Add(footer);
   void UpdateSelectionToolbar()
@@ -1247,7 +1292,7 @@ public partial class MainWindow
    string q=modQuery,f=modFilter,g=modSection;
    RememberPage("模组管理",()=>{modQuery=q;modFilter=f;modSection=g;ShowMods();});
   };
-  FilterRows();
+  FilterRows();UpdateDetail();ResizeDetail();
   list.SizeChanged+=(_,_)=>{
    int next=ModListView.ColumnCount(list.ActualWidth);
    if(next!=cardColumns){cardColumns=next;FilterRows();}
