@@ -91,7 +91,7 @@ public partial class MainWindow
     modStatus=overflow?"文件监测可能遗漏变化，请手动刷新。":"检测到 MOD 文件变化，正在等待文件写入结束。";
    }
    modWatchDebounce?.Stop();modWatchDebounce?.Start();
-   if(page=="模组管理"&&currentVisit?.Key=="模组管理"&&!busy&&!transactionWriting)ShowMods();
+   if((page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page&&!busy&&!transactionWriting)ShowMods();
   }),DispatcherPriority.Background);
  }
 
@@ -116,7 +116,7 @@ public partial class MainWindow
   }
   // Even when the user is viewing another tab, a known previous inventory
   // must be reconciled so manually removed target MODs can retire their fixes.
-  if(modInventoryDirty&&(modInventory!=null||page=="模组管理"&&currentVisit?.Key=="模组管理"))
+  if(modInventoryDirty&&(modInventory!=null||(page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page))
    RefreshMods();
   else if(modInventoryDirty)
    toast.Text="检测到 MOD 文件变化。进入模组管理刷新列表，并重新检查补丁健康状态。";
