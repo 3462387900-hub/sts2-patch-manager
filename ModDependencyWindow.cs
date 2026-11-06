@@ -34,10 +34,9 @@ public partial class MainWindow
             "MOD DEPENDENCY MAP",
             "依赖关系图",
             "箭头方向：前置模组 → 依赖它的 MOD。只分析清单声明和已收录修复补丁的兼容规则，不推断未声明依赖。"));
-        Space(root, 14);
-        root.Children.Add(H(
-            Btn("← 返回模组管理", ShowMods, "Ghost"),
-            Btn("重新扫描", RefreshMods, "Ghost")));
+        Space(root, 10);
+        root.Children.Add(ModWorkspaceTabs("依赖关系"));
+        root.Children.Add(H(Btn("重新扫描", RefreshMods, "Ghost")));
         Space(root, 12);
 
         int missing = report.Edges.Count(edge => edge.Status == ModDependencyStatus.Missing);
