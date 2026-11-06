@@ -17,8 +17,10 @@ public partial class MainWindow
    ("环境快照",ShowModEnvironmentSnapshots)
   })
   {
-   var tab=Btn(name,open,name==active?"ModWorkspaceTabActive":"ModWorkspaceTab");
-   tab.Margin=new Thickness(0,0,13,0);
+   var tab=Btn(name,open,UiThemes.IsClassic?
+    (name==active?"SelectedTab":"Ghost"):
+    (name==active?"ModWorkspaceTabActive":"ModWorkspaceTab"));
+   tab.Margin=new Thickness(0,0,UiThemes.IsClassic?8:13,UiThemes.IsClassic?4:0);
    tab.IsEnabled=!busy&&!transactionWriting;
    tabs.Children.Add(tab);
   }
