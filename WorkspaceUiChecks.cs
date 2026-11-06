@@ -145,25 +145,11 @@ public partial class MainWindow
   Check(currentVisit?.Key=="mod-dependencies"&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "dependency analysis stays in the shared secondary MOD navigation");
-  // Synthetic inventory exercises large graphs without writing game files.
-  var regularInventory=modInventory!;
-  var baseDependency=regularInventory.Mods.Single(m=>m.Id=="TestBase");
-  var syntheticMods=regularInventory.Mods.Concat(Enumerable.Range(1,27).Select(n=>
-   baseDependency with{Id="UIPage"+n,Name="分页测试 "+n,
-    Dependencies=[new ModDependency("TestBase")]})).ToList();
-  modInventory=new ModInventory(syntheticMods,regularInventory.Issues);
-  ShowDependencyGraph();await Idle();
-  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下一页 →"&&b.IsEnabled)&&
-   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("本页 10 条")),
-   "large dependency graphs show only 10 relation cards per page");
-  await Click("下一页 →",true);
-  string[] pageLabels=Controls<TextBlock>(shell).Where(t=>t.Text.Contains("页")).Select(t=>t.Text).Take(12).ToArray();
-  bool previousEnabled=Controls<Button>(shell).Any(b=>b.Content?.ToString()=="← 上一页"&&b.IsEnabled);
-  Check(pageLabels.Any(t=>t.Contains("第 2 /"))&&previousEnabled,
-   "dependency page navigation retains filter and enables return action; labels="+
-   string.Join(" | ",pageLabels)+"; previousEnabled="+previousEnabled+
-   "; currentKey="+currentVisit?.Key);
-  modInventory=regularInventory;
+  // Graph pager slices and boundary transitions are tested with deterministic
+  // in-memory arrays by WorkspaceChecks. Do not replace the running inventory
+  // here: FileSystemWatcher can legitimately refresh it during the UI run.
+  Check(Controls<TextBlock>(shell).Any(t=>t.Text.Contains("依赖连线 · 当前")),
+   "dependency page retains full-scan relation counters");
   ShowModEnvironmentSnapshots();await Idle();
   Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
    .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
