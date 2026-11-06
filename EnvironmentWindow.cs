@@ -12,6 +12,7 @@ public partial class MainWindow
  {
   string root=GameEnvironment.Root(path);
   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)){
+   CancelModUpdateCheck(); // Cancel old game's read-only source check before switching.
    selectedInstallRoot=root;report=null;states=[];ClearCoop();demo=false;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;modTogglePreview=null;orphanPatchNotice=null;modStatus="目录已切换，请刷新模组列表。";InvalidateLifecycle("已切换游戏目录，请重新扫描补丁健康状态。");
   }
   StartModWatch(root);
