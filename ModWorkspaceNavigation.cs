@@ -8,7 +8,7 @@ public partial class MainWindow
  // One persistent secondary navigation pattern across the MOD workspace.
  UIElement ModWorkspaceTabs(string active)
  {
-  var tabs=new WrapPanel{Margin=new Thickness(0,0,0,9)};
+  var tabs=new WrapPanel{Margin=new Thickness(0,0,0,11)};
   foreach(var (name,open) in new (string,Action)[]
   {
    ("已安装",ShowMods),
@@ -17,9 +17,8 @@ public partial class MainWindow
    ("环境快照",ShowModEnvironmentSnapshots)
   })
   {
-   var tab=Btn(name,open,name==active?"SelectedTab":"Ghost");
-   tab.Margin=new Thickness(0,0,8,4);
-   tab.Padding=new Thickness(12,8,12,8);
+   var tab=Btn(name,open,name==active?"ModWorkspaceTabActive":"ModWorkspaceTab");
+   tab.Margin=new Thickness(0,0,13,0);
    tab.IsEnabled=!busy&&!transactionWriting;
    tabs.Children.Add(tab);
   }
