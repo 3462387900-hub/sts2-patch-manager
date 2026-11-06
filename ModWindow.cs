@@ -150,29 +150,32 @@ public partial class MainWindow
   dialog.Content=body;input.Focus();
   if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
- async void DownloadWorkshopMod(ManagedMod? target=null)
+ async void DownloadWorkshopMod(ManagedMod? target=null,ulong? presetWorkshopId=null)
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
   string gameRoot=selectedInstallRoot;
-  ulong? savedId=target==null?null:WorkshopSources().Get(target.Id);
-  var dialog=new Window{Title="从尖塔补给站下载 MOD",Owner=this,Width=560,Height=245,
-   MinWidth=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
-  var body=new StackPanel{Margin=new Thickness(18)};
-  body.Children.Add(T("输入 Steam 创意工坊 Workshop ID，或粘贴 Steam / 尖塔补给站分享链接。",13,muted));
-  var input=new TextBox{Text=savedId?.ToString()??"",Margin=new Thickness(0,12,0,10),MinHeight=32};
-  body.Children.Add(input);
-  var hint=T("支持数字 ID、steamcommunity.com/sharedfiles/filedetails 链接，以及 workshop.apricityx.top/mod 链接。",11,muted);
-  body.Children.Add(hint);
-  ulong workshopId=0;
-  var start=Btn("获取并预览",()=>{
-   if(!WorkshopModInstaller.TryParseWorkshopId(input.Text,out workshopId))
-   {hint.Text="ID 或链接无效；请确认属于《杀戮尖塔 2》（AppID 2868840）的创意工坊条目。";return;}
-   dialog.DialogResult=true;
-  },"Primary");
-  body.Children.Add(H(start,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
-  dialog.Content=body;input.Focus();
-  if(dialog.ShowDialog()!=true)return;
-
+  ulong workshopId=presetWorkshopId??0;
+  if(!presetWorkshopId.HasValue)
+  {
+   ulong? savedId=target==null?null:WorkshopSources().Get(target.Id);
+   var dialog=new Window{Title="从尖塔补给站下载 MOD",Owner=this,Width=560,Height=245,
+    MinWidth=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
+   var body=new StackPanel{Margin=new Thickness(18)};
+   body.Children.Add(T("输入 Steam 创意工坊 Workshop ID，或粘贴 Steam / 尖塔补给站分享链接。",13,muted));
+   var input=new TextBox{Text=savedId?.ToString()??"",Margin=new Thickness(0,12,0,10),MinHeight=32};
+   body.Children.Add(input);
+   var hint=T("支持数字 ID、steamcommunity.com/sharedfiles/filedetails 链接，以及 workshop.apricityx.top/mod 链接。",11,muted);
+   body.Children.Add(hint);
+   var start=Btn("获取并预览",()=>{
+    if(!WorkshopModInstaller.TryParseWorkshopId(input.Text,out workshopId))
+    {hint.Text="ID 或链接无效；请确认属于《杀戮尖塔 2》（AppID 2868840）的创意工坊条目。";return;}
+    dialog.DialogResult=true;
+   },"Primary");
+   body.Children.Add(H(start,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
+   dialog.Content=body;input.Focus();
+   if(dialog.ShowDialog()!=true)return;
+ 
+  }
   busy=true;
   bool changed=false;
   WorkshopModPrepared? prepared=null;
@@ -1024,19 +1027,7 @@ public partial class MainWindow
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
    SetPage("模组管理",root,restore:ShowMods);return;
   }
-  if(!isFixSection)
-  {
-   var tabs=new WrapPanel{Margin=new Thickness(0,0,0,8)};
-   foreach(var (name,go) in new (string,Action)[]{
-    ("已安装",()=>{}),("创意工坊下载",()=>DownloadWorkshopMod()),
-    ("依赖关系",()=>ShowDependencyGraph()),("环境快照",ShowModEnvironmentSnapshots)})
-   {
-    var tab=Btn(name,go,name=="已安装"?"SelectedTab":"Ghost");
-    tab.Margin=new Thickness(0,0,7,4);tab.Padding=new Thickness(11,7,11,7);
-    tabs.Children.Add(tab);
-   }
-   header.Children.Add(tabs);
-  }
+  if(!isFixSection)header.Children.Add(ModWorkspaceTabs("已安装"));
   var tools=new WrapPanel{Margin=new Thickness(0,0,0,4)};
   var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
   refresh.Margin=new Thickness(0,0,7,4);tools.Children.Add(refresh);
