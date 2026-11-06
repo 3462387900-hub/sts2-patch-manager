@@ -89,11 +89,12 @@ public partial class MainWindow
   Check(page=="补丁健康"&&navButtons["修复补丁"].Background.ToString()==B("#7540668A").ToString()&&
    navButtons["修复补丁"].BorderBrush.ToString()==B("#9A91BDF3").ToString(),
    "patch health keeps the patch-center navigation highlighted");
-  ShowMods();await Idle();
-  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="普通 MOD  (6)")&&
-   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="修复补丁  (1)"),
-   "mod management exposes regular MOD and independent patch tabs with accurate counts");
-  await Click("修复补丁  (1)");
+  Navigate("模组管理");await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装")&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="创意工坊下载")&&
+   activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
+   "mod management shows secondary navigation and regular MODs");
+  Navigate("本地补丁");await Idle();
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
    "independent patch tab filters to known patch records");
@@ -104,7 +105,7 @@ public partial class MainWindow
   patchMore.ContextMenu!.IsOpen=false;
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
    "repair patch rows show a descriptive health status even before a scan");
-  Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();
+  ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="LargeHealDisplayFix").Folder);await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="查看依据"),
    "independent patch details expose the evidence viewer");
   await Click("查看依据");
@@ -114,8 +115,8 @@ public partial class MainWindow
   await Click("← 上一步");
   Check(currentVisit?.Key.StartsWith("mod:")==true,"back returns from evidence to original patch detail");
   await Click("← 上一步");
-  Check(page=="模组管理","back returns to repair patch list");
-  await Click("普通 MOD  (6)");
+  Check(page=="本地补丁","back returns to local independent patch list");
+  Navigate("模组管理");await Idle();
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "regular MOD tab excludes the catalogued independent patch");
   Check(ModListView.ColumnCount(600)==1&&ModListView.ColumnCount(790)==2&&ModListView.ColumnCount(1180)==3,
@@ -164,7 +165,16 @@ public partial class MainWindow
    "仅展示预览，不涉及文件修改。",[new ModBatchReview("TestSolo","可处理","测试预览")]);
   await cancelOperation.Task;
   Check(reviewAccepted==false,"batch review can be cancelled before any file operation");
-  var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
+  var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();
+  var filteredCard=Controls<ModCardControl>(activeModList!).First();
+  filteredCard.DetailsRequested?.Invoke((filteredCard.DataContext as ModListRow ?? throw new InvalidOperationException("missing card")));
+  await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="完整详情"),
+   "clicking MOD title opens the contextual details panel");
+  await Click("完整详情");await Idle();
+  Check(currentVisit?.Key.StartsWith("mod:")==true,"full MOD details remain accessible");
+  await Click("← 上一步");
+  Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();
   Check(pageScroll!.VerticalScrollBarVisibility==ScrollBarVisibility.Disabled&&
    ScrollViewer.GetHorizontalScrollBarVisibility(activeModList!)==ScrollBarVisibility.Disabled,
@@ -186,7 +196,7 @@ public partial class MainWindow
   var baseline=ModHistory.CompareAndStore(first,Path.Combine(fixtures,"ui-lifecycle-history"));
   lifecycleReport=PatchLifecycle.Evaluate(first,baseline,LifecycleEvidenceSource.Empty,"fixture",Catalog.Scan(first),ModManager.Scan(first));
   Check(lifecycleReport!=null&&HasValidLifecycleReport,"lifecycle report is present before directory change");
-  ShowMods();await Idle();await Click("修复补丁  (1)");
+  Navigate("本地补丁");await Idle();
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")&&!x.Text.Contains("健康：需重新检查")),
    "valid lifecycle reports appear as live labels on the patch list");
   ShowPatchEvidence("LargeHealDisplayFix");await Idle();
