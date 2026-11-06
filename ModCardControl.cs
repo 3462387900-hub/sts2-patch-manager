@@ -146,7 +146,7 @@ public sealed class ModCardControl : Border
 
   string text=row.BlockReason!=null?ModListView.BriefBlockReason(row.BlockReason):
    row.DependencyIssue?"依赖异常":
-   row.IsFix?row.Health:
+   row.IsFix?"健康："+row.Health:
    row.GitHubText.Contains("有更新",StringComparison.Ordinal)?"有更新":"";
   highlight.Text=text;
   highlight.ToolTip=string.Join("\n",new[]{row.BlockReason,row.GitHubText,row.DependencyText,row.Health}
