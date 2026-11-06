@@ -27,9 +27,11 @@ public sealed class ManagerUpdates : IDisposable
   {
    string declared=Assembly.GetExecutingAssembly()
     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion??"";
-   if(Regex.IsMatch(declared,@"\A[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]*\z"))
-    return declared;
-   return CurrentVersion=="0.14.0"&&declared=="0.14.0"?"0.14.0-beta.1":CurrentVersion;
+   string versionPart=declared.Split('+',2)[0];
+   if(Regex.IsMatch(versionPart,@"\A[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]{0,8}\z"))
+    return versionPart;
+   // v0.14.0 Beta 1 shipped without an informational suffix.
+   return CurrentVersion=="0.14.0"&&versionPart=="0.14.0"?"0.14.0-beta.1":CurrentVersion;
   }
  }
  public const string ChannelFileName="管理器更新通道.json";
@@ -77,7 +79,7 @@ public sealed class ManagerUpdates : IDisposable
  {
   if(version.Contains("-beta.",StringComparison.Ordinal))
   {
-   Require(Regex.IsMatch(version,@"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta\.([1-9][0-9]*)\z"),
+   Require(Regex.IsMatch(version,@"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta\.([1-9][0-9]{0,8})\z"),
     "不支持的 Beta 版本号。");
    string core=version[..version.IndexOf("-beta.",StringComparison.Ordinal)];
    StableVersion(core);return core;
@@ -159,7 +161,7 @@ public sealed class ManagerUpdates : IDisposable
    {
     if(entry.GetProperty("draft").GetBoolean()||!entry.GetProperty("prerelease").GetBoolean())continue;
     string tag=entry.GetProperty("tag_name").GetString()??"";
-    if(!Regex.IsMatch(tag,@"\Av[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]*\z"))continue;
+    if(!Regex.IsMatch(tag,@"\Av[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]{0,8}\z"))continue;
     // A release with matching tag but missing/invalid checksum must not silently become "latest".
     candidates.Add(ParseReleaseElement(entry,ManagerUpdateChannel.Beta));
    }
