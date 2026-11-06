@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using System.Net.Http;
 
 namespace SpirePatch;
 
@@ -31,7 +32,8 @@ public partial class MainWindow
   var confirmed=new CheckBox{Content="我已确认此 Workshop ID 对应当前 MOD，愿意将关联用于导出公共索引",
    Margin=new Thickness(0,5,0,11)};
   body.Children.Add(confirmed);
-  var verify=Btn("核对条目",()=>_ = VerifyAsync(),"Ghost");
+  Button verify=null!;
+  verify=Btn("核对条目",()=>_ = VerifyAsync(),"Ghost");
   var save=Btn(previous.HasValue?"保存 / 修改关联":"保存手动关联",SaveBinding,"Primary");
   body.Children.Add(H(verify,save,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
   body.Children.Add(T("只保存来源编号，不修改 MOD 文件，也不会建立“已验证本地版本”的更新基线。",11,muted));
