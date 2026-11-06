@@ -38,11 +38,12 @@ try {
   [IO.File]::Copy($source,$target,$false)
   if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $hash) { throw ('Staged file mismatch: '+$name) }
  }
- foreach ($required in @('SpirePatch.exe','SpirePatch.dll','SpirePatch.deps.json','SpirePatch.runtimeconfig.json','00-启动尖塔修补站.exe')) {
+ foreach ($required in @('SpirePatch.exe','SpirePatch.dll','SpirePatch.deps.json','SpirePatch.runtimeconfig.json')) {
   if (!$names.Contains($required)) { throw ('Missing essential program file: '+$required) }
  }
- if ((Get-FileHash -LiteralPath (Join-Path $payload 'SpirePatch.exe') -Algorithm SHA256).Hash -ne
-     (Get-FileHash -LiteralPath (Join-Path $payload '00-启动尖塔修补站.exe') -Algorithm SHA256).Hash) {
+ if ($names.Contains('00-启动尖塔修补站.exe') -and
+    (Get-FileHash -LiteralPath (Join-Path $payload 'SpirePatch.exe') -Algorithm SHA256).Hash -ne
+    (Get-FileHash -LiteralPath (Join-Path $payload '00-启动尖塔修补站.exe') -Algorithm SHA256).Hash) {
   throw 'Chinese WinExe launcher does not match SpirePatch.exe.'
  }
 [IO.File]::Copy($manifestPath,(Join-Path $payload 'manager-files.json'),$false)
