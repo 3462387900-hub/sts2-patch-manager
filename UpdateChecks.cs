@@ -109,9 +109,16 @@ public partial class MainWindow
   IEnumerable<TControl> Controls<TControl>(DependencyObject parent) where TControl:DependencyObject {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var child=VisualTreeHelper.GetChild(parent,i);if(child is TControl control)yield return control;foreach(var nested in Controls<TControl>(child))yield return nested;}}
   async Task Idle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);UpdateLayout();}
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var file=File.Create(Path.Combine(output,name+".png"));encoder.Save(file);}
-  int downloads=0;bool failure=false;string version="0.9.0";
+  int downloads=0;bool failure=false;string version="9.0.0";
   // Test source is injected only into the offscreen window, never the normal app.
-  using var source=new ManagerUpdates(new UpdateChecks.Handler(r=>{if(failure)return new(System.Net.HttpStatusCode.Forbidden);if((r.RequestUri!.AbsolutePath.EndsWith("/latest")||r.RequestUri.AbsolutePath.EndsWith("/manager-update.json")))return UpdateChecks.Reply(UpdateChecks.Json(UpdateChecks.Sample(version)));downloads++;return new(System.Net.HttpStatusCode.OK){Content=new System.Net.Http.ByteArrayContent(UpdateChecks.Payload)};}));
+  using var source=new ManagerUpdates(new UpdateChecks.Handler(r=>{
+   if(failure)return new(System.Net.HttpStatusCode.Forbidden);
+   if(r.RequestUri!.AbsolutePath.EndsWith("/releases"))
+    return UpdateChecks.Reply("["+UpdateChecks.Json(UpdateChecks.Sample("0.99.0-beta.1"),prerelease:true)+"]");
+   if(r.RequestUri.AbsolutePath.EndsWith("/latest")||r.RequestUri.AbsolutePath.EndsWith("/manager-update.json"))
+    return UpdateChecks.Reply(UpdateChecks.Json(UpdateChecks.Sample(version)));
+   downloads++;return new(System.Net.HttpStatusCode.OK){Content=new System.Net.Http.ByteArrayContent(UpdateChecks.Payload)};
+  }));
   // Use a test window so production source remains readonly and fixed.
   var test=new MainWindow(false,source){Left=-15000,Top=-15000,ShowActivated=false};test.Show();
   try{await test.RunUpdateUiScenario(output,()=>downloads,v=>version=v,()=>failure=true);}finally{test.Close();}
@@ -127,8 +134,23 @@ public partial class MainWindow
   ShowManagerUpdates();await Idle();Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新")&&Controls<TextBlock>(shell).Any(t=>t.Text.Contains("新增：模组批量查看")),"new release displays notes and an explicit download choice");
   Controls<Button>(shell).Single(b=>b.Content?.ToString()=="暂不更新").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(currentVisit?.Key=="总览"&&downloads()==0,"declining update returns without downloads or writes");
   ShowManagerUpdates();await DownloadManagerUpdateToAsync(managerRelease!,Path.Combine(output,"界面隔离下载.zip"));Check(managerDownload!=null&&downloads()==1&&File.ReadAllBytes(managerDownload).SequenceEqual(UpdateChecks.Payload),"download workflow saves verified package and never executes it");
-  setVersion(ManagerUpdates.CurrentVersion);await CheckManagerUpdatesAsync(true);await Idle();Check(managerUpdateStatus.Contains("最新正式版本")&&!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新"),"current release hides update download action");
-  setVersion("0.6.0");await CheckManagerUpdatesAsync(true);Check(managerUpdateStatus.Contains("无需降级"),"older release cannot offer downgrade");
+  setVersion(ManagerUpdates.CurrentVersion);await CheckManagerUpdatesAsync(true);await Idle();
+  Check(!CanInstallManagerRelease(managerRelease!)&&
+   !Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新"&&b.IsEnabled),
+   "same-core updates cannot bypass the safe forward-only updater");
+  setVersion("0.6.0");await CheckManagerUpdatesAsync(true);
+  Check(managerUpdateStatus.Contains("不会自动降级"),"older stable release cannot offer downgrade");
+  var betaTab=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="测试版 Beta");
+  betaTab.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,betaTab));
+  for(int i=0;i<20&&managerUpdateBusy;i++){await Task.Delay(50);await Idle();}
+  Check(managerUpdateChannel==ManagerUpdateChannel.Beta&&managerRelease?.Version=="0.99.0-beta.1"&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新"&&b.IsEnabled),
+   "Beta selector checks GitHub prereleases and offers an explicit upgrade");
+  var stableTab=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="稳定版");
+  stableTab.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,stableTab));
+  for(int i=0;i<20&&managerUpdateBusy;i++){await Task.Delay(50);await Idle();}
+  Check(managerUpdateChannel==ManagerUpdateChannel.Stable&&managerRelease?.Version=="0.6.0",
+   "stable selector restores the stable release source without reusing Beta metadata");
   fail();await CheckManagerUpdatesAsync(true);await Idle();Check(managerRelease==null&&managerUpdateStatus.Contains("未完成")&&!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下载并更新"),"failed refresh clears stale release and disables downloads");
  }
 }
