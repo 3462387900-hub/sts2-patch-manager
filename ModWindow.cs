@@ -1017,6 +1017,7 @@ public partial class MainWindow
   var header=V(Header("LOCAL MODS",isFixSection?"本地修复补丁":"模组管理",
    isFixSection?"独立修复补丁集中管理；启停需要预览。":"管理已安装 MOD；点击名称查看详情。"));
   root.Children.Add(header);Space(header,9);
+  if(isFixSection){header.Children.Add(PatchCenterTabs("本地补丁"));Space(header,2);}
   if(selectedInstallRoot==null)
   {
    header.Children.Add(Card(V(T("请先定位游戏目录",17,ink,true),
@@ -1191,7 +1192,7 @@ public partial class MainWindow
    actions.Children.Add(preview);
    actions.Children.Add(Btn("完整详情",()=>{CaptureModListOffset();ShowModDetail(mod.Folder);},"Primary"));
    detail.Children.Add(actions);Space(detail,7);
-   detail.Children.Add(Btn("关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();},"Ghost"));
+   detail.Children.Add(Btn("关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();ResizeDetail();},"Ghost"));
    detailHost.Content=new Border{
     Background=SpireGlassTheme.GlassPanel("#C01A2D48"),
     BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
@@ -1200,7 +1201,7 @@ public partial class MainWindow
    detailHost.Visibility=Visibility.Visible;
   }
   list=ModCardList.Create(row=>{
-   CaptureModListOffset();selectedModDetailFolder=row.Mod.Folder;UpdateDetail();
+   CaptureModListOffset();selectedModDetailFolder=row.Mod.Folder;UpdateDetail();ResizeDetail();
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
    var toggle=new MenuItem{Header=row.Mod.Enabled?"预览停用":"预览启用",
