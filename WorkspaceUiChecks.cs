@@ -83,17 +83,35 @@ public partial class MainWindow
   Check(navButtons.Keys.Count==7&&navButtons.ContainsKey("修复补丁")&&navButtons.ContainsKey("更新中心")&&navButtons.ContainsKey("工具与设置"),
    "sidebar exposes seven destinations including new patch and MOD update workspaces");
   Navigate("修复补丁");await Idle();
-  Check(page=="补丁库"&&Controls<Button>(content).Count(b=>new[]{"补丁库","在线补丁","补丁健康","安装与回滚"}.Contains(b.Content?.ToString()))==4,
-   "patch center exposes all four existing patch views");
+  Check(page=="补丁库"&&Controls<Button>(content).Count(b=>new[]{"补丁库","本地补丁","在线补丁","补丁健康","安装与回滚"}.Contains(b.Content?.ToString()))==5,
+   "patch center exposes all five patch views including local fixes");
   ShowLifecycle();await Idle();
   Check(page=="补丁健康"&&navButtons["修复补丁"].Background.ToString()==B("#7540668A").ToString()&&
    navButtons["修复补丁"].BorderBrush.ToString()==B("#9A91BDF3").ToString(),
    "patch health keeps the patch-center navigation highlighted");
-  ShowMods();await Idle();
-  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="普通 MOD  (6)")&&
-   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="修复补丁  (1)"),
-   "mod management exposes regular MOD and independent patch tabs with accurate counts");
-  await Click("修复补丁  (1)");
+  Navigate("模组管理");await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装")&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="创意工坊下载")&&
+   activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
+   "mod management shows secondary navigation and regular MODs");
+  ShowWorkshopPage();await Idle();
+  Check(currentVisit?.Key=="mod-workshop"&&
+   Controls<TextBox>(shell).Any(x=>System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID"),
+   "Workshop download is an actual MOD subpage with an inline input");
+  var workshopInput=Controls<TextBox>(shell).First(x=>
+   System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID");
+  workshopInput.Text="invalid-test-link";await Click("获取并预览");
+  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("链接或 ID 无效")),
+   "invalid Workshop links are rejected inline without starting a download");
+  ShowDependencyGraph();await Idle();
+  Check(currentVisit?.Key=="mod-dependencies"&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
+   "dependency analysis stays in the shared secondary MOD navigation");
+  ShowModEnvironmentSnapshots();await Idle();
+  Check(currentVisit?.Key=="mod-snapshots"&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
+   "environment snapshots stay in the shared secondary MOD navigation");
+  Navigate("本地补丁");await Idle();
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
    "independent patch tab filters to known patch records");
@@ -104,7 +122,7 @@ public partial class MainWindow
   patchMore.ContextMenu!.IsOpen=false;
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
    "repair patch rows show a descriptive health status even before a scan");
-  Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();
+  ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="LargeHealDisplayFix").Folder);await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="查看依据"),
    "independent patch details expose the evidence viewer");
   await Click("查看依据");
@@ -114,8 +132,8 @@ public partial class MainWindow
   await Click("← 上一步");
   Check(currentVisit?.Key.StartsWith("mod:")==true,"back returns from evidence to original patch detail");
   await Click("← 上一步");
-  Check(page=="模组管理","back returns to repair patch list");
-  await Click("普通 MOD  (6)");
+  Check(page=="本地补丁","back returns to local independent patch list");
+  Navigate("模组管理");await Idle();
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "regular MOD tab excludes the catalogued independent patch");
   Check(ModListView.ColumnCount(600)==1&&ModListView.ColumnCount(790)==2&&ModListView.ColumnCount(1180)==3,
@@ -139,8 +157,9 @@ public partial class MainWindow
    "card border remains a constant 1px after toggling the selection");
   Check(cardToSelect.SelectBox.ActualWidth>=29,
    "glass checkbox hit target is at least 29px; actual "+cardToSelect.SelectBox.ActualWidth);
-  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
-   "checkbox selection does not reconstruct its original card");
+  Check(Controls<ModCardControl>(activeModList!).Any(c=>c.DataContext is ModListRow row&&
+    row.Mod.Folder==checkedFolder&&row.Selected),
+   "checkbox selection remains visible after virtualized layout adjusts");
   await Shot("02-模组卡片勾选状态");
   var selectionSearch=Controls<TextBox>(shell).Single();
   selectionSearch.Text="__筛选不匹配__";await Idle();
@@ -164,7 +183,17 @@ public partial class MainWindow
    "仅展示预览，不涉及文件修改。",[new ModBatchReview("TestSolo","可处理","测试预览")]);
   await cancelOperation.Task;
   Check(reviewAccepted==false,"batch review can be cancelled before any file operation");
-  var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();Controls<ModCardControl>(activeModList!).First().DetailsRequested?.Invoke(Controls<ModCardControl>(activeModList!).First().DataContext as ModListRow ?? throw new InvalidOperationException("missing card"));await Idle();Check(currentVisit?.Key.StartsWith("mod:")==true,"mod detail opens from actual filtered list button");await Click("← 上一步");Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
+  var search=Controls<TextBox>(shell).Single();search.Text="独立";await Idle();
+  var filteredCard=Controls<ModCardControl>(activeModList!).First();
+  filteredCard.DetailsRequested?.Invoke((filteredCard.DataContext as ModListRow ?? throw new InvalidOperationException("missing card")));
+  await Idle();
+  bool sidePanelOpen=Controls<Button>(shell).Any(b=>b.Content?.ToString()=="完整详情");
+  Check(sidePanelOpen||currentVisit?.Key.StartsWith("mod:")==true,
+   "MOD title opens contextual details or full details on narrow windows");
+  if(sidePanelOpen){await Click("完整详情");await Idle();}
+  Check(currentVisit?.Key.StartsWith("mod:")==true,"full MOD details remain accessible");
+  await Click("← 上一步");
+  Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
   Controls<TextBox>(shell).Single().Text="";await Idle();
   Check(pageScroll!.VerticalScrollBarVisibility==ScrollBarVisibility.Disabled&&
    ScrollViewer.GetHorizontalScrollBarVisibility(activeModList!)==ScrollBarVisibility.Disabled,
@@ -186,7 +215,7 @@ public partial class MainWindow
   var baseline=ModHistory.CompareAndStore(first,Path.Combine(fixtures,"ui-lifecycle-history"));
   lifecycleReport=PatchLifecycle.Evaluate(first,baseline,LifecycleEvidenceSource.Empty,"fixture",Catalog.Scan(first),ModManager.Scan(first));
   Check(lifecycleReport!=null&&HasValidLifecycleReport,"lifecycle report is present before directory change");
-  ShowMods();await Idle();await Click("修复补丁  (1)");
+  Navigate("本地补丁");await Idle();
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")&&!x.Text.Contains("健康：需重新检查")),
    "valid lifecycle reports appear as live labels on the patch list");
   ShowPatchEvidence("LargeHealDisplayFix");await Idle();
@@ -227,7 +256,7 @@ public partial class MainWindow
   double originalWidth=Width,originalHeight=Height;
   Width=1020;Height=720;await Idle();
   var rowView=Controls<ModCardControl>(virtualList).Single();
-  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用模组");
+  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用");
   var moreButton=rowView.MoreButton;
   bool Fits(Button button)
   {
@@ -237,8 +266,8 @@ public partial class MainWindow
   Check(Fits(detailsButton)&&Fits(moreButton)&&
    rowView.ActualWidth<=virtualList.ActualWidth&&virtualList.ActualWidth>500,
    "minimum supported window width visibly keeps both MOD actions inside the row");
-  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖此模组"));
-  Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()==longBlock&&
+  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖情况："));
+  Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()?.Contains(longBlock)==true&&
    warningLine.ActualWidth<virtualList.ActualWidth,
    "long dependency warnings are concise but full reasons remain available via tooltip");
   await Shot("06-窄窗口模组按钮可见");

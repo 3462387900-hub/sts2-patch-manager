@@ -12,6 +12,7 @@ public partial class MainWindow
  WorkshopZipPlan? zipImportPreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
+ string? selectedModDetailFolder;
  GitHubModUpdates? githubModUpdates;
  GitHubModDiscovery? githubDiscovery;
  GitHubModDiscovery Discovery()=>githubDiscovery??=new GitHubModDiscovery();
@@ -149,29 +150,32 @@ public partial class MainWindow
   dialog.Content=body;input.Focus();
   if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
- async void DownloadWorkshopMod(ManagedMod? target=null)
+ async void DownloadWorkshopMod(ManagedMod? target=null,ulong? presetWorkshopId=null)
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
   string gameRoot=selectedInstallRoot;
-  ulong? savedId=target==null?null:WorkshopSources().Get(target.Id);
-  var dialog=new Window{Title="从尖塔补给站下载 MOD",Owner=this,Width=560,Height=245,
-   MinWidth=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
-  var body=new StackPanel{Margin=new Thickness(18)};
-  body.Children.Add(T("输入 Steam 创意工坊 Workshop ID，或粘贴 Steam / 尖塔补给站分享链接。",13,muted));
-  var input=new TextBox{Text=savedId?.ToString()??"",Margin=new Thickness(0,12,0,10),MinHeight=32};
-  body.Children.Add(input);
-  var hint=T("支持数字 ID、steamcommunity.com/sharedfiles/filedetails 链接，以及 workshop.apricityx.top/mod 链接。",11,muted);
-  body.Children.Add(hint);
-  ulong workshopId=0;
-  var start=Btn("获取并预览",()=>{
-   if(!WorkshopModInstaller.TryParseWorkshopId(input.Text,out workshopId))
-   {hint.Text="ID 或链接无效；请确认属于《杀戮尖塔 2》（AppID 2868840）的创意工坊条目。";return;}
-   dialog.DialogResult=true;
-  },"Primary");
-  body.Children.Add(H(start,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
-  dialog.Content=body;input.Focus();
-  if(dialog.ShowDialog()!=true)return;
-
+  ulong workshopId=presetWorkshopId??0;
+  if(!presetWorkshopId.HasValue)
+  {
+   ulong? savedId=target==null?null:WorkshopSources().Get(target.Id);
+   var dialog=new Window{Title="从尖塔补给站下载 MOD",Owner=this,Width=560,Height=245,
+    MinWidth=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
+   var body=new StackPanel{Margin=new Thickness(18)};
+   body.Children.Add(T("输入 Steam 创意工坊 Workshop ID，或粘贴 Steam / 尖塔补给站分享链接。",13,muted));
+   var input=new TextBox{Text=savedId?.ToString()??"",Margin=new Thickness(0,12,0,10),MinHeight=32};
+   body.Children.Add(input);
+   var hint=T("支持数字 ID、steamcommunity.com/sharedfiles/filedetails 链接，以及 workshop.apricityx.top/mod 链接。",11,muted);
+   body.Children.Add(hint);
+   var start=Btn("获取并预览",()=>{
+    if(!WorkshopModInstaller.TryParseWorkshopId(input.Text,out workshopId))
+    {hint.Text="ID 或链接无效；请确认属于《杀戮尖塔 2》（AppID 2868840）的创意工坊条目。";return;}
+    dialog.DialogResult=true;
+   },"Primary");
+   body.Children.Add(H(start,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
+   dialog.Content=body;input.Focus();
+   if(dialog.ShowDialog()!=true)return;
+ 
+  }
   busy=true;
   bool changed=false;
   WorkshopModPrepared? prepared=null;
@@ -457,7 +461,7 @@ public partial class MainWindow
   int watchVersion=modChangeVersion;
   string? recoveryNotice=null;
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
-  if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+  if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
    var inventory=await Task.Run(()=>ModManager.Scan(root));
@@ -530,7 +534,7 @@ public partial class MainWindow
    busy=false;
    if(recoveryNotice!=null&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
     toast.Text=recoveryNotice;
-   if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+   if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
     string folder=currentVisit.Key["mod:".Length..];
@@ -1012,28 +1016,35 @@ public partial class MainWindow
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
-  var header=V(Header("LOCAL MODS","模组管理","普通 MOD 和独立修复补丁分开管理；启停操作始终需要预览。"));
+  bool isFixSection=modSection=="修复补丁";
+  var header=V(Header("LOCAL MODS",isFixSection?"本地修复补丁":"模组管理",
+   isFixSection?"独立修复补丁集中管理；启停需要预览。":"管理已安装 MOD；点击名称查看详情。"));
   root.Children.Add(header);Space(header,9);
+  if(isFixSection){header.Children.Add(PatchCenterTabs("本地补丁"));Space(header,2);}
   if(selectedInstallRoot==null)
   {
    header.Children.Add(Card(V(T("请先定位游戏目录",17,ink,true),
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
    SetPage("模组管理",root,restore:ShowMods);return;
   }
+  if(!isFixSection)header.Children.Add(ModWorkspaceTabs("已安装"));
+  var tools=new WrapPanel{Margin=new Thickness(0,0,0,4)};
   var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
-  var workshopDownload=Btn("从创意工坊下载",()=>DownloadWorkshopMod(),"Primary");
-  workshopDownload.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
-  header.Children.Add(H(refresh,workshopDownload,
-   Btn("依赖关系",()=>ShowDependencyGraph(),"Ghost"),
-   Btn("导入本地 ZIP",ChooseWorkshopZip,"Ghost")));
-  header.Children.Add(H(
-   Btn("环境快照",ShowModEnvironmentSnapshots,"Ghost"),
-   Btn("打开模组目录",()=>{
-    string directory=Path.Combine(selectedInstallRoot,"mods");
-    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
-   },"Ghost")));
-  Space(header,4);
-  header.Children.Add(T(modStatus,12,muted));Space(header,7);
+  refresh.Margin=new Thickness(0,0,7,4);tools.Children.Add(refresh);
+  if(!isFixSection)
+  {
+   var import=Btn("导入 ZIP",ChooseWorkshopZip,"Ghost");
+   import.Margin=new Thickness(0,0,7,4);tools.Children.Add(import);
+  }
+  var folderButton=Btn("打开目录",()=>{
+   string directory=Path.Combine(selectedInstallRoot,"mods");
+   if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
+  },"Ghost");
+  tools.Children.Add(folderButton);header.Children.Add(tools);
+  var statusSummary=T(modStatus,11,muted);
+  statusSummary.TextWrapping=TextWrapping.NoWrap;
+  statusSummary.TextTrimming=TextTrimming.CharacterEllipsis;statusSummary.ToolTip=modStatus;
+  header.Children.Add(statusSummary);Space(header,7);
   if(modInventoryDirty)
   {
    header.Children.Add(Card(V(T("检测到 MOD 文件变化 · 正在核对列表",13,gold,true),
@@ -1048,21 +1059,6 @@ public partial class MainWindow
   var mods=modInventory?.Mods??[];
   chosenModFolders.RemoveWhere(path=>!mods.Any(m=>m.Folder.Equals(path,StringComparison.OrdinalIgnoreCase)));
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
-  var groups=new WrapPanel{Margin=new Thickness(0,0,0,6)};
-  foreach(var (name,count) in new[]{("普通 MOD",normalCount),("修复补丁",fixCount)})
-  {
-   string selected=name;
-   var tab=Btn($"{name}  ({count})",()=>{
-    CaptureModListOffset();modListOffset=0;modSection=selected;modFilter="全部";chosenModFolders.Clear();ShowMods();
-   },modSection==name?"SelectedTab":"Ghost");
-   tab.Margin=new Thickness(0,0,9,0);
-   groups.Children.Add(tab);
-  }
-  header.Children.Add(groups);
-  header.Children.Add(T(modSection=="修复补丁"
-   ?"已收录的独立补丁集中在此；分类不代表通过文件指纹校验。"
-   :"普通 MOD（包括原 MOD 内置修复）显示在此。",12,muted));
-  Space(header,6);
   if(modSection=="修复补丁")
   {
    header.Children.Add(T(HasValidLifecycleReport
@@ -1165,8 +1161,44 @@ public partial class MainWindow
   ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
+  var workspace=new Grid();
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
+  var detailHost=new ContentControl{Visibility=Visibility.Collapsed};
+  void UpdateDetail()
+  {
+   var mod=modInventory?.Mods.FirstOrDefault(m=>m.Folder==selectedModDetailFolder);
+   if(mod==null||ModPresentation.IsIndependentPatch(mod)!=isFixSection)
+   {
+    detailHost.Visibility=Visibility.Collapsed;detailHost.Content=null;return;
+   }
+   var report=dependencyReport?.Summary(mod.Id);
+   var detail=V(T("模组详情",17,ink,true),T(mod.Name,15,ink,true),
+    T("模组 ID："+mod.Id,12,muted),T("版本号："+mod.Version,12,muted),
+    T("作者："+mod.Author,12,muted),T("状态："+(mod.Enabled?"已启用":"已停用"),12,muted),
+    T("依赖情况："+(report?.Label??"未分析"),12,report?.HasIssue==true?gold:muted));
+   Space(detail,10);
+   var actions=new WrapPanel();
+   var selected=rows.FirstOrDefault(r=>r.Mod.Folder==mod.Folder);
+   var preview=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Ghost");
+   preview.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty&&selected?.BlockReason==null;
+   preview.ToolTip=selected?.BlockReason;preview.Margin=new Thickness(0,0,7,7);
+   actions.Children.Add(preview);
+   actions.Children.Add(Btn("完整详情",()=>{CaptureModListOffset();ShowModDetail(mod.Folder);},"Primary"));
+   detail.Children.Add(actions);Space(detail,7);
+   detail.Children.Add(Btn("关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();ResizeDetail();},"Ghost"));
+   detailHost.Content=new Border{
+    Background=SpireGlassTheme.GlassPanel("#C01A2D48"),
+    BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
+    CornerRadius=new CornerRadius(12),Padding=new Thickness(12),
+    Child=new ScrollViewer{Content=detail,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}};
+   detailHost.Visibility=Visibility.Visible;
+  }
   list=ModCardList.Create(row=>{
-   CaptureModListOffset();ShowModDetail(row.Mod.Folder);
+   CaptureModListOffset();
+   if(workspace.ActualWidth<820){ShowModDetail(row.Mod.Folder);return;}
+   selectedModDetailFolder=row.Mod.Folder;UpdateDetail();ResizeDetail();
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
    var toggle=new MenuItem{Header=row.Mod.Enabled?"预览停用":"预览启用",
@@ -1196,7 +1228,17 @@ public partial class MainWindow
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
    row.Selected=value;UpdateSelectionToolbar();
   });
-  activeModList=list;Grid.SetRow(list,1);root.Children.Add(list);
+  activeModList=list;
+  workspace.Children.Add(list);Grid.SetColumn(detailHost,2);workspace.Children.Add(detailHost);
+  void ResizeDetail()
+  {
+   bool show=detailHost.Content!=null&&workspace.ActualWidth>=820;
+   detailHost.Visibility=show?Visibility.Visible:Visibility.Collapsed;
+   workspace.ColumnDefinitions[1].Width=new GridLength(show?12:0);
+   workspace.ColumnDefinitions[2].Width=new GridLength(show?290:0);
+  }
+  workspace.SizeChanged+=(_,_)=>ResizeDetail();
+  Grid.SetRow(workspace,1);root.Children.Add(workspace);
   var footer=V(empty);
   Grid.SetRow(footer,2);root.Children.Add(footer);
   void UpdateSelectionToolbar()
@@ -1235,6 +1277,11 @@ public partial class MainWindow
    UpdateSelectionToolbar();
    shownCount.Text=$"显示 {visible.Length} / {(modSection=="修复补丁"?fixCount:normalCount)} 项";
    empty.Visibility=visible.Length==0&&!busy?Visibility.Visible:Visibility.Collapsed;
+   if(selectedModDetailFolder!=null&&!visible.Any(row=>
+       row.Mod.Folder.Equals(selectedModDetailFolder,StringComparison.OrdinalIgnoreCase)))
+   {
+    selectedModDetailFolder=null;UpdateDetail();ResizeDetail();
+   }
   }
   search.TextChanged+=(_,_)=>{
    modQuery=search.Text;
@@ -1244,7 +1291,7 @@ public partial class MainWindow
    string q=modQuery,f=modFilter,g=modSection;
    RememberPage("模组管理",()=>{modQuery=q;modFilter=f;modSection=g;ShowMods();});
   };
-  FilterRows();
+  FilterRows();UpdateDetail();ResizeDetail();
   list.SizeChanged+=(_,_)=>{
    int next=ModListView.ColumnCount(list.ActualWidth);
    if(next!=cardColumns){cardColumns=next;FilterRows();}
@@ -1253,7 +1300,7 @@ public partial class MainWindow
    if(activeModList==list&&ListScroll(list) is { } scroll)scroll.ScrollToVerticalOffset(modListOffset);
   }),System.Windows.Threading.DispatcherPriority.Loaded);
   string savedQuery=modQuery,savedFilter=modFilter,savedSection=modSection;
-  SetPage("模组管理",root,restore:()=>{
+  SetPage(isFixSection?"本地补丁":"模组管理",root,restore:()=>{
    modQuery=savedQuery;modFilter=savedFilter;modSection=savedSection;ShowMods();
   });
  }

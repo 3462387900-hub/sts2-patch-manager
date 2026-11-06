@@ -22,11 +22,9 @@ public partial class MainWindow
             "MOD ENVIRONMENT SNAPSHOTS",
             "MOD 环境快照",
             "保存整个 MOD 目录和已停用模组保留区。恢复前会先校验快照，并自动保存当前环境。"));
-        Space(root, 14);
-        root.Children.Add(H(
-            Btn("← 返回模组管理", ShowMods, "Ghost"),
-            Btn("刷新快照列表", ShowModEnvironmentSnapshots, "Ghost")));
-
+        Space(root, 10);
+        root.Children.Add(ModWorkspaceTabs("环境快照"));
+        root.Children.Add(H(Btn("刷新快照列表", ShowModEnvironmentSnapshots, "Ghost")));
         Space(root, 12);
         int totalMods = modInventory?.Mods.Count ?? 0;
         int enabledMods = modInventory?.Mods.Count(mod => mod.Enabled) ?? 0;
