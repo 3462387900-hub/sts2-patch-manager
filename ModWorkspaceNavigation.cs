@@ -5,6 +5,33 @@ namespace SpirePatch;
 
 public partial class MainWindow
 {
+ // Shared fixed-height heading keeps second-level tabs aligned across MOD pages.
+ // Every page retains its own explanation; the empty space is reserved intentionally.
+ UIElement ModWorkspaceHeader(string title,string description,UIElement? actions=null)
+ {
+  var grid=new Grid{Height=90,Margin=new Thickness(0,0,0,5)};
+  grid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(40)});
+  grid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(50)});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  var heading=T(title,23,ink,true);
+  heading.VerticalAlignment=VerticalAlignment.Center;
+  grid.Children.Add(heading);
+  if(actions!=null)
+  {
+   Grid.SetColumn(actions,1);
+   actions.VerticalAlignment=VerticalAlignment.Center;
+   grid.Children.Add(actions);
+  }
+  var descriptionText=T(description,12,muted);
+  descriptionText.LineHeight=19;
+  descriptionText.VerticalAlignment=VerticalAlignment.Top;
+  descriptionText.Margin=new Thickness(0,2,0,0);
+  Grid.SetRow(descriptionText,1);
+  Grid.SetColumnSpan(descriptionText,2);
+  grid.Children.Add(descriptionText);
+  return grid;
+ }
  // One persistent secondary navigation pattern across the MOD workspace.
  UIElement ModWorkspaceTabs(string active)
  {
