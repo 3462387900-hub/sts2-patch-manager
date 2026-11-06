@@ -1120,6 +1120,7 @@ public partial class MainWindow
    Space(header,8);
   }
 
+  ListBox list=null!;
   var searchArea=new Grid{Margin=new Thickness(0,3,0,9)};
   var search=new TextBox{Text=modQuery,MinHeight=39,ToolTip="按 MOD 名称、ID、作者搜索"};
   search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索模组");
@@ -1236,7 +1237,6 @@ public partial class MainWindow
    return string.Join(" · ",context);
   },mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
    mod=>dependencyReport?.Summary(mod.Id).HasIssue??false);
-  ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
   var workspace=new Grid();
@@ -1263,19 +1263,38 @@ public partial class MainWindow
    preview.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty&&selected?.BlockReason==null;
    preview.ToolTip=selected?.BlockReason;preview.Margin=new Thickness(0,0,7,7);
    actions.Children.Add(preview);
-   actions.Children.Add(Btn("完整详情",()=>{CaptureModListOffset();ShowModDetail(mod.Folder);},"Primary"));
-   detail.Children.Add(actions);Space(detail,7);
-   detail.Children.Add(Btn("关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();ResizeDetail();},"Ghost"));
+   if(!isFixSection)
+   {
+    var github=GitHubUpdates();
+    var source=github.Repository(mod.Id);
+    var cached=github.Cached(mod.Id);
+    var update=Btn(source==null?"查找 GitHub 来源":cached?.Status=="有更新"?"下载并更新":"检查更新",()=>{
+     if(busy||transactionWriting||modInventoryDirty)return;
+     if(source==null)DiscoverGitHubMod(mod);
+     else if(cached?.Status=="有更新")UpdateGitHubMod(mod);
+     else CheckGitHubMod(mod);
+    },"ModToolbarPrimary");
+    update.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
+    update.Margin=new Thickness(0,0,7,7);actions.Children.Add(update);
+   }
+   var full=Btn("完整详情",()=>{CaptureModListOffset();ShowModDetail(mod.Folder);},"ModToolbarAction");
+   full.Margin=new Thickness(0,0,7,7);actions.Children.Add(full);
+   detail.Children.Add(actions);Space(detail,10);
+   detail.Children.Add(Btn("打开模组目录",()=>OpenUrl(mod.Folder),"ModToolbarAction"));
+   Space(detail,8);
+   detail.Children.Add(Btn("✕  关闭详情",()=>{selectedModDetailFolder=null;UpdateDetail();ResizeDetail();},"ModToolbarAction"));
    detailHost.Content=new Border{
-    Background=SpireGlassTheme.GlassPanel("#C01A2D48"),
+    Background=SpireGlassTheme.GlassPanel("#EE172A43"),
     BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
-    CornerRadius=new CornerRadius(12),Padding=new Thickness(12),
+    CornerRadius=new CornerRadius(13),Padding=new Thickness(15),
+    Effect=new System.Windows.Media.Effects.DropShadowEffect{
+     Color=System.Windows.Media.Colors.Black,BlurRadius=22,ShadowDepth=3,Opacity=.42},
     Child=new ScrollViewer{Content=detail,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}};
    detailHost.Visibility=Visibility.Visible;
   }
   list=ModCardList.Create(row=>{
    CaptureModListOffset();
-   if(workspace.ActualWidth<820){ShowModDetail(row.Mod.Folder);return;}
+   if(workspace.ActualWidth<540){ShowModDetail(row.Mod.Folder);return;}
    selectedModDetailFolder=row.Mod.Folder;UpdateDetail();ResizeDetail();
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
@@ -1307,13 +1326,20 @@ public partial class MainWindow
    row.Selected=value;UpdateSelectionToolbar();
   });
   activeModList=list;
-  workspace.Children.Add(list);Grid.SetColumn(detailHost,2);workspace.Children.Add(detailHost);
+  workspace.Children.Add(list);
+  detailHost.HorizontalAlignment=HorizontalAlignment.Right;
+  detailHost.VerticalAlignment=VerticalAlignment.Stretch;
+  Panel.SetZIndex(detailHost,10);
+  workspace.Children.Add(detailHost);
   void ResizeDetail()
   {
-   bool show=detailHost.Content!=null&&workspace.ActualWidth>=820;
+   bool show=detailHost.Content!=null&&workspace.ActualWidth>=540;
+   bool dock=show&&workspace.ActualWidth>=1400;
    detailHost.Visibility=show?Visibility.Visible:Visibility.Collapsed;
-   workspace.ColumnDefinitions[1].Width=new GridLength(show?12:0);
-   workspace.ColumnDefinitions[2].Width=new GridLength(show?290:0);
+   detailHost.Width=show?(dock?335:330):0;
+   workspace.ColumnDefinitions[1].Width=new GridLength(dock?12:0);
+   workspace.ColumnDefinitions[2].Width=new GridLength(dock?335:0);
+   Grid.SetColumn(detailHost,dock?2:0);
   }
   workspace.SizeChanged+=(_,_)=>ResizeDetail();
   Grid.SetRow(workspace,1);root.Children.Add(workspace);
