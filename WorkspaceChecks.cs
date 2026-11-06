@@ -72,6 +72,24 @@ public static class WorkspaceChecks
    ModListView.Filter(presentation,"普通 MOD","全部","独立").Single().Mod.Id=="TestSolo"&&
    ModListView.Filter(presentation,"普通 MOD","启用","").Length==6,
    "virtual list filters only data by category, enabled state, and search");
+  Func<ManagedMod,bool> hasWorkshopId=m=>localSources.Get(m.Id).HasValue;
+  var unbound=ModListView.Filter(presentation,"普通 MOD","全部","","未绑定 Workshop ID",hasWorkshopId);
+  Check(unbound.Length==4&&unbound.All(row=>row.Mod.Id is not ("TestBase" or "TestSolo"))&&
+   unbound.All(row=>!row.IsFix),
+   "unbound Workshop filter excludes bound MODs and independent repair patches");
+  Check(ModListView.Filter(presentation,"普通 MOD","未绑定 Workshop ID","",workshopBound:hasWorkshopId).Length==4&&
+   ModListView.Filter(presentation,"普通 MOD","启用","",
+    "未绑定 Workshop ID",hasWorkshopId).Length==4,
+   "classic button and modern dropdown share identical local unbound source logic");
+  Check(ModListView.Filter(presentation,"普通 MOD","全部","海克斯",
+    "未绑定 Workshop ID",hasWorkshopId).Single().Mod.Id=="HextechRunes"&&
+   ModListView.Filter(presentation,"修复补丁","全部","",
+    "未绑定 Workshop ID",hasWorkshopId).Length==0,
+   "unbound Workshop filtering composes with search without exposing patch category");
+  localSources.Bind("HextechRunes",4033333333);
+  Check(ModListView.Filter(presentation,"普通 MOD","全部","",
+    "未绑定 Workshop ID",hasWorkshopId).Length==3,
+   "new manual binding immediately removes a MOD from the unbound filter");
   Check(ModPresentation.IsIndependentPatch(Find("LargeHealDisplayFix"))&&!ModPresentation.IsIndependentPatch(Find("TestSolo"))&&
    !ModPresentation.IsIndependentPatch(Find("HextechRunes")),"mod list groups only catalogued independent patches, never original mods");
   Reject(()=>ModManager.Preview(root,Find("TestBase").Folder,false),"cannot disable a declared dependency while a dependent mod is active");
