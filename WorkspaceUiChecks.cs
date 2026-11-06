@@ -94,6 +94,23 @@ public partial class MainWindow
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="创意工坊下载")&&
    activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "mod management shows secondary navigation and regular MODs");
+  ShowWorkshopPage();await Idle();
+  Check(currentVisit?.Key=="mod-workshop"&&
+   Controls<TextBox>(shell).Any(x=>System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID"),
+   "Workshop download is an actual MOD subpage with an inline input");
+  var workshopInput=Controls<TextBox>(shell).First(x=>
+   System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID");
+  workshopInput.Text="invalid-test-link";await Click("获取并预览");
+  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("链接或 ID 无效")),
+   "invalid Workshop links are rejected inline without starting a download");
+  ShowDependencyGraph();await Idle();
+  Check(currentVisit?.Key=="mod-dependencies"&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
+   "dependency analysis stays in the shared secondary MOD navigation");
+  ShowModEnvironmentSnapshots();await Idle();
+  Check(currentVisit?.Key=="mod-snapshots"&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
+   "environment snapshots stay in the shared secondary MOD navigation");
   Navigate("本地补丁");await Idle();
   Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
