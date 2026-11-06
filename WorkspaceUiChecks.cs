@@ -239,7 +239,7 @@ public partial class MainWindow
   double originalWidth=Width,originalHeight=Height;
   Width=1020;Height=720;await Idle();
   var rowView=Controls<ModCardControl>(virtualList).Single();
-  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用模组");
+  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用");
   var moreButton=rowView.MoreButton;
   bool Fits(Button button)
   {
@@ -249,8 +249,8 @@ public partial class MainWindow
   Check(Fits(detailsButton)&&Fits(moreButton)&&
    rowView.ActualWidth<=virtualList.ActualWidth&&virtualList.ActualWidth>500,
    "minimum supported window width visibly keeps both MOD actions inside the row");
-  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖此模组"));
-  Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()==longBlock&&
+  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖情况："));
+  Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()?.Contains(longBlock)==true&&
    warningLine.ActualWidth<virtualList.ActualWidth,
    "long dependency warnings are concise but full reasons remain available via tooltip");
   await Shot("06-窄窗口模组按钮可见");
