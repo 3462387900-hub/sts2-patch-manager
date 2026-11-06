@@ -45,6 +45,17 @@ jobs:
           Copy-Item third_party/WorkshopAndroidDownloader-LICENSE.txt (Join-Path $thirdParty 'WorkshopAndroidDownloader-LICENSE.txt')
           Copy-Item third_party/SharpCompress-LICENSE.txt (Join-Path $thirdParty 'SharpCompress-LICENSE.txt')
           ./scripts/整理玩家发布目录.ps1 -ApplicationDirectory $app
+          $friendly = Join-Path $app '00-启动尖塔修补站.exe'
+          $original = Join-Path $app 'SpirePatch.exe'
+          if (!(Test-Path -LiteralPath $friendly) -or
+              (Get-FileHash -LiteralPath $friendly -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash) {
+            throw 'Chinese Windows launch entry is missing or differs from original apphost.'
+          }
+          if (!(Test-Path -LiteralPath (Join-Path $app '使用说明/本版更新内容.md')) -or
+              (Test-Path -LiteralPath (Join-Path $app '本版更新内容.md'))) {
+            throw 'Release documentation is not grouped under 使用说明.'
+          }
           ./scripts/生成程序清单.ps1 -Directory $app
           $dir = Join-Path (Get-Location) 'release-output'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
