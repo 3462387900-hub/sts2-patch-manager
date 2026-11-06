@@ -9,7 +9,7 @@ namespace SpirePatch;
 
 // v0.14: the whole compact card opens context; checkbox and overflow remain independent controls.
 // Existing callbacks are retained for virtualized groups and safe operation previews.
-public sealed class ModCardControl : Border
+public class ModCardControl : Border
 {
  public static readonly RoutedEvent DetailsEvent=EventManager.RegisterRoutedEvent("CardDetails",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModCardControl));
  public static readonly RoutedEvent MoreEvent=EventManager.RegisterRoutedEvent("CardMore",RoutingStrategy.Bubble,typeof(RoutedEventHandler),typeof(ModCardControl));
