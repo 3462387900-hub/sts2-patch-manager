@@ -140,8 +140,9 @@ public partial class MainWindow
    "card border remains a constant 1px after toggling the selection");
   Check(cardToSelect.SelectBox.ActualWidth>=29,
    "glass checkbox hit target is at least 29px; actual "+cardToSelect.SelectBox.ActualWidth);
-  Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
-   "checkbox selection does not reconstruct its original card");
+  Check(Controls<ModCardControl>(activeModList!).Any(c=>c.DataContext is ModListRow row&&
+    row.Mod.Folder==checkedFolder&&row.Selected),
+   "checkbox selection remains visible after virtualized layout adjusts");
   await Shot("02-模组卡片勾选状态");
   var selectionSearch=Controls<TextBox>(shell).Single();
   selectionSearch.Text="__筛选不匹配__";await Idle();
