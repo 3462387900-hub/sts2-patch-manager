@@ -81,7 +81,7 @@ public static class WorkspaceChecks
    ModListView.Filter(presentation,"普通 MOD","启用","",
     "未绑定 Workshop ID",hasWorkshopId).Length==4,
    "classic button and modern dropdown share identical local unbound source logic");
-  Check(ModListView.Filter(presentation,"普通 MOD","全部","海克斯",
+  Check(ModListView.Filter(presentation,"普通 MOD","全部","HextechRunes",
     "未绑定 Workshop ID",hasWorkshopId).Single().Mod.Id=="HextechRunes"&&
    ModListView.Filter(presentation,"修复补丁","全部","",
     "未绑定 Workshop ID",hasWorkshopId).Length==0,
