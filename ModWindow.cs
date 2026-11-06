@@ -10,7 +10,7 @@ public partial class MainWindow
  string? orphanPatchNotice;
  ModTogglePlan? modTogglePreview;
  WorkshopZipPlan? zipImportPreview;
- string modSection="普通 MOD",modQuery="",modFilter="全部",modStatus="读取模组清单，管理本地模组的启用和停用。";
+ string modSection="普通 MOD",modQuery="",modFilter="全部",modIssueFilter="所有状态",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
  string? selectedModDetailFolder;
  GitHubModUpdates? githubModUpdates;
@@ -1017,34 +1017,88 @@ public partial class MainWindow
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   bool isFixSection=modSection=="修复补丁";
-  var header=V(Header("LOCAL MODS",isFixSection?"本地修复补丁":"模组管理",
-   isFixSection?"独立修复补丁集中管理；启停需要预览。":"管理已安装 MOD；点击名称查看详情。"));
-  root.Children.Add(header);Space(header,9);
-  if(isFixSection){header.Children.Add(PatchCenterTabs("本地补丁"));Space(header,2);}
+  if(modFilter is "有更新" or "有问题" or "依赖异常")
+  {
+   modIssueFilter=modFilter;modFilter="全部";
+  }
+  var header=V();
+  root.Children.Add(header);
+  var titleRow=new Grid{Margin=new Thickness(0,0,0,6)};
+  titleRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  titleRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  var heading=T(isFixSection?"本地修复补丁":"模组管理",23,ink,true);
+  heading.VerticalAlignment=VerticalAlignment.Center;
+  titleRow.Children.Add(heading);
   if(selectedInstallRoot==null)
   {
+   header.Children.Add(titleRow);
    header.Children.Add(Card(V(T("请先定位游戏目录",17,ink,true),
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
-   SetPage("模组管理",root,restore:ShowMods);return;
+   SetPage(isFixSection?"本地补丁":"模组管理",root,restore:ShowMods);return;
   }
-  if(!isFixSection)header.Children.Add(ModWorkspaceTabs("已安装"));
-  var tools=new WrapPanel{Margin=new Thickness(0,0,0,4)};
-  var refresh=Btn("刷新模组",RefreshMods,"Ghost");refresh.IsEnabled=!busy;
-  refresh.Margin=new Thickness(0,0,7,4);tools.Children.Add(refresh);
+  var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,
+   VerticalAlignment=VerticalAlignment.Center};
+  var refresh=Btn("↻  刷新",RefreshMods,"ModToolbarAction");
+  refresh.IsEnabled=!busy;refresh.Margin=new Thickness(0,0,5,0);
+  actions.Children.Add(refresh);
   if(!isFixSection)
   {
-   var import=Btn("导入 ZIP",ChooseWorkshopZip,"Ghost");
-   import.Margin=new Thickness(0,0,7,4);tools.Children.Add(import);
+   var import=Btn("＋  导入 ZIP",ChooseWorkshopZip,"ModToolbarPrimary");
+   import.Margin=new Thickness(0,0,5,0);import.IsEnabled=!busy&&!transactionWriting;
+   actions.Children.Add(import);
   }
-  var folderButton=Btn("打开目录",()=>{
+  var moreTools=new Button{Content="⋯",FontSize=19,MinWidth=34,MinHeight=33,
+   ToolTip="更多工作区工具"};
+  if(FindResource("ModToolbarAction") is Style toolStyle)moreTools.Style=toolStyle;
+  var toolsMenu=new ContextMenu();
+  var openFolder=new MenuItem{Header="打开模组目录"};
+  openFolder.Click+=(_,_)=>{
    string directory=Path.Combine(selectedInstallRoot,"mods");
    if(Directory.Exists(directory))OpenUrl(directory);else toast.Text="此目录尚未创建 mods 文件夹。";
-  },"Ghost");
-  tools.Children.Add(folderButton);header.Children.Add(tools);
-  var statusSummary=T(modStatus,11,muted);
-  statusSummary.TextWrapping=TextWrapping.NoWrap;
-  statusSummary.TextTrimming=TextTrimming.CharacterEllipsis;statusSummary.ToolTip=modStatus;
-  header.Children.Add(statusSummary);Space(header,7);
+  };
+  toolsMenu.Items.Add(openFolder);
+  if(isFixSection)
+  {
+   toolsMenu.Items.Add(new Separator());
+   var organize=new MenuItem{Header="整理独立补丁",IsEnabled=!busy&&!transactionWriting};
+   organize.Click+=(_,_)=>PreparePatchOrganization();toolsMenu.Items.Add(organize);
+   var health=new MenuItem{Header="重新检查健康状态",IsEnabled=!busy&&!transactionWriting};
+   health.Click+=(_,_)=>RefreshLifecycleFromMods();toolsMenu.Items.Add(health);
+   var autoStop=new MenuItem{Header="删除目标 MOD 后自动停用补丁："+(OrphanPatchAutoStop.Enabled(installer.DataRoot)?"开启":"关闭")};
+   autoStop.Click+=(_,_)=>{
+    try
+    {
+     bool old=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+     OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!old);
+     orphanPatchNotice=old?"已关闭自动停用；之后只手动管理修复补丁。":
+      "已开启自动停用；完整扫描会记录 MOD 环境，删除目标时自动核对并停用对应补丁。";
+     ShowMods();
+     if(!old)RefreshMods();
+    }
+    catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
+   };
+   toolsMenu.Items.Add(autoStop);
+  }
+  moreTools.Click+=(_,_)=>{toolsMenu.PlacementTarget=moreTools;toolsMenu.IsOpen=true;};
+  actions.Children.Add(moreTools);Grid.SetColumn(actions,1);titleRow.Children.Add(actions);
+  header.Children.Add(titleRow);
+  header.Children.Add(isFixSection?PatchCenterTabs("本地补丁"):ModWorkspaceTabs("已安装"));
+  if(isFixSection)
+  {
+   var healthLine=T(HasValidLifecycleReport
+    ?"健康最近检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+    :lifecycleStale?"文件变化后健康状态待重新检查":"补丁健康尚未检查",11,muted);
+   healthLine.Margin=new Thickness(0,0,0,7);
+   header.Children.Add(healthLine);
+  }
+  if(!modStatus.StartsWith("共 ",StringComparison.Ordinal))
+  {
+   var operation=T(modStatus,11,muted);
+   operation.TextTrimming=TextTrimming.CharacterEllipsis;
+   operation.TextWrapping=TextWrapping.NoWrap;
+   operation.ToolTip=modStatus;
+   header.Children.Add(operation);
+  }
   if(modInventoryDirty)
   {
    header.Children.Add(Card(V(T("检测到 MOD 文件变化 · 正在核对列表",13,gold,true),
