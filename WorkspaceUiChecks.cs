@@ -120,7 +120,15 @@ public partial class MainWindow
    !Controls<ClassicModCardControl>(activeModList!).Any()&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="所有状态  ▾"),
    "modern beta restores lightweight filters and compact cards in-place");
+  double alignedTabY=Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y;
+  Check(Controls<TextBlock>(shell).Any(t=>t.Text.Contains("管理已安装 MOD")),
+   "installed MODs retain their explanatory subtitle");
   ShowWorkshopPage();await Idle();
+  Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("通过已授权的尖塔补给站接口下载")),
+   "Workshop explanation remains visible without shifting second-level tabs");
   Check(currentVisit?.Key=="mod-workshop"&&
    Controls<TextBox>(shell).Any(x=>System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID"),
    "Workshop download is an actual MOD subpage with an inline input");
@@ -130,10 +138,34 @@ public partial class MainWindow
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("链接或 ID 无效")),
    "invalid Workshop links are rejected inline without starting a download");
   ShowDependencyGraph();await Idle();
+  Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("箭头方向")),
+   "dependency description remains visible with the same tab position");
   Check(currentVisit?.Key=="mod-dependencies"&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "dependency analysis stays in the shared secondary MOD navigation");
+  // Synthetic inventory exercises large graphs without writing game files.
+  var regularInventory=modInventory!;
+  var baseDependency=regularInventory.Mods.Single(m=>m.Id=="TestBase");
+  var syntheticMods=regularInventory.Mods.Concat(Enumerable.Range(1,27).Select(n=>
+   baseDependency with{Id="UIPage"+n,Name="分页测试 "+n,
+    Dependencies=[new ModDependency("TestBase")]})).ToList();
+  modInventory=new ModInventory(syntheticMods,regularInventory.Issues);
+  ShowDependencyGraph();await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="下一页 →"&&b.IsEnabled)&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("本页 10 条")),
+   "large dependency graphs show only 10 relation cards per page");
+  await Click("下一页 →",true);
+  Check(Controls<TextBlock>(shell).Any(t=>t.Text.Contains("第 2 /"))&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="← 上一页"&&b.IsEnabled),
+   "dependency page navigation retains filter and enables return action");
+  modInventory=regularInventory;
   ShowModEnvironmentSnapshots();await Idle();
+  Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("保存整个 MOD 目录")),
+   "snapshot subtitle remains visible at fixed tab height");
   Check(currentVisit?.Key=="mod-snapshots"&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "environment snapshots stay in the shared secondary MOD navigation");
