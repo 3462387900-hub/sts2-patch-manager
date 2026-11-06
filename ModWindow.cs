@@ -1277,6 +1277,11 @@ public partial class MainWindow
    UpdateSelectionToolbar();
    shownCount.Text=$"显示 {visible.Length} / {(modSection=="修复补丁"?fixCount:normalCount)} 项";
    empty.Visibility=visible.Length==0&&!busy?Visibility.Visible:Visibility.Collapsed;
+   if(selectedModDetailFolder!=null&&!visible.Any(row=>
+       row.Mod.Folder.Equals(selectedModDetailFolder,StringComparison.OrdinalIgnoreCase)))
+   {
+    selectedModDetailFolder=null;UpdateDetail();ResizeDetail();
+   }
   }
   search.TextChanged+=(_,_)=>{
    modQuery=search.Text;
