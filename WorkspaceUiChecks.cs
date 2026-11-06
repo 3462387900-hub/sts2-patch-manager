@@ -137,6 +137,14 @@ public partial class MainWindow
   Check(modIssueFilter=="依赖异常"&&modFilter=="启用",
    "segmented enable filter composes with the attention status dropdown");
   modIssueFilter="所有状态";modFilter="全部";ShowMods();await Idle();
+  var unboundMenu=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="所有状态  ▾").ContextMenu!;
+  var unboundOption=unboundMenu.Items.OfType<MenuItem>()
+   .Single(m=>m.Header?.ToString()=="未绑定 Workshop ID");
+  unboundOption.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent,unboundOption));await Idle();
+  Check(modIssueFilter=="未绑定 Workshop ID"&&
+   activeModList?.Items.OfType<ModCardGroup>().Sum(g=>g.Cards.Length)==6,
+   "modern unbound Workshop filter is available and shows the unbound sample MODs");
+  modIssueFilter="所有状态";ShowMods();await Idle();
   // Both beta themes are selectable without restarting or changing MOD files.
   string themeFixture=Path.Combine(fixtures,"ui-theme-preferences");
   UiThemes.Save(themeFixture,UiThemes.Classic);
@@ -148,6 +156,8 @@ public partial class MainWindow
   Check(UiThemes.IsClassic&&Controls<ClassicModCardControl>(activeModList!).Any()&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="刷新模组"),
    "classic beta keeps previous MOD layout and three-action cards");
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="未绑定 Workshop ID"),
+   "classic MOD layout exposes an unbound Workshop ID filter button");
   var themeModern=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="新版 Beta");
   themeModern.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeModern));await Idle();
   Check(UiThemes.IsWorkspace&&Controls<ModCardControl>(activeModList!).Any()&&

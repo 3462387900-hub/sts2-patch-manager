@@ -6,6 +6,13 @@ Windows 原生 C# / WPF / .NET 9 工具，面向当前小队的杀戮尖塔 2 �
 
 管理器源码与版本发布在本仓库。具体模组补丁及各自的适配说明继续保存在 [sts2-patches](https://github.com/3462387900-hub/sts2-patches)。管理器无需 GitHub 登录，不附带游戏或第三方模组本体。
 
+## v0.14.5 Beta 1：中文启动入口与未绑定 Workshop ID 筛选
+
+- 发布 ZIP 新增 **`00-启动尖塔修补站.exe`** 中文 Windows 启动程序：实际复制并校验原 WinExe，继续保留 `SpirePatch.exe` 供旧版升级器使用。文档集中到 `使用说明/`，运行 DLL 仍保留原目录确保安全更新兼容。
+- MOD 管理的经典按钮和新版下拉筛选均新增 **未绑定 Workshop ID**，只针对普通 MOD，支持搜索及启停组合，绑定后刷新结果。
+- 包含独立的 Beta 静态更新源优先读取逻辑；稳定版更新源不变。
+- 详见 [v0.14.5 Beta 1 说明](releases/v0.14.5-beta.1.md)。
+
 ## v0.14.4 Beta 1：手动关联 Workshop 来源与公共索引导出
 
 - 普通 MOD 完整详情和新版快捷详情新增「手动关联 Workshop ID」，支持数字 ID / Steam / 尖塔补给站链接；可选择查询远端条目标题供人工核对。

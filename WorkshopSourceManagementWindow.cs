@@ -98,6 +98,13 @@ public partial class MainWindow
   {
    toast.Text="已手动关联 "+mod.Id+" → Workshop "+WorkshopSources().Get(mod.Id)+"；尚未核验本地版本基线。";
    if(page=="更新中心")ShowModUpdatesCenter();
+   else if(page=="模组管理"&&
+    (modFilter=="未绑定 Workshop ID"||modIssueFilter=="未绑定 Workshop ID"))
+   {
+    // After binding, remove the resolved card from the pending-source list.
+    selectedModDetailFolder=null;
+    ShowMods();
+   }
    else if(currentVisit?.Key.StartsWith("mod:",StringComparison.Ordinal)==true)ShowModDetail(mod.Folder);
    else if(page=="模组管理")ShowMods();
   }

@@ -1046,6 +1046,10 @@ public partial class MainWindow
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   bool isFixSection=modSection=="修复补丁";
+  if(modIssueFilter=="未绑定 Workshop ID"&&!isFixSection)
+  {
+   modFilter="未绑定 Workshop ID";modIssueFilter="所有状态";
+  }
   var header=V(Header("LOCAL MODS",isFixSection?"本地修复补丁":"模组管理",
    isFixSection?"独立修复补丁集中管理；启停需要预览。":"管理已安装 MOD；点击名称查看详情。"));
   root.Children.Add(header);Space(header,9);
@@ -1134,7 +1138,7 @@ public partial class MainWindow
   var shownCount=T("",12,muted);shownCount.VerticalAlignment=VerticalAlignment.Center;
   DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
   var filters=new WrapPanel();
-  foreach(var name in new[]{"全部","启用","停用","有更新","有问题","依赖异常"})
+  foreach(var name in new[]{"全部","启用","停用","有更新","有问题","依赖异常","未绑定 Workshop ID"})
   {
    string selected=name;
    var button=Btn(name,()=>{CaptureModListOffset();modListOffset=0;modFilter=selected;ShowMods();},
@@ -1273,7 +1277,8 @@ public partial class MainWindow
   void UpdateSelectionToolbar()
   {
    int count=ChosenMods().Length;
-   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery)
+   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery,"所有状态",
+    m=>WorkshopSources().Get(m.Id).HasValue)
     .Count(r=>chosenModFolders.Contains(r.Mod.Folder));
    selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
@@ -1286,21 +1291,24 @@ public partial class MainWindow
     count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopCheckBatch.IsEnabled=hasWorkshopSource&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopUpdateBatch.IsEnabled=hasWorkshopUpdate&&!busy&&!transactionWriting&&!modInventoryDirty;
-   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,"所有状态",
+    m=>WorkshopSources().Get(m.Id).HasValue);
    checkAll.Checked-=OnCheckAll;checkAll.Unchecked-=OnCheckAll;
    checkAll.IsChecked=visible.Length>0&&visible.All(r=>chosenModFolders.Contains(r.Mod.Folder));
    checkAll.Checked+=OnCheckAll;checkAll.Unchecked+=OnCheckAll;
   }
   void OnCheckAll(object sender,RoutedEventArgs e)
   {
-   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery))
+   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery,"所有状态",
+    m=>WorkshopSources().Get(m.Id).HasValue))
     if(checkAll.IsChecked==true)chosenModFolders.Add(row.Mod.Folder);
     else chosenModFolders.Remove(row.Mod.Folder);
    FilterRows();
   }
   void FilterRows()
   {
-   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,"所有状态",
+    m=>WorkshopSources().Get(m.Id).HasValue);
    foreach(var row in rows)row.Selected=chosenModFolders.Contains(row.Mod.Folder);
    ModCardList.SetItems(list,visible,cardColumns);
    UpdateSelectionToolbar();
@@ -1340,7 +1348,7 @@ public partial class MainWindow
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   bool isFixSection=modSection=="修复补丁";
-  if(modFilter is "有更新" or "有问题" or "依赖异常")
+  if(modFilter is "有更新" or "有问题" or "依赖异常" or "未绑定 Workshop ID")
   {
    modIssueFilter=modFilter;modFilter="全部";
   }
@@ -1476,7 +1484,7 @@ public partial class MainWindow
   var attentionButton=Btn(modIssueFilter=="所有状态"?"所有状态  ▾":modIssueFilter+"  ▾",()=>{},"ModToolbarAction");
   attentionButton.Margin=new Thickness(0,0,10,3);
   var attentionMenu=new ContextMenu();
-  foreach(var option in new[]{"所有状态","有更新","有问题","依赖异常"})
+  foreach(var option in new[]{"所有状态","有更新","有问题","依赖异常","未绑定 Workshop ID"})
   {
    var item=new MenuItem{Header=option,IsCheckable=true,IsChecked=modIssueFilter==option};
    attentionMenu.Items.Add(item);
@@ -1683,7 +1691,8 @@ public partial class MainWindow
   void UpdateSelectionToolbar()
   {
    int count=ChosenMods().Length;
-   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter)
+   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter,
+    m=>WorkshopSources().Get(m.Id).HasValue)
     .Count(r=>chosenModFolders.Contains(r.Mod.Folder));
    selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
@@ -1696,21 +1705,24 @@ public partial class MainWindow
    moreBatch.IsEnabled=count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopCheckBatch.IsEnabled=hasWorkshopSource&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopUpdateBatch.IsEnabled=hasWorkshopUpdate&&!busy&&!transactionWriting&&!modInventoryDirty;
-   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter);
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter,
+    m=>WorkshopSources().Get(m.Id).HasValue);
    checkAll.Checked-=OnCheckAll;checkAll.Unchecked-=OnCheckAll;
    checkAll.IsChecked=visible.Length>0&&visible.All(r=>chosenModFolders.Contains(r.Mod.Folder));
    checkAll.Checked+=OnCheckAll;checkAll.Unchecked+=OnCheckAll;
   }
   void OnCheckAll(object sender,RoutedEventArgs e)
   {
-   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter))
+   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter,
+    m=>WorkshopSources().Get(m.Id).HasValue))
     if(checkAll.IsChecked==true)chosenModFolders.Add(row.Mod.Folder);
     else chosenModFolders.Remove(row.Mod.Folder);
    FilterRows();
   }
   void FilterRows()
   {
-   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter);
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter,
+    m=>WorkshopSources().Get(m.Id).HasValue);
    foreach(var row in rows)row.Selected=chosenModFolders.Contains(row.Mod.Folder);
    ModCardList.SetItems(list,visible,cardColumns);
    UpdateSelectionToolbar();
