@@ -69,11 +69,11 @@ public partial class MainWindow : Window
   toolsButton.HorizontalContentAlignment=HorizontalAlignment.Left;toolsButton.Padding=new(14,11,8,11);navButtons["工具与设置"]=toolsButton;navigation.Children.Add(toolsButton);
   layout.Children.Add(new ScrollViewer{Content=navigation,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
  }
- static bool IsPatchCenterPage(string name)=>name is "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚";
+ static bool IsPatchCenterPage(string name)=>name is "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚" or "本地补丁";
  UIElement PatchCenterTabs(string active)
  {
   var tabs=new WrapPanel{Margin=new(0,0,0,16)};
-  foreach(var name in new[]{"补丁库","在线补丁","补丁健康","安装与回滚"}){
+  foreach(var name in new[]{"补丁库","本地补丁","在线补丁","补丁健康","安装与回滚"}){
    var tab=Btn(name,()=>Navigate(name),name==active?"SelectedTab":"Ghost");
    tab.Margin=new(0,8,8,0);tab.IsEnabled=!busy&&!transactionWriting;tabs.Children.Add(tab);
   }
@@ -103,9 +103,9 @@ public partial class MainWindow : Window
   if(active!="工具与设置"&&bareGlassTestActive)SetBareGlassTest(false,false);
   TrackPage(key??active,restore??(()=>Navigate(active)));page=active;
   // The virtualized MOD list owns scrolling; other pages keep the normal page scrollbar.
-  pageScroll!.VerticalScrollBarVisibility=active=="模组管理"&&(key??active)=="模组管理"
+  pageScroll!.VerticalScrollBarVisibility=(active=="模组管理"||active=="本地补丁")&&(key??active)==active
    ?ScrollBarVisibility.Disabled:ScrollBarVisibility.Auto;
-  if(IsPatchCenterPage(active)){
+  if(IsPatchCenterPage(active)&&active!="本地补丁"){
    var group=V(PatchCenterTabs(active),element);
    content.Content=group;
   }else content.Content=element;
@@ -117,10 +117,10 @@ public partial class MainWindow : Window
    kv.Value.BorderBrush=selected?B("#9A91BDF3"):Brushes.Transparent;
    kv.Value.Foreground=selected?ink:muted;
   }
-  modeLabel.Text=active=="检查更新"?"管理器更新 · 自愿下载":active=="模组管理"?"本地模组 · 保留文件 · 可恢复启停":active=="安装与回滚"?"真实操作 · 检查后确认 · 保留备份":active=="在线补丁"?"公开仓库 · 下载校验 · 整合包安装":demo?"演示环境 · 安装流程不会修改游戏":"本地扫描 · 文件状态";
+  modeLabel.Text=active=="检查更新"?"管理器更新 · 自愿下载":active=="模组管理"?"本地模组 · 保留文件 · 可恢复启停":active=="本地补丁"?"本地独立补丁 · 安全启停 · 健康检查":active=="安装与回滚"?"真实操作 · 检查后确认 · 保留备份":active=="在线补丁"?"公开仓库 · 下载校验 · 整合包安装":demo?"演示环境 · 安装流程不会修改游戏":"本地扫描 · 文件状态";
   folderLabel.Text=selectedInstallRoot??(demo?"联机小队 · 示例配置\n尚未选择游戏目录":"尚未选择游戏目录");folderLabel.ToolTip=selectedInstallRoot;
  }
- void Navigate(string name){if(busy)return;switch(name){case "检查更新":ShowManagerUpdates();break;case "模组管理":ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "修复中心":case "修复补丁":ShowLibrary();break;case "更新中心":ShowModUpdatesCenter();break;case "诊断与日志":ShowDiagnosis();break;case "工具与设置":ShowTools();break;case "补丁健康":ShowLifecycle();if(lifecycleReport==null)RefreshLifecycle();break;case "游戏目录":ShowLocations();break;case "在线补丁":ShowOnline();if(onlineCatalog==null&&!onlineBusy)RefreshOnline();break;case "安装与回滚":ShowInstaller();break;case "总览":ShowOverview();break;case "补丁库":ShowLibrary();break;case "诊断":ShowDiagnosis();break;case "联机检查":ShowCoop();break;}}
+ void Navigate(string name){if(busy)return;switch(name){case "检查更新":ShowManagerUpdates();break;case "模组管理":modSection="普通 MOD";ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "本地补丁":modSection="修复补丁";ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "修复中心":case "修复补丁":ShowLibrary();break;case "更新中心":ShowModUpdatesCenter();break;case "诊断与日志":ShowDiagnosis();break;case "工具与设置":ShowTools();break;case "补丁健康":ShowLifecycle();if(lifecycleReport==null)RefreshLifecycle();break;case "游戏目录":ShowLocations();break;case "在线补丁":ShowOnline();if(onlineCatalog==null&&!onlineBusy)RefreshOnline();break;case "安装与回滚":ShowInstaller();break;case "总览":ShowOverview();break;case "补丁库":ShowLibrary();break;case "诊断":ShowDiagnosis();break;case "联机检查":ShowCoop();break;}}
  UIElement Header(string eyebrow,string title,string subtitle,UIElement? action=null)
  {var txt=V(T(title,24,ink,true),T(subtitle,13,muted));var g=new Grid();g.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});g.ColumnDefinitions.Add(new(){Width=GridLength.Auto});g.Children.Add(txt);if(action!=null){Grid.SetColumn(action,1);g.Children.Add(action);if(action is FrameworkElement f)f.VerticalAlignment=VerticalAlignment.Center;}return g;}
  void ShowOverview()
