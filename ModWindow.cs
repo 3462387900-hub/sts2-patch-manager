@@ -1205,7 +1205,9 @@ public partial class MainWindow
    detailHost.Visibility=Visibility.Visible;
   }
   list=ModCardList.Create(row=>{
-   CaptureModListOffset();selectedModDetailFolder=row.Mod.Folder;UpdateDetail();ResizeDetail();
+   CaptureModListOffset();
+   if(workspace.ActualWidth<820){ShowModDetail(row.Mod.Folder);return;}
+   selectedModDetailFolder=row.Mod.Folder;UpdateDetail();ResizeDetail();
   },(row,button)=>{
    var menu=new ContextMenu{PlacementTarget=button};
    var toggle=new MenuItem{Header=row.Mod.Enabled?"预览停用":"预览启用",
