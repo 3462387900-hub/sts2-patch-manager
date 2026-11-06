@@ -36,7 +36,9 @@ internal static class ModListView
    (state=="全部"||(state=="启用"&&row.Mod.Enabled)||(state=="停用"&&!row.Mod.Enabled)||
    (state=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
    (state=="有问题"&&row.BlockReason!=null)||
-   (state=="依赖异常"&&row.DependencyIssue))&&
+   (state=="依赖异常"&&row.DependencyIssue)||
+   (state=="未绑定 Workshop ID"&&!row.IsFix&&
+    workshopBound!=null&&!workshopBound(row.Mod)))&&
    (attention=="所有状态"||
     (attention=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
     (attention=="有问题"&&row.BlockReason!=null)||
