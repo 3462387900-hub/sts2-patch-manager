@@ -458,7 +458,7 @@ public partial class MainWindow
   int watchVersion=modChangeVersion;
   string? recoveryNotice=null;
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
-  if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+  if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
    var inventory=await Task.Run(()=>ModManager.Scan(root));
@@ -531,7 +531,7 @@ public partial class MainWindow
    busy=false;
    if(recoveryNotice!=null&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
     toast.Text=recoveryNotice;
-   if(page=="模组管理"&&currentVisit?.Key=="模组管理")ShowMods();
+   if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
     string folder=currentVisit.Key["mod:".Length..];
