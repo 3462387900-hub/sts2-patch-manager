@@ -1113,30 +1113,6 @@ public partial class MainWindow
   var mods=modInventory?.Mods??[];
   chosenModFolders.RemoveWhere(path=>!mods.Any(m=>m.Folder.Equals(path,StringComparison.OrdinalIgnoreCase)));
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
-  if(modSection=="修复补丁")
-  {
-   header.Children.Add(T(HasValidLifecycleReport
-    ?"补丁健康最近检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
-    :lifecycleStale?"文件有变化，建议重新检查补丁健康。":"尚未检查补丁健康。",12,muted));
-   Space(header,5);
-   header.Children.Add(H(Btn("整理独立补丁",PreparePatchOrganization,"Ghost"),
-    Btn("重新检查健康状态",RefreshLifecycleFromMods,"Ghost")));
-   Space(header,8);
-   bool autoOn=OrphanPatchAutoStop.Enabled(installer.DataRoot);
-   header.Children.Add(H(
-    Btn("删除目标 MOD 后自动停用补丁："+(autoOn?"开启":"关闭"),()=>{
-     try
-     {
-      OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!autoOn);
-      orphanPatchNotice=autoOn?"已关闭自动停用；之后只手动管理修复补丁。":
-       "已开启自动停用；首次完整扫描会记录 MOD 环境，之后删除目标 MOD 时会自动核对、停用并保留文件。";
-      ShowMods();
-      if(!autoOn)RefreshMods();
-     }
-     catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
-    },"Ghost")));
-   Space(header,8);
-  }
   if(modInventory?.Issues.Count>0)
   {
    header.Children.Add(Card(V(T("部分 MOD 清单需要处理",14,gold,true),
