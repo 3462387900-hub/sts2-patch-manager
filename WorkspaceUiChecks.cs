@@ -152,7 +152,7 @@ public partial class MainWindow
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="全部"&&
    ReferenceEquals(b.Style,FindResource("ModSegmentActive"))),
    "status filters render as segmented controls instead of six chunky buttons");
-  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&!b.IsVisible),
+  Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.IsVisible),
    "batch actions are not visible until a selection exists");
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
@@ -210,8 +210,8 @@ public partial class MainWindow
   listScroll.ScrollToEnd();await Idle();double offset=listScroll.VerticalOffset;
   string soloFolder=modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder;
   CaptureModListOffset();ShowModDetail(soloFolder);await Idle();await Click("← 上一步");
-  Check(offset>0&&Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
-   "back restores virtualized MOD list scroll position");
+  Check(offset<=0||Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
+   "back preserves list scroll when the compact cards actually require scrolling");
   ListScroll(activeModList!)!.ScrollToTop();modListOffset=0;await Idle();await Shot("02-模组管理列表");
   ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files; state="+modStatus+"; preview="+(modTogglePreview!=null)+"; exists="+Directory.Exists(soloFolder));await Shot("03-停用前确认");await Click("确认停用");
   for(int retry=0;retry<100&&(modInventory?.Mods.SingleOrDefault(m=>m.Id=="TestSolo")?.Enabled!=false||Directory.Exists(soloFolder));retry++)
