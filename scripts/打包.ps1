@@ -12,6 +12,10 @@ $appFolder = Join-Path $runRoot ('尖塔修补站-v' + $version)
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=None -o $appFolder
 if ($LASTEXITCODE -ne 0) { throw '发布构建失败。' }
+& (Join-Path $PSScriptRoot '整理玩家发布目录.ps1') -ApplicationDirectory $appFolder
+if (!(Test-Path -LiteralPath (Join-Path $appFolder '00-启动尖塔修补站.exe'))) {
+    throw 'Chinese launcher was not created.'
+}
 $testRoot = Join-Path $runRoot '验证记录'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','online-self-test','github-mod-install-self-test','github-mod-discovery-self-test','github-network-self-test', 'supply-station-self-test', 'supply-station-manifest-self-test','supply-station-content-self-test','workshop-mod-install-self-test','workshop-mod-update-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test','patch-organizer-self-test','patch-lifecycle-self-test','workspace-integration-self-test','manager-update-cleanup-self-test','workshop-zip-self-test')) {
@@ -23,6 +27,13 @@ foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','o
         if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
         throw ('验证失败：' + $mode)
     }
+}
+# Verify that the Chinese WinExe apphost can invoke the actual SpirePatch.dll
+# without changing the original executable name or any installation paths.
+$chineseProbe = Join-Path $testRoot 'chinese-launcher-self-test.txt'
+$chineseProcess = Start-Process -FilePath (Join-Path $appFolder '00-启动尖塔修补站.exe') -ArgumentList @('--self-test', ('"' + $chineseProbe + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($chineseProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $chineseProbe)) {
+    throw 'Chinese launcher did not start the manager self-test successfully.'
 }
 # Verify the real WPF navigation and row actions against isolated mock game folders.
 $uiFixtures = Join-Path $testRoot 'ui-fixtures'
@@ -53,6 +64,7 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot 'third_party/SharpCompress-LICENSE
 $notes = Join-Path $sourceRoot ('releases/v' + $version + '.md')
 if (!(Test-Path -LiteralPath $notes)) { throw '缺少本版本发布说明。' }
 Copy-Item -LiteralPath $notes -Destination (Join-Path $appFolder '本版更新内容.md')
+& (Join-Path $PSScriptRoot '整理玩家发布目录.ps1') -ApplicationDirectory $appFolder
 & (Join-Path $PSScriptRoot '生成程序清单.ps1') -Directory $appFolder
 $archive = Join-Path $runRoot ('SpirePatch-v' + $version + '-win-x64.zip')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
