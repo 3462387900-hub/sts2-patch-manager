@@ -1587,6 +1587,14 @@ public partial class MainWindow
    actions.Children.Add(preview);
    if(!isFixSection)
    {
+    ulong? currentWorkshopId=WorkshopSources().Get(mod.Id);
+    detail.Children.Add(T(currentWorkshopId.HasValue?
+     "Workshop ID："+currentWorkshopId.Value:
+     "创意工坊：尚未关联",12,muted));
+    var manual=Btn(currentWorkshopId.HasValue?"修改 Workshop 关联":"手动关联 Workshop ID",
+     ()=>BindWorkshopMod(mod),"ModToolbarAction");
+    manual.Margin=new Thickness(0,0,7,7);
+    actions.Children.Add(manual);
     var github=GitHubUpdates();
     var source=github.Repository(mod.Id);
     var cached=github.Cached(mod.Id);
@@ -1777,7 +1785,11 @@ public partial class MainWindow
     root.Children.Add(T("创意工坊状态："+workshopStatus.Status+" · "+workshopStatus.Message,11,
      workshopStatus.Status=="有更新"?gold:muted));
    }
-   var workshopActions=new List<UIElement>();
+   var workshopActions=new List<UIElement>
+   {
+    Btn(workshopId.HasValue?"修改 Workshop 关联":"手动关联 Workshop ID",
+     ()=>BindWorkshopMod(mod),"Ghost")
+   };
    if(workshopId.HasValue)
     workshopActions.Add(Btn("检查创意工坊更新",()=>CheckWorkshopMod(mod),"Ghost"));
    string workshopActionLabel=workshopId is null?"从创意工坊下载并关联":
