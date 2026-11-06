@@ -22,6 +22,7 @@ public partial class MainWindow : Window
  public MainWindow(bool onlineStartup=true,ManagerUpdates? updates=null)
  {
   rememberEnvironment=onlineStartup;if(updates!=null)managerUpdates=updates;
+   managerUpdateChannel=onlineStartup?ManagerUpdates.LoadChannel(installer.DataRoot):ManagerUpdateChannel.Stable;
    uiTheme=onlineStartup?UiThemes.Load(installer.DataRoot):UiThemes.Workspace;
    UiThemes.Active=uiTheme;
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
