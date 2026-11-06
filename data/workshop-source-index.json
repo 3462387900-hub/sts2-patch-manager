@@ -1,0 +1,321 @@
+{
+  "schema": 1,
+  "app_id": 2868840,
+  "mods": [
+    {
+      "mod_id": "Act4FinalAscent",
+      "name": "\u7B2C\u56DB\u5E55\uFF1A\u7EC8\u7109\u6500\u5347",
+      "author": "\u68A7\u8431\u68A6\u6C50X, Act 4: Final Ascent Contributors",
+      "workshop_id": "3748937859",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "AK_Exusiai",
+      "name": "\u80FD\u5929\u4F7F",
+      "author": "Jimmyzzt",
+      "workshop_id": "3801483321",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Archetto",
+      "name": "\u7A7A\u5F26Archetto",
+      "author": "Wave",
+      "workshop_id": "3747563715",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "ATA_IronClad",
+      "name": "\u673A\u5A18\u201C\u963F\u5854\u201D",
+      "author": "OLC, \u963F\u5854Official",
+      "workshop_id": "3747952763",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "BaseLib",
+      "name": "BaseLib",
+      "author": "Alchyr",
+      "workshop_id": "3737335127",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "CartethyiaMod",
+      "name": "\u5361\u63D0\u5E0C\u5A05:\u9AD8\u5854\u91CD\u4E34",
+      "author": "CartethyiaMod",
+      "workshop_id": "3811949217",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "CombatStats",
+      "name": "StS2 Damage Meter \u0026 Logs",
+      "author": "Keegan",
+      "workshop_id": "3809103316",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "CyanrainNymphBeta",
+      "name": "CyanrainNymph Beta",
+      "author": "Author",
+      "workshop_id": "3754068303",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "CznCore",
+      "name": "CznCore",
+      "author": "Pelleas",
+      "workshop_id": "3826011578",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "CznTipheraCharacter",
+      "name": "CznTipheraCharacter",
+      "author": "Pelleas",
+      "workshop_id": "3799519206",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "DeepseekWhaleDefect",
+      "name": "DeepSeek Whale Defect",
+      "author": "slay-project",
+      "workshop_id": "3810578000",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "EndlessMod",
+      "name": "\u65E0\u5C3D\u6A21\u5F0F",
+      "author": "\u68A7\u8431\u68A6\u6C50X",
+      "workshop_id": "3747729740",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Evanescia",
+      "name": "Evanescia",
+      "author": "\u8349\u98DF\u7CFB\u59B9\u63A7",
+      "workshop_id": "3747578491",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "figure_Saya",
+      "name": "\u6C99\u8036\u4E4B\u6B4C",
+      "author": "\u5343\u5BFC\u9662\u67AB",
+      "workshop_id": "3747508952",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "HextechRunes",
+      "name": "ARAM: Mayhem / \u6D77\u514B\u65AF\u5927\u4E71\u6597",
+      "author": "Natsuki",
+      "workshop_id": "3747501308",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "HextechRunesSponsorPack",
+      "name": "\u6D77\u514B\u65AF\u5927\u4E71\u6597\uFF1A\u989D\u5916\u62D3\u5C55\u5305",
+      "author": "Natsuki",
+      "workshop_id": "3749708876",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "HoolheyakMod",
+      "name": "HoolheyakMod",
+      "author": "Chirpchump",
+      "workshop_id": "3832406756",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Hysilens",
+      "name": "\u6D77\u745F\u97F3",
+      "author": "\u6B81\u6B81",
+      "workshop_id": "3800681612",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "IntegratedStrategyEvents",
+      "name": "\u96C6\u6210\u6218\u7565\u4E8B\u4EF6",
+      "author": "Natsuki",
+      "workshop_id": "3747637213",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "intentgraph2",
+      "name": "Intent Graph",
+      "author": "Chaofan",
+      "workshop_id": "3747528152",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Kakarot",
+      "name": "Kakarot",
+      "author": "nzl",
+      "workshop_id": "3749037087",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Kurumi",
+      "name": "\u4E45\u7559\u7F8E \u00B7 FX\u4E0E\u6B32\u671B\uFF08\u5F00\u53D1\u7248\uFF09",
+      "author": "\u5E3D\u5B50",
+      "workshop_id": "3832078155",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "MeiLinMod",
+      "name": "MeiLinMod",
+      "author": "lozalia",
+      "workshop_id": "3747511784",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Mesugaki",
+      "name": "Mesugaki_Regent",
+      "author": "Seic_Oh(\u30BB\u30A4\u30AF\u30AA),Dodobird",
+      "workshop_id": "3748603697",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "MinionLib",
+      "name": "MinionLib",
+      "author": "FuYnAloft",
+      "workshop_id": "3747595039",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Miyabists2",
+      "name": "Miyabi The Spire",
+      "author": "\u6708\u4E0B\u6A31",
+      "workshop_id": "3747607263",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Neuvillette",
+      "name": "Neuvillette",
+      "author": "\u53F6\u7FBD\u3001\u68A7\u8431\u68A6\u6C50X",
+      "workshop_id": "3747624399",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Noctis",
+      "name": "Noctis",
+      "author": "HummingBird",
+      "workshop_id": "3796018942",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Noctis_Translation",
+      "name": "\u8BFA\u514B\u63D0\u65AF\u7B80\u4F53\u4E2D\u6587\u6C49\u5316 | Noctis",
+      "author": "L",
+      "workshop_id": "3797219015",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Phrolova",
+      "name": "\u5F17\u6D1B\u6D1B",
+      "author": "TideOrca\u6F6E\u6C50\u5C0F\u864E\u9CB8",
+      "workshop_id": "3748296419",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "QuickNewRun",
+      "name": "Quick New Run \u0026 Quick Load",
+      "author": "mol6021023",
+      "workshop_id": "3760512444",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Ray",
+      "name": "Ray",
+      "author": "Wave",
+      "workshop_id": "3764062882",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Reclimax",
+      "name": "Reclimax \u2014\u2014 \u91CD\u8FD4\u5DC5\u5CF0",
+      "author": "J^V\u3001\u68A7\u8431\u68A6\u6C50X",
+      "workshop_id": "3776018671",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Remielle",
+      "name": "Remielle",
+      "author": "\u9006\u6714\u660E",
+      "workshop_id": "3787409106",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Remilia",
+      "name": "Remilia",
+      "author": "Feiyap",
+      "workshop_id": "3747515571",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "RemoveMultiplayerPlayerLimit",
+      "name": "RemoveMultiplayerPlayerLimit",
+      "author": "Rain_G",
+      "workshop_id": "3809094500",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Rossi",
+      "name": "Rossi",
+      "author": "poema",
+      "workshop_id": "3748099434",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "STS2-RitsuLib",
+      "name": "RitsuLib",
+      "author": "OLC",
+      "workshop_id": "3747602295",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Sts2ModTranslator",
+      "name": "STS2 Mod Translator",
+      "author": "inggom",
+      "workshop_id": "3752522987",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "STS2_WineFox",
+      "name": "\u9152\u72D0",
+      "author": "\u706F\u706B\u6A58,OLC",
+      "workshop_id": "3747599967",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "Typhon",
+      "name": "\u63D0\u4E30Typhon",
+      "author": "FimmlpS",
+      "workshop_id": "3792240485",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "YeShunguang",
+      "name": "YeShunguangMod",
+      "author": "\u9006\u6714\u660E",
+      "workshop_id": "3747567161",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "YukiMod",
+      "name": "YukiMod",
+      "author": "lozalia,\u661F\u6668\u4EE3\u8C22",
+      "workshop_id": "3747516145",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "YuWanCard",
+      "name": "\u732A\u732A",
+      "author": "\u4E00\u6761\u9C7C\u4E38_",
+      "workshop_id": "3747566068",
+      "verification": "local_binding"
+    },
+    {
+      "mod_id": "ZZZLib",
+      "name": "ZZZLib",
+      "author": "\u9006\u6714\u660E",
+      "workshop_id": "3774920850",
+      "verification": "local_binding"
+    }
+  ]
+}
