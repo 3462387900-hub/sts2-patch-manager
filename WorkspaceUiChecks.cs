@@ -138,9 +138,10 @@ public partial class MainWindow
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "environment snapshots stay in the shared secondary MOD navigation");
   Navigate("本地补丁");await Idle();
-  Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
-   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
-   "independent patch tab filters to known patch records");
+  var patchRows=activeModList?.Items.OfType<ModCardGroup>().SelectMany(group=>group.Cards).ToArray();
+  Check(patchRows?.Length==1&&patchRows[0].Mod.Id=="LargeHealDisplayFix"&&
+   Controls<ModCardControl>(shell).Any(),
+   "independent patch tab shows the known patch ID after layout theme changes");
   var patchMore=Controls<ModCardControl>(activeModList!).First().MoreButton;
   patchMore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Idle();
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()>=3,
