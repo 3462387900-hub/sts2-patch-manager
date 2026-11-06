@@ -20,7 +20,7 @@ public partial class MainWindow
   if(actions!=null)
   {
    Grid.SetColumn(actions,1);
-   actions.VerticalAlignment=VerticalAlignment.Center;
+   if(actions is FrameworkElement actionElement)actionElement.VerticalAlignment=VerticalAlignment.Center;
    grid.Children.Add(actions);
   }
   var descriptionText=T(description,12,muted);
