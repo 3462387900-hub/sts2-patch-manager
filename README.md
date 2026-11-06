@@ -6,6 +6,13 @@ Windows 原生 C# / WPF / .NET 9 工具，面向当前小队的杀戮尖塔 2 �
 
 管理器源码与版本发布在本仓库。具体模组补丁及各自的适配说明继续保存在 [sts2-patches](https://github.com/3462387900-hub/sts2-patches)。管理器无需 GitHub 登录，不附带游戏或第三方模组本体。
 
+## Beta 更新元数据访问优化（开发中）
+
+- Beta 更新检查将优先读取与稳定版分离的 `manager-beta-update.json` 公开静态索引，避免频繁请求受匿名限流影响的 GitHub Releases API。
+- 静态索引无法访问时才会回退官方 GitHub API；如果索引内容格式或 SHA-256 元数据不合法则直接拒绝，不静默信任其他版本。
+- 初始索引来自已发布的 v0.14.4 Beta 1，仍与正式版 `manager-update.json` 隔离。旧版本尚未具备此改动，首次升级需要从 GitHub Release 手动获取测试版。
+- 每次发布新的 Beta 时必须同步更新 Beta 静态索引；这一步需要纳入后续 Beta 发布流程，不得依赖普通用户提交任何 token。
+
 ## v0.14.3：更新中心不再强制检查与锁住页面
 
 - 打开「更新中心」只显示已有检查结果，不自动开始漫长的 GitHub/创意工坊查询。
