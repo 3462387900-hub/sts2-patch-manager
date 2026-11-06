@@ -52,14 +52,13 @@ public partial class MainWindow
    try
    {
     using var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(15));
-    dialog.Closed+=(_,_)=>cancel.Cancel();
     using var source=new SpireSupplyStationClient();
     var identity=await source.ReadContentIdentityAsync(SpireSupplyStationClient.SupportedAppId,id,cancel.Token);
     if(!dialog.IsVisible||input.Text!=checkedText)return;
     preview.Text="补给站条目："+identity.Title+"\nWorkshop ID："+identity.PublishedFileId+
      "。请与本地 MOD 名称和作者核对后再勾选确认；远端标题相似不等于内容完全一致。";
    }
-   catch(Exception e) when(e is HttpRequestException or IOException or InvalidDataException or OperationCanceledException)
+   catch(Exception e) when(e is HttpRequestException or IOException or OperationCanceledException)
    {
     if(dialog.IsVisible&&input.Text==checkedText)
      preview.Text="在线核对失败："+e.Message+"。可以自行查看创意工坊页面后手动确认，但请勿猜测 ID。";
