@@ -1036,16 +1036,16 @@ public partial class MainWindow
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
    SetPage(isFixSection?"本地补丁":"模组管理",root,restore:ShowMods);return;
   }
-  var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,
+  var toolbarActions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,
    VerticalAlignment=VerticalAlignment.Center};
   var refresh=Btn("↻  刷新",RefreshMods,"ModToolbarAction");
   refresh.IsEnabled=!busy;refresh.Margin=new Thickness(0,0,5,0);
-  actions.Children.Add(refresh);
+  toolbarActions.Children.Add(refresh);
   if(!isFixSection)
   {
    var import=Btn("＋  导入 ZIP",ChooseWorkshopZip,"ModToolbarPrimary");
    import.Margin=new Thickness(0,0,5,0);import.IsEnabled=!busy&&!transactionWriting;
-   actions.Children.Add(import);
+   toolbarActions.Children.Add(import);
   }
   var moreTools=new Button{Content="⋯",FontSize=19,MinWidth=34,MinHeight=33,
    ToolTip="更多工作区工具"};
@@ -1080,7 +1080,7 @@ public partial class MainWindow
    toolsMenu.Items.Add(autoStop);
   }
   moreTools.Click+=(_,_)=>{toolsMenu.PlacementTarget=moreTools;toolsMenu.IsOpen=true;};
-  actions.Children.Add(moreTools);Grid.SetColumn(actions,1);titleRow.Children.Add(actions);
+  toolbarActions.Children.Add(moreTools);Grid.SetColumn(toolbarActions,1);titleRow.Children.Add(toolbarActions);
   header.Children.Add(titleRow);
   header.Children.Add(isFixSection?PatchCenterTabs("本地补丁"):ModWorkspaceTabs("已安装"));
   if(isFixSection)
