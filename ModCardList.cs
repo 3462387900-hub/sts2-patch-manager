@@ -69,7 +69,8 @@ public sealed class ModCardGroupControl : Grid
   for(int i=0;i<displayedGroup.Cards.Length;i++)
   {
    ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-   var card=new ModCardControl{DataContext=displayedGroup.Cards[i]};
+   ModCardControl card=UiThemes.IsClassic?new ClassicModCardControl():new ModCardControl();
+   card.DataContext=displayedGroup.Cards[i];
    SetColumn(card,i);Children.Add(card);
   }
   BindActions();
