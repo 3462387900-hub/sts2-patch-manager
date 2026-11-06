@@ -1321,15 +1321,13 @@ public partial class MainWindow
   }
   var header=V();
   root.Children.Add(header);
-  var titleRow=new Grid{Margin=new Thickness(0,0,0,6)};
-  titleRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-  titleRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-  var heading=T(isFixSection?"本地修复补丁":"模组管理",23,ink,true);
-  heading.VerticalAlignment=VerticalAlignment.Center;
-  titleRow.Children.Add(heading);
+  string title=isFixSection?"本地修复补丁":"模组管理";
+  string description=isFixSection?
+   "集中管理独立修复补丁，启停前提供安全预览。":
+   "管理已安装 MOD，点击卡片查看详情；勾选后可进行批量操作。";
   if(selectedInstallRoot==null)
   {
-   header.Children.Add(titleRow);
+   header.Children.Add(ModWorkspaceHeader(title,description));
    header.Children.Add(Card(V(T("请先定位游戏目录",17,ink,true),
     H(Btn("自动定位目录",LocateGame,"Primary"),Btn("手动选择目录",ChooseFolder,"Ghost")))));
    SetPage(isFixSection?"本地补丁":"模组管理",root,restore:ShowMods);return;
@@ -1379,8 +1377,8 @@ public partial class MainWindow
   }
   moreTools.ContextMenu=toolsMenu;
   moreTools.Click+=(_,_)=>{toolsMenu.PlacementTarget=moreTools;toolsMenu.IsOpen=true;};
-  toolbarActions.Children.Add(moreTools);Grid.SetColumn(toolbarActions,1);titleRow.Children.Add(toolbarActions);
-  header.Children.Add(titleRow);
+  toolbarActions.Children.Add(moreTools);
+  header.Children.Add(ModWorkspaceHeader(title,description,toolbarActions));
   header.Children.Add(isFixSection?PatchCenterTabs("本地补丁"):ModWorkspaceTabs("已安装"));
   if(isFixSection)
   {
