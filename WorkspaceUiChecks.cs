@@ -109,12 +109,12 @@ public partial class MainWindow
   Check(UiThemes.Load(themeFixture)==UiThemes.Classic,"classic theme preference persists in isolated config");
   UiThemes.Save(themeFixture,UiThemes.Workspace);
   Check(UiThemes.Load(themeFixture)==UiThemes.Workspace,"workspace theme preference persists in isolated config");
-  var themeClassic=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="经典");
+  var themeClassic=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="经典 Beta");
   themeClassic.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeClassic));await Idle();
   Check(UiThemes.IsClassic&&Controls<ClassicModCardControl>(activeModList!).Any()&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="刷新模组"),
    "classic beta keeps previous MOD layout and three-action cards");
-  var themeModern=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="新版");
+  var themeModern=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="新版 Beta");
   themeModern.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeModern));await Idle();
   Check(UiThemes.IsWorkspace&&Controls<ModCardControl>(activeModList!).Any()&&
    !Controls<ClassicModCardControl>(activeModList!).Any()&&
