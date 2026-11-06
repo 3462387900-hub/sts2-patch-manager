@@ -31,6 +31,40 @@ public static class WorkspaceChecks
   Check(ModDependencyPaging.Clamp(0,27)==1&&ModDependencyPaging.Clamp(99,27)==3&&
    ModDependencyPaging.Items(relations,99).SequenceEqual(Enumerable.Range(21,7)),
    "out-of-range pages clamp safely after filtering");
+  // Export only the explicitly available local source mapping. No private paths or
+  // version-baseline metadata may appear in a community index upload.
+  string publicIndexData=Path.Combine(parent,"public-source-fixture-"+Guid.NewGuid().ToString("N"));
+  var localSources=new WorkshopModSources(publicIndexData,root);
+  var inventoryBefore=ModManager.Scan(root);
+  Check(PublicWorkshopSourceExport.Build(inventoryBefore.Mods,localSources).Mods.Length==0,
+   "public source export omits all unbound mods");
+  localSources.Bind("TestBase",3737335127);
+  localSources.Bind("TestSolo",3833333333);
+  localSources.Bind("LargeHealDisplayFix",3933333333);
+  var export=PublicWorkshopSourceExport.Build(inventoryBefore.Mods,localSources);
+  string exportedJson=PublicWorkshopSourceExport.Serialize(export);
+  using var parsed=JsonDocument.Parse(exportedJson);
+  var entries=parsed.RootElement.GetProperty("mods").EnumerateArray().ToArray();
+  Check(parsed.RootElement.GetProperty("schema").GetInt32()==1&&
+   parsed.RootElement.GetProperty("app_id").GetUInt32()==2868840&&
+   entries.Length==2&&entries.Any(e=>e.GetProperty("mod_id").GetString()=="TestBase"&&
+    e.GetProperty("workshop_id").GetString()=="3737335127")&&
+   entries.Any(e=>e.GetProperty("mod_id").GetString()=="TestSolo")&&
+   entries.All(e=>e.GetProperty("verification").GetString()=="local_binding"),
+   "export contains only real bound MOD IDs, excludes independent patch and avoids claiming remote verification");
+  Check(!exportedJson.Contains(root,StringComparison.OrdinalIgnoreCase)&&
+   !exportedJson.Contains("Folder",StringComparison.OrdinalIgnoreCase)&&
+   !exportedJson.Contains("ManifestId",StringComparison.OrdinalIgnoreCase)&&
+   !exportedJson.Contains("LocalSnapshotSha256",StringComparison.OrdinalIgnoreCase)&&
+   !exportedJson.Contains(".versions.json",StringComparison.OrdinalIgnoreCase)&&
+   new WorkshopModSources(publicIndexData,root).Get("TestBase")==3737335127,
+   "public index excludes local paths, baselines, secrets and preserves local bindings");
+  Check(PublicWorkshopSourceExport.Build(inventoryBefore.Mods.Append(
+    inventoryBefore.Mods.Single(m=>m.Id=="TestBase") with{Name="不同作者重发版"}),localSources)
+   .Mods.All(m=>m.ModId!="TestBase"),
+   "conflicting variants with identical internal MOD IDs are never exported automatically");
+  Reject(()=>localSources.Bind("SharedOne",3737335127),
+   "existing binding rejects reusing one Workshop ID for multiple MOD IDs");
   var original=Snapshot();Check(ModManager.Scan(root).Mods.Count==7,"manifest inventory reads IDs and shared directories without changing files");
   var presentation=ModListView.Rows(root,ModManager.Scan(root),_=>"未检查");
   Check(ModListView.Filter(presentation,"修复补丁","全部","").Length==1&&

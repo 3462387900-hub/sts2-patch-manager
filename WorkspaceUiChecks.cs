@@ -326,7 +326,14 @@ public partial class MainWindow
   Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false&&!Directory.Exists(soloFolder),"actual disable button retains mod outside active directory; status="+modStatus);
   await Click("← 上一步");Check(modTogglePreview==null&&modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false,"back after a file operation cannot replay stale confirmation");
   await OpenReadyPreview(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder,true);await Click("预览启用");await Click("确认启用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled&&Directory.Exists(soloFolder),"actual enable button restores mod to original directory");await Shot("04-已恢复启用");
-  ShowModDetail(modInventory.Mods.Single(m=>m.Id=="TestBase").Folder);await Idle();Check(!Controls<Button>(shell).Single(b=>b.Content?.ToString()=="预览停用").IsEnabled,"UI disables unsafe base-mod toggle and shows dependency reason");await Shot("05-前置依赖保护");
+  ShowModDetail(modInventory.Mods.Single(m=>m.Id=="TestBase").Folder);await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="手动关联 Workshop ID"),
+   "MOD details expose manual Workshop ID binding without starting downloads");
+  ShowTools();await Idle();
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="导出公共来源 JSON"),
+   "Tools and Settings expose a reviewed JSON-only source export");
+  ShowModDetail(modInventory.Mods.Single(m=>m.Id=="TestBase").Folder);await Idle();
+  Check(!Controls<Button>(shell).Single(b=>b.Content?.ToString()=="预览停用").IsEnabled,"UI disables unsafe base-mod toggle and shows dependency reason");await Shot("05-前置依赖保护");
   var baseline=ModHistory.CompareAndStore(first,Path.Combine(fixtures,"ui-lifecycle-history"));
   lifecycleReport=PatchLifecycle.Evaluate(first,baseline,LifecycleEvidenceSource.Empty,"fixture",Catalog.Scan(first),ModManager.Scan(first));
   Check(lifecycleReport!=null&&HasValidLifecycleReport,"lifecycle report is present before directory change");

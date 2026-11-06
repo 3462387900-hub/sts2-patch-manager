@@ -93,6 +93,10 @@ public partial class MainWindow : Window
   root.Children.Add(Card(V(T("游戏目录",17,ink,true),T("选择当前游戏安装位置；切换后旧扫描与操作预览会失效。",13,muted),Btn("定位游戏目录",ShowLocations,"Ghost"))));Space(root,12);
   root.Children.Add(Card(V(T("管理器更新",17,ink,true),T("检查更新和查看历史记录，不会自动安装版本。",13,muted),Btn("查看管理器更新",ShowManagerUpdates,"Ghost"))));
   Space(root,12);
+  root.Children.Add(Card(V(T("导出公共 MOD 来源索引",17,ink,true),
+   T("将当前游戏目录已绑定的 MOD ID、名称、作者和 Workshop ID 导出为可分享 JSON。不会上传数据，不包含本地路径或版本基线；上传 GitHub 前需要人工复核。",13,muted),
+   Btn("导出公共来源 JSON",ExportPublicWorkshopIndex,"Ghost"))));
+  Space(root,12);
   root.Children.Add(Card(V(T("Spire Glass · 材质诊断",17,ink,true),
    T(SpireGlassBackdrop.Status,12,muted),
    T(SpireGlassBackdrop.AlphaStatus,12,muted),
