@@ -83,8 +83,8 @@ public partial class MainWindow
   Check(navButtons.Keys.Count==7&&navButtons.ContainsKey("修复补丁")&&navButtons.ContainsKey("更新中心")&&navButtons.ContainsKey("工具与设置"),
    "sidebar exposes seven destinations including new patch and MOD update workspaces");
   Navigate("修复补丁");await Idle();
-  Check(page=="补丁库"&&Controls<Button>(content).Count(b=>new[]{"补丁库","在线补丁","补丁健康","安装与回滚"}.Contains(b.Content?.ToString()))==4,
-   "patch center exposes all four existing patch views");
+  Check(page=="补丁库"&&Controls<Button>(content).Count(b=>new[]{"补丁库","本地补丁","在线补丁","补丁健康","安装与回滚"}.Contains(b.Content?.ToString()))==5,
+   "patch center exposes all five patch views including local fixes");
   ShowLifecycle();await Idle();
   Check(page=="补丁健康"&&navButtons["修复补丁"].Background.ToString()==B("#7540668A").ToString()&&
    navButtons["修复补丁"].BorderBrush.ToString()==B("#9A91BDF3").ToString(),
