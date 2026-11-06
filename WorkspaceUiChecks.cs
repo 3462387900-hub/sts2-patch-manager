@@ -170,9 +170,10 @@ public partial class MainWindow
   var filteredCard=Controls<ModCardControl>(activeModList!).First();
   filteredCard.DetailsRequested?.Invoke((filteredCard.DataContext as ModListRow ?? throw new InvalidOperationException("missing card")));
   await Idle();
-  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="完整详情"),
-   "clicking MOD title opens the contextual details panel");
-  await Click("完整详情");await Idle();
+  bool sidePanelOpen=Controls<Button>(shell).Any(b=>b.Content?.ToString()=="完整详情");
+  Check(sidePanelOpen||currentVisit?.Key.StartsWith("mod:")==true,
+   "MOD title opens contextual details or full details on narrow windows");
+  if(sidePanelOpen){await Click("完整详情");await Idle();}
   Check(currentVisit?.Key.StartsWith("mod:")==true,"full MOD details remain accessible");
   await Click("← 上一步");
   Check(modQuery=="独立"&&Controls<TextBox>(shell).Single().Text=="独立","back preserves mod search text");
