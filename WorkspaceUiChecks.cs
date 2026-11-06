@@ -94,6 +94,15 @@ public partial class MainWindow
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="创意工坊下载")&&
    activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "mod management shows secondary navigation and regular MODs");
+  var attention=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="所有状态  ▾");
+  var attentionIssue=attention.ContextMenu!.Items.OfType<MenuItem>().Single(m=>m.Header?.ToString()=="依赖异常");
+  attentionIssue.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent,attentionIssue));await Idle();
+  var enabledSegment=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="启用"&&
+   ReferenceEquals(b.Style,FindResource("ModSegment")));
+  enabledSegment.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,enabledSegment));await Idle();
+  Check(modIssueFilter=="依赖异常"&&modFilter=="启用",
+   "segmented enable filter composes with the attention status dropdown");
+  modIssueFilter="所有状态";modFilter="全部";ShowMods();await Idle();
   ShowWorkshopPage();await Idle();
   Check(currentVisit?.Key=="mod-workshop"&&
    Controls<TextBox>(shell).Any(x=>System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID"),
@@ -154,6 +163,12 @@ public partial class MainWindow
    "status filters render as segmented controls instead of six chunky buttons");
   Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.IsVisible),
    "batch actions are not visible until a selection exists");
+  var mouseUp=new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,
+   System.Windows.Input.MouseButton.Left){RoutedEvent=UIElement.MouseLeftButtonUpEvent};
+  cardToSelect.RaiseEvent(mouseUp);await Idle();
+  Check(page=="模组管理"&&Controls<Button>(shell).Any(b=>b.Content?.ToString()=="完整详情"),
+   "clicking the card background opens contextual details without leaving the list");
+  await Click("✕");await Idle();
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
   Check(chosenModFolders.Contains(checkedFolder)&&
