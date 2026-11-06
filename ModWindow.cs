@@ -1170,6 +1170,10 @@ public partial class MainWindow
   ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
+  var workspace=new Grid();
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
+  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
   var detailHost=new ContentControl{Visibility=Visibility.Collapsed};
   void UpdateDetail()
   {
@@ -1232,10 +1236,6 @@ public partial class MainWindow
    row.Selected=value;UpdateSelectionToolbar();
   });
   activeModList=list;
-  var workspace=new Grid();
-  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
-  workspace.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
   workspace.Children.Add(list);Grid.SetColumn(detailHost,2);workspace.Children.Add(detailHost);
   void ResizeDetail()
   {
