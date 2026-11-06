@@ -1,0 +1,18 @@
+{
+  "tag_name": "v0.14.4-beta.1",
+  "draft": false,
+  "prerelease": true,
+  "body": "# 尖塔修补站 v0.14.4 Beta 1 · 手动关联创意工坊来源与公共索引导出\r\n\r\n本版是**第一阶段功能预览**，不会修改稳定版自动更新索引。\r\n\r\n## 新增\r\n- 在普通 MOD 的完整详情，以及新版工作台的右侧快捷详情中，新增 **手动关联 Workshop ID**。\r\n- 支持直接输入数字 ID、Steam 创意工坊或尖塔补给站链接；可选用「核对条目」只读读取补给站名称，不会下载 MOD。\r\n- 必须由用户勾选“我已确认该来源对应本地 MOD”才能保存；如修改已有来源，会告知旧版本基线失效，避免静默误判更新。\r\n- 在「工具与设置」新增 **导出公共来源 JSON**：只导出当前游戏目录中已绑定的普通 MOD，过滤重复 ID 的身份冲突及独立修复补丁。\r\n- 导出字段只包含 `schema`、`app_id` 和 `mods` 下的 `mod_id`、`name`、`author`、`workshop_id`、`verification=local_binding`。不包含个人路径、MOD 文件、版本快照、凭据或日志。\r\n- 不会自动上传。导出后请先检查 JSON，将文件发给维护者人工审核，确认后才会加入 GitHub 公共来源索引。\r\n\r\n## 如何使用\r\n1. 切到「模组管理 → 已安装」，点击需要绑定的普通 MOD，打开右侧详情或完整详情。\r\n2. 点击「手动关联 Workshop ID」，输入条目编号或链接；需要的话先通过「核对条目」读取补给站标题。\r\n3. 确认条目与当前 MOD 对应后，勾选确认并保存。\r\n4. 多个 MOD 绑定完成后，进入「工具与设置 → 导出公共来源 JSON」，选择保存位置。\r\n5. 将 `workshop-source-index.json` 发送给维护者，审核后用于后续公共来源缓存。\r\n\r\n## 注意\r\n- `local_binding` 仅说明在本地存在已绑定来源，**不代表已验证远端 MOD 内容或当前版本基线**。\r\n- 本版尚不自动读取、上传或应用公共云端索引。这一功能会在独立的第二阶段实现。\r\n- 原有 MOD 下载、备份、启停预览与更新校验继续使用既有安全机制。\r\n- 新版为 Beta 预发布，稳定版仍是 v0.14.3。建议保留原有管理器目录以便回退。\r\n\r\n更多细节见 [公共 Workshop 来源索引设计](../docs/公共Workshop来源索引.md)。保留 [项目来源与鸣谢](../鸣谢与来源.md)。\r\n",
+  "published_at": "2026-11-06T18:54:33Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.4-beta.1",
+  "assets": [
+    {
+      "name": "SpirePatch-v0.14.4-beta.1-win-x64.zip",
+      "state": "uploaded",
+      "size": 64935980,
+      "digest": "sha256:2fbce28399b84197ffa8f32925b12388c17e143b020ab9edb48adab689598bb3",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.14.4-beta.1/SpirePatch-v0.14.4-beta.1-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/718197127"
+    }
+  ]
+}
