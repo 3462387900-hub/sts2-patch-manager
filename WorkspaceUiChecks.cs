@@ -45,6 +45,28 @@ public partial class MainWindow
    if(busy||transactionWriting)throw new InvalidOperationException("UI 操作超时："+label);
    await Idle();
   }
+  // A FileSystemWatcher refresh can leave an earlier details button disabled.
+  // Wait for a settled scan and regenerate the details before exercising the
+  // *real* safe preview action, without relaxing the production guard.
+  async Task OpenReadyPreview(string folder,bool enable)
+  {
+   string label=enable?"预览启用":"预览停用";
+   for(int attempt=0;attempt<180;attempt++)
+   {
+    await Idle();
+    if(!busy&&!transactionWriting&&!modInventoryDirty&&
+       modInventory?.Mods.Any(mod=>mod.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
+    {
+     ShowModDetail(folder);await Idle();
+     if(Controls<Button>(shell).Any(button=>button.Content?.ToString()==label&&button.IsEnabled))
+      return;
+    }
+    await Task.Delay(60);
+   }
+   throw new InvalidOperationException("安全预览按钮在稳定扫描后仍不可用："+label+
+    "; busy="+busy+"; writing="+transactionWriting+"; dirty="+modInventoryDirty+
+    "; page="+page+"; folder="+folder);
+  }
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
   // Regression: a visually opaque overlay hid the native acrylic throughout v0.12.0.
   Check(SpireGlassTheme.Background(true) is LinearGradientBrush acrylicTint&&
@@ -298,12 +320,12 @@ public partial class MainWindow
   Check(offset<=0||Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
    "back preserves list scroll when the compact cards actually require scrolling");
   ListScroll(activeModList!)!.ScrollToTop();modListOffset=0;await Idle();await Shot("02-模组管理列表");
-  ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files; state="+modStatus+"; preview="+(modTogglePreview!=null)+"; exists="+Directory.Exists(soloFolder));await Shot("03-停用前确认");await Click("确认停用");
+  await OpenReadyPreview(soloFolder,false);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files; state="+modStatus+"; preview="+(modTogglePreview!=null)+"; exists="+Directory.Exists(soloFolder));await Shot("03-停用前确认");await Click("确认停用");
   for(int retry=0;retry<100&&(modInventory?.Mods.SingleOrDefault(m=>m.Id=="TestSolo")?.Enabled!=false||Directory.Exists(soloFolder));retry++)
    {await Task.Delay(60);await Idle();}
   Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false&&!Directory.Exists(soloFolder),"actual disable button retains mod outside active directory; status="+modStatus);
   await Click("← 上一步");Check(modTogglePreview==null&&modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled==false,"back after a file operation cannot replay stale confirmation");
-  ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder);await Click("预览启用");await Click("确认启用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled&&Directory.Exists(soloFolder),"actual enable button restores mod to original directory");await Shot("04-已恢复启用");
+  await OpenReadyPreview(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder,true);await Click("预览启用");await Click("确认启用");Check(modInventory!.Mods.Single(m=>m.Id=="TestSolo").Enabled&&Directory.Exists(soloFolder),"actual enable button restores mod to original directory");await Shot("04-已恢复启用");
   ShowModDetail(modInventory.Mods.Single(m=>m.Id=="TestBase").Folder);await Idle();Check(!Controls<Button>(shell).Single(b=>b.Content?.ToString()=="预览停用").IsEnabled,"UI disables unsafe base-mod toggle and shows dependency reason");await Shot("05-前置依赖保护");
   var baseline=ModHistory.CompareAndStore(first,Path.Combine(fixtures,"ui-lifecycle-history"));
   lifecycleReport=PatchLifecycle.Evaluate(first,baseline,LifecycleEvidenceSource.Empty,"fixture",Catalog.Scan(first),ModManager.Scan(first));
