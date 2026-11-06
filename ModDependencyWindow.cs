@@ -30,11 +30,8 @@ public partial class MainWindow
         }
 
         var report = ModDependencyGraph.Analyze(modInventory);
-        var root = V(Header(
-            "MOD DEPENDENCY MAP",
-            "依赖关系图",
+        var root = V(ModWorkspaceHeader("依赖关系图",
             "箭头方向：前置模组 → 依赖它的 MOD。只分析清单声明和已收录修复补丁的兼容规则，不推断未声明依赖。"));
-        Space(root, 10);
         root.Children.Add(ModWorkspaceTabs("依赖关系"));
         root.Children.Add(H(Btn("重新扫描", RefreshMods, "Ghost")));
         Space(root, 12);
