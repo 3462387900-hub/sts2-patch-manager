@@ -1143,13 +1143,7 @@ public partial class MainWindow
   var segmentButtons=new Dictionary<string,Button>();
   foreach(var name in new[]{"全部","启用","停用"})
   {
-   string state=name;
-   var segment=Btn(name,()=>{
-    modFilter=state;
-    foreach(var choice in segmentButtons)
-     choice.Value.Style=(Style)FindResource(choice.Key==modFilter?"ModSegmentActive":"ModSegment");
-    modListOffset=0;FilterRows();ListScroll(list)?.ScrollToTop();
-   },modFilter==name?"ModSegmentActive":"ModSegment");
+   var segment=Btn(name,()=>{},modFilter==name?"ModSegmentActive":"ModSegment");
    segment.Margin=new Thickness(1,0,1,0);
    segmentButtons[name]=segment;segments.Children.Add(segment);
   }
@@ -1162,14 +1156,7 @@ public partial class MainWindow
   var attentionMenu=new ContextMenu();
   foreach(var option in new[]{"所有状态","有更新","有问题","依赖异常"})
   {
-   string chosen=option;
    var item=new MenuItem{Header=option,IsCheckable=true,IsChecked=modIssueFilter==option};
-   item.Click+=(_,_)=>{
-    modIssueFilter=chosen;attentionButton.Content=chosen+"  ▾";
-    foreach(var entry in attentionMenu.Items.OfType<MenuItem>())
-     entry.IsChecked=entry.Header?.ToString()==chosen;
-    modListOffset=0;FilterRows();ListScroll(list)?.ScrollToTop();
-   };
    attentionMenu.Items.Add(item);
   }
   attentionButton.Click+=(_,_)=>{attentionMenu.PlacementTarget=attentionButton;attentionMenu.IsOpen=true;};
@@ -1386,6 +1373,28 @@ public partial class MainWindow
    {
     selectedModDetailFolder=null;UpdateDetail();ResizeDetail();
    }
+  }
+  // Bind filtering only after all controls and row sources are constructed.
+  // This also avoids capturing unassigned locals in a control factory callback.
+  foreach(var entry in segmentButtons)
+  {
+   string state=entry.Key;
+   entry.Value.Click+=(_,_)=>{
+    modFilter=state;
+    foreach(var choice in segmentButtons)
+     choice.Value.Style=(Style)FindResource(choice.Key==modFilter?"ModSegmentActive":"ModSegment");
+    modListOffset=0;FilterRows();ListScroll(list)?.ScrollToTop();
+   };
+  }
+  foreach(var item in attentionMenu.Items.OfType<MenuItem>())
+  {
+   string chosen=item.Header?.ToString()??"所有状态";
+   item.Click+=(_,_)=>{
+    modIssueFilter=chosen;attentionButton.Content=chosen+"  ▾";
+    foreach(var option in attentionMenu.Items.OfType<MenuItem>())
+     option.IsChecked=option.Header?.ToString()==chosen;
+    modListOffset=0;FilterRows();ListScroll(list)?.ScrollToTop();
+   };
   }
   search.TextChanged+=(_,_)=>{
    modQuery=search.Text;
