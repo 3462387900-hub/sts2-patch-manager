@@ -1317,39 +1317,39 @@ public partial class MainWindow
   }
   workspace.SizeChanged+=(_,_)=>ResizeDetail();
   Grid.SetRow(workspace,1);root.Children.Add(workspace);
-  var footer=V(empty);
+  var footer=V(empty,bulkHost);
   Grid.SetRow(footer,2);root.Children.Add(footer);
   void UpdateSelectionToolbar()
   {
    int count=ChosenMods().Length;
-   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery)
+   int visibleSelected=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter)
     .Count(r=>chosenModFolders.Contains(r.Mod.Folder));
    selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
-   foreach(var button in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch,enableBatch,disableBatch,clearBatch})
-    button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
+   bulkHost.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
    bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&WorkshopSources().Get(m.Id).HasValue);
    bool hasWorkshopUpdate=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
     WorkshopSources().Get(m.Id).HasValue&&WorkshopUpdates().Cached(m.Id)?.Status=="有更新");
    findBatch.IsEnabled=checkBatch.IsEnabled=enableBatch.IsEnabled=disableBatch.IsEnabled=
     count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
+   moreBatch.IsEnabled=count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopCheckBatch.IsEnabled=hasWorkshopSource&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopUpdateBatch.IsEnabled=hasWorkshopUpdate&&!busy&&!transactionWriting&&!modInventoryDirty;
-   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter);
    checkAll.Checked-=OnCheckAll;checkAll.Unchecked-=OnCheckAll;
    checkAll.IsChecked=visible.Length>0&&visible.All(r=>chosenModFolders.Contains(r.Mod.Folder));
    checkAll.Checked+=OnCheckAll;checkAll.Unchecked+=OnCheckAll;
   }
   void OnCheckAll(object sender,RoutedEventArgs e)
   {
-   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery))
+   foreach(var row in ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter))
     if(checkAll.IsChecked==true)chosenModFolders.Add(row.Mod.Folder);
     else chosenModFolders.Remove(row.Mod.Folder);
    FilterRows();
   }
   void FilterRows()
   {
-   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery);
+   var visible=ModListView.Filter(rows,modSection,modFilter,modQuery,modIssueFilter);
    foreach(var row in rows)row.Selected=chosenModFolders.Contains(row.Mod.Folder);
    ModCardList.SetItems(list,visible,cardColumns);
    UpdateSelectionToolbar();
@@ -1367,7 +1367,8 @@ public partial class MainWindow
    modListOffset=0;
    FilterRows();ListScroll(list)?.ScrollToTop();
    string q=modQuery,f=modFilter,g=modSection;
-   RememberPage("模组管理",()=>{modQuery=q;modFilter=f;modSection=g;ShowMods();});
+   string issue=modIssueFilter;
+   RememberPage(isFixSection?"本地补丁":"模组管理",()=>{modQuery=q;modFilter=f;modSection=g;modIssueFilter=issue;ShowMods();});
   };
   FilterRows();UpdateDetail();ResizeDetail();
   list.SizeChanged+=(_,_)=>{
@@ -1377,9 +1378,9 @@ public partial class MainWindow
   list.Loaded+=(_,_)=>Dispatcher.BeginInvoke(new Action(()=>{
    if(activeModList==list&&ListScroll(list) is { } scroll)scroll.ScrollToVerticalOffset(modListOffset);
   }),System.Windows.Threading.DispatcherPriority.Loaded);
-  string savedQuery=modQuery,savedFilter=modFilter,savedSection=modSection;
+  string savedQuery=modQuery,savedFilter=modFilter,savedSection=modSection,savedIssue=modIssueFilter;
   SetPage(isFixSection?"本地补丁":"模组管理",root,restore:()=>{
-   modQuery=savedQuery;modFilter=savedFilter;modSection=savedSection;ShowMods();
+   modQuery=savedQuery;modFilter=savedFilter;modSection=savedSection;modIssueFilter=savedIssue;ShowMods();
   });
  }
  void ShowModDetail(string folder)
