@@ -57,9 +57,8 @@ public partial class MainWindow
  void ShowWorkshopPage()
  {
   if(selectedInstallRoot==null){ShowMods();return;}
-  var root=V(Header("MOD DOWNLOAD","创意工坊下载",
+  var root=V(ModWorkspaceHeader("创意工坊下载",
    "通过已授权的尖塔补给站接口下载《杀戮尖塔 2》创意工坊 MOD，安装前先预览并确认。"));
-  Space(root,10);
   root.Children.Add(ModWorkspaceTabs("创意工坊下载"));
   Space(root,8);
 
