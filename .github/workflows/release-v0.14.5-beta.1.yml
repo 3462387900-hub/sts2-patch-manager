@@ -1,0 +1,71 @@
+name: Publish v0.14.5 Beta 1
+on:
+  push:
+    branches: [feat/portable-chinese-launcher-unbound-filter]
+    paths:
+      - '.github/workflows/release-v0.14.5-beta.1.yml'
+permissions:
+  contents: write
+concurrency:
+  group: publish-v0.14.5-beta.1
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Build and run isolated checks
+        shell: pwsh
+        run: ./scripts/打包.ps1 -BuildOnly -OutputRoot artifacts
+      - name: Assemble self-contained release ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$project = Get-Content -LiteralPath 'SpirePatch.csproj'
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($version -ne '0.14.5') { throw 'This workflow only publishes the v0.14.5 Beta 1 assembly.' }
+          $app = Get-ChildItem -LiteralPath 'artifacts' -Directory |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1 |
+            ForEach-Object { Join-Path $_.FullName ('尖塔修补站-v' + $version) }
+          if (!(Test-Path -LiteralPath (Join-Path $app 'SpirePatch.exe'))) { throw 'Build output is missing.' }
+          Copy-Item README.md (Join-Path $app '使用说明.md')
+          Copy-Item 更新日志.md (Join-Path $app '更新日志.md')
+          Copy-Item 发布指南.md (Join-Path $app '发布指南.md')
+          Copy-Item 补丁发布指南.md (Join-Path $app '补丁发布指南.md')
+          Copy-Item releases/v0.14.5-beta.1.md (Join-Path $app '本版更新内容.md')
+          Copy-Item 鸣谢与来源.md (Join-Path $app '鸣谢与来源.md')
+          Copy-Item THIRD-PARTY-NOTICES.md (Join-Path $app 'THIRD-PARTY-NOTICES.md')
+          $thirdParty = Join-Path $app 'third_party'
+          New-Item -ItemType Directory -Path $thirdParty -Force | Out-Null
+          Copy-Item third_party/WorkshopAndroidDownloader-LICENSE.txt (Join-Path $thirdParty 'WorkshopAndroidDownloader-LICENSE.txt')
+          Copy-Item third_party/SharpCompress-LICENSE.txt (Join-Path $thirdParty 'SharpCompress-LICENSE.txt')
+          ./scripts/整理玩家发布目录.ps1 -ApplicationDirectory $app
+          ./scripts/生成程序清单.ps1 -Directory $app
+          $dir = Join-Path (Get-Location) 'release-output'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $archive = Join-Path $dir 'SpirePatch-v0.14.5-beta.1-win-x64.zip'
+          ./scripts/创建干净发布包.ps1 -ApplicationDirectory $app -ArchivePath $archive -Version $version
+          $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $info = [ordered]@{version=$version;file_name=[IO.Path]::GetFileName($archive);bytes=(Get-Item $archive).Length;sha256=$digest}
+          $info | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir '校验信息.json') -Encoding utf8
+          if ((Get-Item $archive).Length -lt 1000000) { throw 'Release archive unexpectedly small.' }
+      - name: Publish release on GitHub
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = '${{ github.repository }}'
+          $existing = gh release view v0.14.5-beta.1 -R $repo --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.14.5-beta.1 already exists; refusing to replace published assets.' }
+          gh release create v0.14.5-beta.1 -R $repo --target '${{ github.sha }}' --title '尖塔修补站 v0.14.5 Beta 1' --notes-file releases/v0.14.5-beta.1.md --prerelease --latest=false 'release-output/SpirePatch-v0.14.5-beta.1-win-x64.zip' 'release-output/校验信息.json'
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }
+          $release = gh api "repos/$repo/releases/tags/v0.14.5-beta.1" | ConvertFrom-Json
+          $asset = @($release.assets | Where-Object { $_.name -eq 'SpirePatch-v0.14.5-beta.1-win-x64.zip' -and $_.state -eq 'uploaded' })
+          $expected = (Get-Content 'release-output/校验信息.json' -Raw | ConvertFrom-Json).sha256
+          if ($asset.Count -ne 1 -or $asset[0].digest -ne ('sha256:' + $expected)) { throw 'Uploaded asset checksum mismatch.' }
