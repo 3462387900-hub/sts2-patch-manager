@@ -38,6 +38,33 @@ public static class AutoUpdateChecks
   Check(!File.Exists(Path.Combine(root,"retired.dll"))&&File.Exists(Path.Combine(root,"added.json")),"obsolete owned files are removed and declared new files installed");
   Check(File.ReadAllText(Path.Combine(root,"数据","偏好.json"))=="user preference"&&File.ReadAllText(Path.Combine(root,"个人备注.txt"))=="keep me","personal data and unrelated files survive automatic update");
   Check(File.Exists(Path.Combine(plan.Job,"backup","SpirePatch.dll")),"changed original program files are preserved in backup");
+  // Beta tag identifies the release; archive & worker still use the numeric assembly core.
+  var betaRelease=package.Release with{
+   Version="1.1.0-beta.1",FileName="SpirePatch-v1.1.0-beta.1-win-x64.zip",
+   DownloadUrl=ManagerUpdates.RepositoryUrl+"/releases/download/v1.1.0-beta.1/SpirePatch-v1.1.0-beta.1-win-x64.zip",
+   ReleaseUrl=ManagerUpdates.RepositoryUrl+"/releases/tag/v1.1.0-beta.1"};
+  string betaRoot=Fixture(parent);
+  var betaOriginal=Snapshot(betaRoot);
+  var betaPlan=await ManagerAutoUpdate.PrepareAsync(betaRelease,package.Zip,betaRoot,fixture:true);
+  Check(betaPlan.Request.ToVersion=="1.1.0"&&Same(betaRoot,betaOriginal),
+   "Beta plan preserves numeric manifest and makes no changes before confirmation");
+  var betaRun=await Run(betaPlan);
+  Check(betaRun.Code==0&&betaRun.Status=="complete"&&
+   File.ReadAllText(Path.Combine(betaRoot,"SpirePatch.dll")).StartsWith("new:"),
+   "Beta update runs verified forward-only worker instead of bypassing safeguards");
+  var betaRestored=await Run(betaPlan,recover:true);
+  Check(betaRestored.Code==0&&betaRestored.Status=="restored"&&Same(betaRoot,betaOriginal),
+   "Beta upgrade uses existing byte-exact rollback");
+  var equalCore=betaRelease with{
+   Version="1.0.0-beta.2",FileName="SpirePatch-v1.0.0-beta.2-win-x64.zip",
+   DownloadUrl=ManagerUpdates.RepositoryUrl+"/releases/download/v1.0.0-beta.2/SpirePatch-v1.0.0-beta.2-win-x64.zip",
+   ReleaseUrl=ManagerUpdates.RepositoryUrl+"/releases/tag/v1.0.0-beta.2"};
+  try{await ManagerAutoUpdate.PrepareAsync(equalCore,package.Zip,betaRoot,fixture:true);
+   throw new InvalidOperationException("same-core Beta overwrite accepted");}
+  catch(InvalidDataException){}
+  Check(Same(betaRoot,betaOriginal),
+   "same-core Beta cannot overwrite installed application");
+
   var recovered=await Run(plan,recover:true);Check(recovered.Code==0&&recovered.Status=="restored"&&Same(root,original),"recovery restores byte-exact previous application including retired files");
   root=Fixture(parent);original=Snapshot(root);plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);run=await Run(plan,failAfter:2);Check(run.Code!=0&&run.Status=="restored"&&Same(root,original),"interrupted file replacement automatically restores previous application");
   root=Fixture(parent);original=Snapshot(root);plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);using(var locked=new FileStream(Path.Combine(root,"SpirePatch.dll"),FileMode.Open,FileAccess.Read,FileShare.Read)){run=await Run(plan);Check(run.Code!=0&&run.Status=="restored"&&Same(root,original),"locked application file triggers rollback without forcing another process closed");}
