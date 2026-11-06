@@ -152,7 +152,7 @@ public partial class MainWindow
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="全部"&&
    ReferenceEquals(b.Style,FindResource("ModSegmentActive"))),
    "status filters render as segmented controls instead of six chunky buttons");
-  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.Visibility==Visibility.Collapsed),
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&!b.IsVisible),
    "batch actions are not visible until a selection exists");
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
@@ -174,8 +174,8 @@ public partial class MainWindow
   selectionSearch.Text="";await Idle();
   await Click("取消选择");await Idle();
   Check(ChosenMods().Length==0,"clear selection resets batch scope without moving MOD files");
-  Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"),
-   "clearing selection removes the floating batch-action rail");
+  Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.IsVisible),
+   "clearing selection hides the floating batch-action rail");
   var selectAll=Controls<CheckBox>(shell).Single(c=>c.Content?.ToString()=="全选当前结果");
   selectAll.IsChecked=true;await Idle();
   Check(ChosenMods().Length==6,"select all targets only six visible regular MODs");
