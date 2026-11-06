@@ -1120,46 +1120,94 @@ public partial class MainWindow
    Space(header,8);
   }
 
-  var searchArea=new Grid{Margin=new Thickness(0,0,0,6)};
-  var search=new TextBox{Text=modQuery,ToolTip="按 MOD 名称、ID、作者搜索"};
+  var searchArea=new Grid{Margin=new Thickness(0,3,0,9)};
+  var search=new TextBox{Text=modQuery,MinHeight=39,ToolTip="按 MOD 名称、ID、作者搜索"};
   search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索模组");
   searchArea.Children.Add(search);
-  var placeholder=T("搜索名称、MOD ID 或作者…",12,muted);
+  var placeholder=T("⌕   搜索名称、MOD ID 或作者…",12,muted);
   placeholder.Margin=new Thickness(12,0,0,0);
   placeholder.VerticalAlignment=VerticalAlignment.Center;
   placeholder.IsHitTestVisible=false;
   placeholder.Visibility=string.IsNullOrEmpty(modQuery)?Visibility.Visible:Visibility.Collapsed;
   searchArea.Children.Add(placeholder);
   header.Children.Add(searchArea);
-  var filterBar=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,5)};
-  var shownCount=T("",12,muted);shownCount.VerticalAlignment=VerticalAlignment.Center;
-  DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
-  var filters=new WrapPanel();
-  foreach(var name in new[]{"全部","启用","停用","有更新","有问题","依赖异常"})
-  {
-   string selected=name;
-   var button=Btn(name,()=>{CaptureModListOffset();modListOffset=0;modFilter=selected;ShowMods();},
-    modFilter==name?"SelectedTab":"Ghost");
-   button.Margin=new Thickness(0,0,7,0);filters.Children.Add(button);
-  }
-  filterBar.Children.Add(filters);header.Children.Add(filterBar);
-  var selectionBar=new WrapPanel{Margin=new Thickness(0,3,0,8)};
-  var checkAll=new CheckBox{Content="全选当前结果",Margin=new Thickness(0,7,12,0)};
-  var selectionCount=T("",13,ink,true);selectionCount.Margin=new Thickness(0,7,12,0);
-  selectionBar.Children.Add(checkAll);selectionBar.Children.Add(selectionCount);
-  var findBatch=Btn("查找 GitHub 来源",BatchFindGitHub,"Ghost");
-  var checkBatch=Btn("检查 GitHub 更新",BatchCheckGitHub,"Ghost");
-  var workshopCheckBatch=Btn("检查创意工坊更新",BatchCheckWorkshop,"Ghost");
-  var workshopUpdateBatch=Btn("批量更新创意工坊",BatchUpdateWorkshop,"Ghost");
-  var enableBatch=Btn("批量启用",()=>BatchToggleMods(true),"Ghost");
-  var disableBatch=Btn("批量停用",()=>BatchToggleMods(false),"Ghost");
-  var clearBatch=Btn("取消选择",()=>{chosenModFolders.Clear();ShowMods();},"Ghost");
-  foreach(var button in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch,enableBatch,disableBatch,clearBatch}){
-   button.Padding=new Thickness(9,7,9,7);button.Margin=new Thickness(0,0,6,4);
-   selectionBar.Children.Add(button);
-  }
-  header.Children.Add(selectionBar);
 
+  var filterBar=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,8)};
+  var shownCount=T("",11,muted);
+  shownCount.VerticalAlignment=VerticalAlignment.Center;shownCount.Margin=new Thickness(9,0,0,0);
+  DockPanel.SetDock(shownCount,Dock.Right);filterBar.Children.Add(shownCount);
+
+  var compactFilters=new WrapPanel{VerticalAlignment=VerticalAlignment.Center};
+  var segments=new StackPanel{Orientation=Orientation.Horizontal};
+  var segmentButtons=new Dictionary<string,Button>();
+  foreach(var name in new[]{"全部","启用","停用"})
+  {
+   string state=name;
+   var segment=Btn(name,()=>{
+    modFilter=state;
+    foreach(var choice in segmentButtons)
+     choice.Value.Style=(Style)FindResource(choice.Key==modFilter?"ModSegmentActive":"ModSegment");
+    modListOffset=0;FilterRows();ListScroll(list)?.ScrollToTop();
+   },modFilter==name?"ModSegmentActive":"ModSegment");
+   segment.Margin=new Thickness(1,0,1,0);
+   segmentButtons[name]=segment;segments.Children.Add(segment);
+  }
+  var segmentHost=new Border{Background=B("#68304760"),CornerRadius=new CornerRadius(9),
+   Padding=new Thickness(3),Child=segments,Margin=new Thickness(0,0,10,3)};
+  compactFilters.Children.Add(segmentHost);
+
+  var attentionButton=Btn(modIssueFilter=="所有状态"?"所有状态  ▾":modIssueFilter+"  ▾",()=>{},"ModToolbarAction");
+  attentionButton.Margin=new Thickness(0,0,10,3);
+  var attentionMenu=new ContextMenu();
+  foreach(var option in new[]{"所有状态","有更新","有问题","依赖异常"})
+  {
+   string chosen=option;
+   var item=new MenuItem{Header=option,IsCheckable=true,IsChecked=modIssueFilter==option};
+   item.Click+=(_,_)=>{
+    modIssueFilter=chosen;attentionButton.Content=chosen+"  ▾";
+    foreach(var entry in attentionMenu.Items.OfType<MenuItem>())
+     entry.IsChecked=entry.Header?.ToString()==chosen;
+    modListOffset=0;FilterRows();ListScroll(list)?.ScrollToTop();
+   };
+   attentionMenu.Items.Add(item);
+  }
+  attentionButton.Click+=(_,_)=>{attentionMenu.PlacementTarget=attentionButton;attentionMenu.IsOpen=true;};
+  compactFilters.Children.Add(attentionButton);
+
+  var checkAll=new CheckBox{Content="全选当前结果",Margin=new Thickness(0,0,0,3),
+   VerticalAlignment=VerticalAlignment.Center};
+  if(FindResource("ModCardCheckBox") is Style checkAllStyle)checkAll.Style=checkAllStyle;
+  compactFilters.Children.Add(checkAll);
+  filterBar.Children.Add(compactFilters);header.Children.Add(filterBar);
+
+  // Batch tools occupy the bottom rail only after a selection, not a permanent header row.
+  var selectionBar=new WrapPanel{Margin=new Thickness(9,6,9,6),VerticalAlignment=VerticalAlignment.Center};
+  var selectionCount=T("",12,ink,true);
+  selectionCount.Margin=new Thickness(0,7,14,0);
+  selectionBar.Children.Add(selectionCount);
+  var enableBatch=Btn("启用",()=>BatchToggleMods(true),"ModToolbarPrimary");
+  var disableBatch=Btn("停用",()=>BatchToggleMods(false),"ModToolbarAction");
+  var clearBatch=Btn("取消选择",()=>{chosenModFolders.Clear();ShowMods();},"ModToolbarAction");
+  foreach(var b in new[]{enableBatch,disableBatch,clearBatch})
+  {b.Margin=new Thickness(0,0,6,0);selectionBar.Children.Add(b);}
+  var moreBatch=Btn("更多操作  ▾",()=>{},"ModToolbarAction");
+  var batchMenu=new ContextMenu();
+  var findBatch=new MenuItem{Header="查找 GitHub 来源"};
+  findBatch.Click+=(_,_)=>BatchFindGitHub();
+  var checkBatch=new MenuItem{Header="检查 GitHub 更新"};
+  checkBatch.Click+=(_,_)=>BatchCheckGitHub();
+  var workshopCheckBatch=new MenuItem{Header="检查创意工坊更新"};
+  workshopCheckBatch.Click+=(_,_)=>BatchCheckWorkshop();
+  var workshopUpdateBatch=new MenuItem{Header="批量更新创意工坊"};
+  workshopUpdateBatch.Click+=(_,_)=>BatchUpdateWorkshop();
+  foreach(var item in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch})
+   batchMenu.Items.Add(item);
+  moreBatch.Click+=(_,_)=>{batchMenu.PlacementTarget=moreBatch;batchMenu.IsOpen=true;};
+  selectionBar.Children.Insert(selectionBar.Children.Count-1,moreBatch);
+  var bulkHost=new Border{Background=SpireGlassTheme.GlassPanel("#D5213852"),
+   BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
+   CornerRadius=new CornerRadius(10),Child=selectionBar,
+   Visibility=Visibility.Collapsed,Margin=new Thickness(0,6,0,0)};
   var dependencyReport=modInventory==null?null:ModDependencyGraph.Analyze(modInventory);
   var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
    if(ModPresentation.IsIndependentPatch(mod))return "";
