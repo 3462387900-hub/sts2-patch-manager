@@ -147,8 +147,11 @@ public partial class MainWindow
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()>=3,
    "on-demand compact patch menu exposes preview toggle and folder action");
   patchMore.ContextMenu!.IsOpen=false;
-  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
-   "repair patch rows show a descriptive health status even before a scan");
+  var patchHealthRows=activeModList?.Items.OfType<ModCardGroup>()
+   .SelectMany(g=>g.Cards).Where(r=>r.IsFix).ToArray();
+  Check(patchHealthRows?.Length==1&&!string.IsNullOrWhiteSpace(patchHealthRows[0].Health)&&
+   Controls<ModCardControl>(activeModList!).Any(),
+   "independent patch cards preserve the health state regardless of chosen layout");
   ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="LargeHealDisplayFix").Folder);await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="查看依据"),
    "independent patch details expose the evidence viewer");
