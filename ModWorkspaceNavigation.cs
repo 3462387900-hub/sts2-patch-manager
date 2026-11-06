@@ -5,10 +5,37 @@ namespace SpirePatch;
 
 public partial class MainWindow
 {
+ // Shared fixed-height heading keeps second-level tabs aligned across MOD pages.
+ // Every page retains its own explanation; the empty space is reserved intentionally.
+ UIElement ModWorkspaceHeader(string title,string description,UIElement? actions=null)
+ {
+  var grid=new Grid{Height=90,Margin=new Thickness(0,0,0,5)};
+  grid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(40)});
+  grid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(50)});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  grid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  var heading=T(title,23,ink,true);
+  heading.VerticalAlignment=VerticalAlignment.Center;
+  grid.Children.Add(heading);
+  if(actions!=null)
+  {
+   Grid.SetColumn(actions,1);
+   if(actions is FrameworkElement actionElement)actionElement.VerticalAlignment=VerticalAlignment.Center;
+   grid.Children.Add(actions);
+  }
+  var descriptionText=T(description,12,muted);
+  descriptionText.LineHeight=19;
+  descriptionText.VerticalAlignment=VerticalAlignment.Top;
+  descriptionText.Margin=new Thickness(0,2,0,0);
+  Grid.SetRow(descriptionText,1);
+  Grid.SetColumnSpan(descriptionText,2);
+  grid.Children.Add(descriptionText);
+  return grid;
+ }
  // One persistent secondary navigation pattern across the MOD workspace.
  UIElement ModWorkspaceTabs(string active)
  {
-  var tabs=new WrapPanel{Margin=new Thickness(0,0,0,9)};
+  var tabs=new WrapPanel{Margin=new Thickness(0,0,0,11)};
   foreach(var (name,open) in new (string,Action)[]
   {
    ("已安装",ShowMods),
@@ -17,9 +44,10 @@ public partial class MainWindow
    ("环境快照",ShowModEnvironmentSnapshots)
   })
   {
-   var tab=Btn(name,open,name==active?"SelectedTab":"Ghost");
-   tab.Margin=new Thickness(0,0,8,4);
-   tab.Padding=new Thickness(12,8,12,8);
+   var tab=Btn(name,open,UiThemes.IsClassic?
+    (name==active?"SelectedTab":"Ghost"):
+    (name==active?"ModWorkspaceTabActive":"ModWorkspaceTab"));
+   tab.Margin=new Thickness(0,0,UiThemes.IsClassic?8:13,UiThemes.IsClassic?4:0);
    tab.IsEnabled=!busy&&!transactionWriting;
    tabs.Children.Add(tab);
   }
@@ -29,9 +57,8 @@ public partial class MainWindow
  void ShowWorkshopPage()
  {
   if(selectedInstallRoot==null){ShowMods();return;}
-  var root=V(Header("MOD DOWNLOAD","创意工坊下载",
+  var root=V(ModWorkspaceHeader("创意工坊下载",
    "通过已授权的尖塔补给站接口下载《杀戮尖塔 2》创意工坊 MOD，安装前先预览并确认。"));
-  Space(root,10);
   root.Children.Add(ModWorkspaceTabs("创意工坊下载"));
   Space(root,8);
 

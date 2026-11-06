@@ -19,6 +19,18 @@ public static class WorkspaceChecks
   ManagedMod Find(string id)=>ModManager.Scan(root).Mods.Single(m=>m.Id==id);
   Dictionary<string,string> Snapshot()=>Directory.EnumerateFiles(Path.Combine(root,"mods"),"*",SearchOption.AllDirectories).ToDictionary(f=>f,Catalog.Hash);
   bool Same(Dictionary<string,string> expected)=>expected.Count==Snapshot().Count&&expected.All(f=>File.Exists(f.Key)&&Catalog.Hash(f.Key)==f.Value);
+  // Paging is deterministic and never truncates the underlying dependency report.
+  int[] relations=Enumerable.Range(1,27).ToArray();
+  Check(ModDependencyPaging.Count(0)==1&&ModDependencyPaging.Count(10)==1&&
+   ModDependencyPaging.Count(11)==2&&ModDependencyPaging.Count(27)==3,
+   "dependency page count respects 10 relations per page, including empty results");
+  Check(ModDependencyPaging.Items(relations,1).SequenceEqual(Enumerable.Range(1,10))&&
+   ModDependencyPaging.Items(relations,2).SequenceEqual(Enumerable.Range(11,10))&&
+   ModDependencyPaging.Items(relations,3).SequenceEqual(Enumerable.Range(21,7)),
+   "dependency paging partitions all relations without duplicate or missing rows");
+  Check(ModDependencyPaging.Clamp(0,27)==1&&ModDependencyPaging.Clamp(99,27)==3&&
+   ModDependencyPaging.Items(relations,99).SequenceEqual(Enumerable.Range(21,7)),
+   "out-of-range pages clamp safely after filtering");
   var original=Snapshot();Check(ModManager.Scan(root).Mods.Count==7,"manifest inventory reads IDs and shared directories without changing files");
   var presentation=ModListView.Rows(root,ModManager.Scan(root),_=>"未检查");
   Check(ModListView.Filter(presentation,"修复补丁","全部","").Length==1&&

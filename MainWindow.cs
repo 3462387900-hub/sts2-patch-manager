@@ -22,6 +22,9 @@ public partial class MainWindow : Window
  public MainWindow(bool onlineStartup=true,ManagerUpdates? updates=null)
  {
   rememberEnvironment=onlineStartup;if(updates!=null)managerUpdates=updates;
+   managerUpdateChannel=onlineStartup?ManagerUpdates.LoadChannel(installer.DataRoot):ManagerUpdateChannel.Stable;
+   uiTheme=onlineStartup?UiThemes.Load(installer.DataRoot):UiThemes.Workspace;
+   UiThemes.Active=uiTheme;
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
   Closing+=(_,e)=>{if(transactionWriting){e.Cancel=true;MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");}else {preparationCancellation?.Cancel();managerUpdateCancellation?.Cancel();}};
   Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
@@ -33,7 +36,7 @@ public partial class MainWindow : Window
   var main=new Grid{Margin=new(25,18,25,15)};Grid.SetColumn(main,1);shell.Children.Add(main);
   main.RowDefinitions.Add(new(){Height=GridLength.Auto});main.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});main.RowDefinitions.Add(new(){Height=GridLength.Auto});
   var top=new DockPanel{LastChildFill=false,Margin=new(0,0,0,15)};
-  backButton=Btn("← 上一步",GoBack,"Ghost");backButton.Margin=new(0,0,10,0);DockPanel.SetDock(backButton,Dock.Left);top.Children.Add(backButton);
+  backButton=Btn("← 上一步",GoBack,UiThemes.IsClassic?"Ghost":"ModToolbarAction");backButton.Margin=new(0,0,10,0);DockPanel.SetDock(backButton,Dock.Left);top.Children.Add(backButton);
   var mode=Badge("v"+ManagerUpdates.CurrentVersion,muted);DockPanel.SetDock(mode,Dock.Left);top.Children.Add(mode);
   modeLabel.Foreground=muted;modeLabel.FontSize=12;modeLabel.VerticalAlignment=VerticalAlignment.Center;modeLabel.Margin=new(12,0,0,0);top.Children.Add(modeLabel);
   launchButton=Btn("▶ 启动游戏",LaunchGame,"Primary");DockPanel.SetDock(launchButton,Dock.Right);top.Children.Add(launchButton);main.Children.Add(top);
@@ -67,15 +70,19 @@ public partial class MainWindow : Window
   Space(navigation,18);navigation.Children.Add(T("工具",11,muted));Space(navigation,12);
   var toolsButton=Btn("⌁    工具与设置",()=>Navigate("工具与设置"),"NavItem");
   toolsButton.HorizontalContentAlignment=HorizontalAlignment.Left;toolsButton.Padding=new(14,11,8,11);navButtons["工具与设置"]=toolsButton;navigation.Children.Add(toolsButton);
+   navigation.Children.Add(ThemeSwitcher());
   layout.Children.Add(new ScrollViewer{Content=navigation,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
  }
  static bool IsPatchCenterPage(string name)=>name is "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚" or "本地补丁";
  UIElement PatchCenterTabs(string active)
  {
-  var tabs=new WrapPanel{Margin=new(0,0,0,16)};
+  var tabs=new WrapPanel{Margin=new(0,0,0,11)};
   foreach(var name in new[]{"补丁库","本地补丁","在线补丁","补丁健康","安装与回滚"}){
-   var tab=Btn(name,()=>Navigate(name),name==active?"SelectedTab":"Ghost");
-   tab.Margin=new(0,8,8,0);tab.IsEnabled=!busy&&!transactionWriting;tabs.Children.Add(tab);
+   var tab=Btn(name,()=>Navigate(name),UiThemes.IsClassic?
+     name==active?"SelectedTab":"Ghost":
+     name==active?"ModWorkspaceTabActive":"ModWorkspaceTab");
+   tab.Margin=new(0,0,UiThemes.IsClassic?8:13,0);
+    tab.IsEnabled=!busy&&!transactionWriting;tabs.Children.Add(tab);
   }
   return tabs;
  }

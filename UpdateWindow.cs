@@ -8,6 +8,7 @@ public partial class MainWindow
 {
  readonly ManagerUpdates managerUpdates=new();
  ManagerRelease? managerRelease;
+ ManagerUpdateChannel managerUpdateChannel=ManagerUpdateChannel.Stable;
  CancellationTokenSource? managerUpdateCancellation;
  bool managerUpdateBusy,managerUpdateChecked,managerCleanupBusy;
  string managerCleanupStatus="保留最近一次成功更新的完整回滚任务；仅清理已确认归属的旧任务和缓存。";
@@ -17,30 +18,53 @@ public partial class MainWindow
  TextBlock? managerProgress;
  void ShowManagerUpdates()
  {
-  var root=V(Header("MANAGER UPDATES","检查更新","查看尖塔修补站的新版本与更新内容，按需下载。"));Space(root,20);
-  var summary=V(Badge("当前版本  "+ManagerUpdates.CurrentVersion,gold),T(managerUpdateStatus,16,ink,true));Space(summary,16);
+  var root=V(Header("MANAGER UPDATES","检查更新","自行选择正式发布或 Beta 预发布，下载前核对版本内容。"));Space(root,16);
+  var channelTabs=new StackPanel{Orientation=Orientation.Horizontal};
+  foreach(var (name,channel) in new[]{("稳定版",ManagerUpdateChannel.Stable),("测试版 Beta",ManagerUpdateChannel.Beta)})
+  {
+   var selected=channel==managerUpdateChannel;
+   var tab=Btn(name,()=>SelectManagerUpdateChannel(channel),
+    selected?"ModSegmentActive":"ModSegment");
+   tab.Margin=new Thickness(0,0,4,0);tab.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy&&!busy&&!transactionWriting;
+   channelTabs.Children.Add(tab);
+  }
+  root.Children.Add(new Border{Child=channelTabs,HorizontalAlignment=HorizontalAlignment.Left,
+   Padding=new Thickness(4),CornerRadius=new CornerRadius(9),Background=B("#68304760")});
+  Space(root,8);
+  root.Children.Add(T(managerUpdateChannel==ManagerUpdateChannel.Stable?
+   "稳定版：仅检查正式 Release，推荐日常使用。":
+   "测试版：检查 GitHub Beta 预发布；可能包含未经过完整实机验证的改动。",12,muted));
+  Space(root,12);
+  var summary=V(Badge("当前已安装  v"+ManagerUpdates.CurrentReleaseVersion,gold),
+   T(managerUpdateStatus,15,ink,true));Space(summary,13);
   var check=Btn(managerUpdateBusy?"正在处理…":"检查更新",()=>_=CheckManagerUpdatesAsync(true),"Primary");check.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy;
-  summary.Children.Add(H(check,Btn("打开发布页",()=>OpenUrl(ManagerUpdates.RepositoryUrl+"/releases/latest"),"Ghost")));
+  summary.Children.Add(H(check,Btn("打开发布页",()=>OpenUrl(ManagerUpdates.RepositoryUrl+(managerUpdateChannel==ManagerUpdateChannel.Stable?"/releases/latest":"/releases")),"Ghost")));
   if(managerUpdateBusy&&managerUpdateCancellation!=null){Space(summary,10);summary.Children.Add(Btn("取消",()=>managerUpdateCancellation?.Cancel(),"Ghost"));}
   root.Children.Add(Card(summary));Space(root,20);
   if(managerRelease is { } release){
-   bool newer=ManagerUpdates.IsNewer(release,ManagerUpdates.CurrentVersion);
-   var details=V(T("正式版本  "+release.Version,22,ink,true),T("发布于 "+release.PublishedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")+" · Windows x64 · "+(release.Size/1024d/1024).ToString("F1")+" MB",12,muted));Space(details,18);
+   bool newer=ManagerUpdates.IsNewer(release);
+   bool canInstall=CanInstallManagerRelease(release);
+   var details=V(T((managerUpdateChannel==ManagerUpdateChannel.Beta?"Beta 测试版  ":"稳定版本  ")+release.Version,22,ink,true),T("发布于 "+release.PublishedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")+" · Windows x64 · "+(release.Size/1024d/1024).ToString("F1")+" MB",12,muted));Space(details,18);
    if(newer){
     var download=Btn("下载并更新",DownloadAndApplyManagerUpdate,"Primary");
-    download.IsEnabled=CanUpdateManager;
+    download.IsEnabled=CanUpdateManager&&canInstall;
     var alternate=Btn("备用官方通道更新",DownloadAndApplyManagerUpdateViaApi,"Ghost");
-    alternate.IsEnabled=CanUpdateManager;
+    alternate.IsEnabled=CanUpdateManager&&canInstall;
     var manual=Btn("仅下载 ZIP",DownloadManagerUpdate,"Ghost");manual.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy;
     var later=Btn("暂不更新",DeferManagerUpdate,"Ghost");later.IsEnabled=!managerUpdateBusy&&!managerCleanupBusy;
-    details.Children.Add(H(download,alternate,manual,later));
+    if(canInstall)details.Children.Add(H(download,alternate,manual,later));
+    else
+    {
+     details.Children.Add(T("此版本与当前安装的程序主版本相同。为保护更新事务，不能自动覆盖；可仅下载 ZIP 并手动另行解压。",12,gold));
+     details.Children.Add(H(manual,later));
+    }
     details.Children.Add(T("备用通道使用 GitHub 官方附件 API；可能仍走相同的下载网络，不保证提速。两种方式均验证 SHA-256。",11,muted));
    }
    Space(details,18);details.Children.Add(T("更新内容",17,ink,true));Space(details,8);details.Children.Add(T(release.Notes,13,muted));Space(details,12);
    details.Children.Add(Btn("查看此版本发布页",()=>OpenUrl(release.ReleaseUrl),"Ghost"));root.Children.Add(Card(details));Space(root,18);
   }
   managerProgress=T("",12,gold);root.Children.Add(managerProgress);
-  if(managerDownload!=null){var apply=Btn("安装此更新并重启",()=>_=InstallDownloadedManagerAsync(false),"Primary");apply.IsEnabled=CanUpdateManager;root.Children.Add(Card(V(T("更新包已下载并通过 SHA256 校验",17,green,true),T(managerDownload,12,muted),H(apply,Btn("打开下载文件夹",()=>OpenUrl(Path.GetDirectoryName(managerDownload)!),"Ghost")))));Space(root,18);}
+  if(managerDownload!=null){var apply=Btn("安装此更新并重启",()=>_=InstallDownloadedManagerAsync(false),"Primary");apply.IsEnabled=CanUpdateManager&&managerRelease!=null&&CanInstallManagerRelease(managerRelease);root.Children.Add(Card(V(T("更新包已下载并通过 SHA256 校验",17,green,true),T(managerDownload,12,muted),H(apply,Btn("打开下载文件夹",()=>OpenUrl(Path.GetDirectoryName(managerDownload)!),"Ghost")))));Space(root,18);}
   root.Children.Add(T("如何更新",17,ink,true));Space(root,8);
   root.Children.Add(T("选择“下载并更新”并确认后，下载、校验、备份、替换与重新打开会自动完成。安装路径、快捷方式、设置和缓存继续使用；游戏与模组文件不受影响。文件替换失败时会尝试恢复上一版。",13,muted));
   Space(root,10);root.Children.Add(Btn("查看管理器更新记录",()=>{string folder=Path.Combine(installer.DataRoot,"管理器更新");if(Directory.Exists(folder))OpenUrl(folder);else toast.Text="还没有管理器更新记录。";},"Ghost"));
@@ -53,6 +77,23 @@ public partial class MainWindow
   string resultPath=Path.Combine(installer.DataRoot,"管理器更新","最近结果.json");if(File.Exists(resultPath)){try{using var result=System.Text.Json.JsonDocument.Parse(File.ReadAllText(resultPath));Space(root,12);root.Children.Add(T("最近一次："+result.RootElement.GetProperty("message").GetString(),13,muted));}catch{}}
   SetPage("检查更新",root,restore:ShowManagerUpdates);toast.Text="更新由你确认；会保留程序备份和个人数据。";
  }
+ void SelectManagerUpdateChannel(ManagerUpdateChannel channel)
+ {
+  if(channel==managerUpdateChannel||!CanUpdateManager)return;
+  try{if(rememberEnvironment)ManagerUpdates.SaveChannel(installer.DataRoot,channel);}
+  catch(Exception e){managerUpdateStatus="更新通道偏好未保存："+e.Message;ShowManagerUpdates();return;}
+  managerUpdateChannel=channel;managerRelease=null;managerDownload=null;managerUpdateChecked=false;
+  managerUpdateStatus=channel==ManagerUpdateChannel.Beta?
+   "已切换到 Beta 测试版，尚未检查。":"已切换到稳定版，尚未检查。";
+  if(managerUpdateButton!=null)managerUpdateButton.Content="检查更新";
+  ShowManagerUpdates();
+  _=CheckManagerUpdatesAsync(true);
+ }
+ // The updater's worker enforces an increasing three-part assembly version.
+ // Same-core Beta -> stable or Beta -> Beta upgrades need an explicitly newer assembly.
+ bool CanInstallManagerRelease(ManagerRelease release)=>
+  ManagerUpdates.StableVersion(ManagerUpdates.CoreVersion(release.Version))>
+   ManagerUpdates.StableVersion(ManagerUpdates.CurrentVersion);
  void DeferManagerUpdate(){if(managerUpdateBusy||managerCleanupBusy)return;if(backHistory.Count>0)GoBack();else ShowOverview();}
  bool CanUpdateManager=>!managerUpdateBusy&&!managerCleanupBusy&&!busy&&!transactionWriting&&!onlineBusy;
  async void CleanupOldManagerFiles()
@@ -102,7 +143,7 @@ public partial class MainWindow
  async void DownloadAndApplyManagerUpdateViaApi()=>await DownloadAndApplyManagerUpdateCoreAsync(true);
  async Task DownloadAndApplyManagerUpdateCoreAsync(bool preferAssetApi)
  {
-  if(!CanUpdateManager||managerRelease==null||!ConfirmManagerUpdate())return;
+  if(!CanUpdateManager||managerRelease==null||!CanInstallManagerRelease(managerRelease)||!ConfirmManagerUpdate())return;
   try{var release=managerRelease;string destination=BundleInstaller.Child(installer.DataRoot,"管理器下载/"+release.FileName);Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
    await DownloadManagerUpdateToAsync(release,destination,preferAssetApi);
    if(managerDownload!=null)await InstallDownloadedManagerAsync(true);
@@ -110,7 +151,7 @@ public partial class MainWindow
  }
  async Task InstallDownloadedManagerAsync(bool confirmed)
  {
-  if(!CanUpdateManager||managerRelease==null||managerDownload==null||(!confirmed&&!ConfirmManagerUpdate()))return;
+  if(!CanUpdateManager||managerRelease==null||!CanInstallManagerRelease(managerRelease)||managerDownload==null||(!confirmed&&!ConfirmManagerUpdate()))return;
   var release=managerRelease;var archive=managerDownload;busy=true;transactionWriting=true;managerUpdateBusy=true;managerUpdateStatus="正在核对程序文件并准备更新…";ShowManagerUpdates();
   bool handoff=false;
   try{
@@ -123,12 +164,20 @@ public partial class MainWindow
  }
  async Task CheckManagerUpdatesAsync(bool showPage)
  {
-  if(managerUpdateBusy||managerCleanupBusy)return;managerUpdateBusy=true;managerUpdateChecked=true;managerRelease=null;managerDownload=null;managerUpdateStatus="正在检查正式发布…";managerUpdateCancellation=new();
+  if(managerUpdateBusy||managerCleanupBusy)return;
+  var channel=managerUpdateChannel;
+  managerUpdateBusy=true;managerUpdateChecked=true;managerRelease=null;managerDownload=null;
+  managerUpdateStatus=channel==ManagerUpdateChannel.Beta?"正在检查 Beta 预发布…":"正在检查稳定版…";
+  managerUpdateCancellation=new();
   if(showPage)ShowManagerUpdates();
   try{
-   managerRelease=await managerUpdates.CheckAsync(managerUpdateCancellation.Token);
-   int comparison=ManagerUpdates.StableVersion(managerRelease.Version).CompareTo(ManagerUpdates.StableVersion(ManagerUpdates.CurrentVersion));
-   managerUpdateStatus=comparison>0?"发现新版本，可以先查看更新内容，再决定是否下载。":comparison==0?"当前已是最新正式版本。":"当前版本高于仓库正式版本，无需降级。";
+   managerRelease=await managerUpdates.CheckAsync(channel,managerUpdateCancellation.Token);
+   int comparison=ManagerUpdates.CompareVersions(managerRelease.Version,ManagerUpdates.CurrentReleaseVersion);
+   managerUpdateStatus=comparison>0?
+    CanInstallManagerRelease(managerRelease)?"发现此通道的新版本，可先查看变更后选择更新。":
+     "发现同主版本的新构建；自动覆盖不受支持，可仅下载 ZIP 手动安装。":
+    comparison==0?"当前已是此通道的最新版本。":
+     "当前安装版本高于此通道提供的版本，不会自动降级。";
    if(managerUpdateButton!=null)managerUpdateButton.Content=comparison>0?"↑  发现 v"+managerRelease.Version:"检查更新";
   }catch(OperationCanceledException){managerUpdateStatus="检查已取消或超时，未改动程序。可以重试或打开发布页。";}
   catch(Exception e){managerUpdateStatus="检查未完成："+e.Message;}
@@ -136,7 +185,7 @@ public partial class MainWindow
  }
  async void DownloadManagerUpdate()
  {
-  if(managerUpdateBusy||managerCleanupBusy||managerRelease==null||!ManagerUpdates.IsNewer(managerRelease,ManagerUpdates.CurrentVersion))return;
+  if(managerUpdateBusy||managerCleanupBusy||managerRelease==null||!ManagerUpdates.IsNewer(managerRelease))return;
   var release=managerRelease;var save=new SaveFileDialog{Title="保存管理器更新包",FileName=release.FileName,Filter="ZIP 更新包|*.zip",DefaultExt=".zip",AddExtension=true};if(save.ShowDialog(this)!=true)return;
   await DownloadManagerUpdateToAsync(release,save.FileName);
  }

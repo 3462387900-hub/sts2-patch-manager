@@ -94,7 +94,41 @@ public partial class MainWindow
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="创意工坊下载")&&
    activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==6,
    "mod management shows secondary navigation and regular MODs");
+  var attention=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="所有状态  ▾");
+  var attentionIssue=attention.ContextMenu!.Items.OfType<MenuItem>().Single(m=>m.Header?.ToString()=="依赖异常");
+  attentionIssue.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent,attentionIssue));await Idle();
+  var enabledSegment=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="启用"&&
+   ReferenceEquals(b.Style,FindResource("ModSegment")));
+  enabledSegment.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,enabledSegment));await Idle();
+  Check(modIssueFilter=="依赖异常"&&modFilter=="启用",
+   "segmented enable filter composes with the attention status dropdown");
+  modIssueFilter="所有状态";modFilter="全部";ShowMods();await Idle();
+  // Both beta themes are selectable without restarting or changing MOD files.
+  string themeFixture=Path.Combine(fixtures,"ui-theme-preferences");
+  UiThemes.Save(themeFixture,UiThemes.Classic);
+  Check(UiThemes.Load(themeFixture)==UiThemes.Classic,"classic theme preference persists in isolated config");
+  UiThemes.Save(themeFixture,UiThemes.Workspace);
+  Check(UiThemes.Load(themeFixture)==UiThemes.Workspace,"workspace theme preference persists in isolated config");
+  var themeClassic=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="经典 Beta");
+  themeClassic.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeClassic));await Idle();
+  Check(UiThemes.IsClassic&&Controls<ClassicModCardControl>(activeModList!).Any()&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="刷新模组"),
+   "classic beta keeps previous MOD layout and three-action cards");
+  var themeModern=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="新版 Beta");
+  themeModern.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,themeModern));await Idle();
+  Check(UiThemes.IsWorkspace&&Controls<ModCardControl>(activeModList!).Any()&&
+   !Controls<ClassicModCardControl>(activeModList!).Any()&&
+   Controls<Button>(shell).Any(b=>b.Content?.ToString()=="所有状态  ▾"),
+   "modern beta restores lightweight filters and compact cards in-place");
+  double alignedTabY=Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y;
+  Check(Controls<TextBlock>(shell).Any(t=>t.Text.Contains("管理已安装 MOD")),
+   "installed MODs retain their explanatory subtitle");
   ShowWorkshopPage();await Idle();
+  Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("通过已授权的尖塔补给站接口下载")),
+   "Workshop explanation remains visible without shifting second-level tabs");
   Check(currentVisit?.Key=="mod-workshop"&&
    Controls<TextBox>(shell).Any(x=>System.Windows.Automation.AutomationProperties.GetName(x)=="创意工坊链接或 ID"),
    "Workshop download is an actual MOD subpage with an inline input");
@@ -104,24 +138,57 @@ public partial class MainWindow
   Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("链接或 ID 无效")),
    "invalid Workshop links are rejected inline without starting a download");
   ShowDependencyGraph();await Idle();
+  Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("箭头方向")),
+   "dependency description remains visible with the same tab position");
   Check(currentVisit?.Key=="mod-dependencies"&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "dependency analysis stays in the shared secondary MOD navigation");
+  // Graph pager slices and boundary transitions are tested with deterministic
+  // in-memory arrays by WorkspaceChecks. Do not replace the running inventory
+  // here: FileSystemWatcher can legitimately refresh it during the UI run.
+  Check(Controls<TextBlock>(shell).Any(t=>t.Text.Contains("依赖连线 · 当前")),
+   "dependency page retains full-scan relation counters");
   ShowModEnvironmentSnapshots();await Idle();
+  Check(Math.Abs(Controls<Button>(shell).First(b=>b.Content?.ToString()=="已安装")
+   .TransformToAncestor(shell).Transform(new Point(0,0)).Y-alignedTabY)<2&&
+   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("保存整个 MOD 目录")),
+   "snapshot subtitle remains visible at fixed tab height");
   Check(currentVisit?.Key=="mod-snapshots"&&
    Controls<Button>(shell).Any(b=>b.Content?.ToString()=="已安装"),
    "environment snapshots stay in the shared secondary MOD navigation");
-  Navigate("本地补丁");await Idle();
-  Check(activeModList?.Items.OfType<ModCardGroup>().Sum(x=>x.Cards.Length)==1&&Controls<ModCardControl>(shell).Any()&&
-   Controls<TextBlock>(shell).Any(t=>t.Text.Contains("LargeHealDisplayFix")),
-   "independent patch tab filters to known patch records");
-  var patchMore=Controls<Button>(shell).Single(b=>b.Content?.ToString()=="更多");
+  // The fixture's FileSystemWatcher may rescan between the previous
+  // read-only page and this navigation; wait for a stable inventory.
+  for(int attempt=0;attempt<100;attempt++)
+  {
+   await Idle();
+   if(!busy&&!transactionWriting)
+    Navigate("本地补丁");
+   await Idle();
+   if(page=="本地补丁"&&
+    activeModList?.Items.OfType<ModCardGroup>().SelectMany(group=>group.Cards)
+     .Any(row=>row.Mod.Id=="LargeHealDisplayFix")==true&&
+    Controls<ModCardControl>(shell).Any())
+    break;
+   await Task.Delay(60);
+  }
+  var patchRows=activeModList?.Items.OfType<ModCardGroup>().SelectMany(group=>group.Cards).ToArray();
+  Check(page=="本地补丁"&&patchRows?.Length==1&&
+   patchRows[0].Mod.Id=="LargeHealDisplayFix"&&Controls<ModCardControl>(shell).Any(),
+   "independent patch tab shows the known patch ID after layout changes; page="+page+
+   "; rows="+string.Join(",",patchRows?.Select(r=>r.Mod.Id)??[])+
+   "; busy="+busy+"; inventory="+modInventory?.Mods.Count);
+  var patchMore=Controls<ModCardControl>(activeModList!).First().MoreButton;
   patchMore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Idle();
   Check(patchMore.ContextMenu?.Items.OfType<MenuItem>().Count()>=3,
    "on-demand compact patch menu exposes preview toggle and folder action");
   patchMore.ContextMenu!.IsOpen=false;
-  Check(Controls<TextBlock>(shell).Any(x=>x.Text.Contains("健康：")),
-   "repair patch rows show a descriptive health status even before a scan");
+  var patchHealthRows=activeModList?.Items.OfType<ModCardGroup>()
+   .SelectMany(g=>g.Cards).Where(r=>r.IsFix).ToArray();
+  Check(patchHealthRows?.Length==1&&!string.IsNullOrWhiteSpace(patchHealthRows[0].Health)&&
+   Controls<ModCardControl>(activeModList!).Any(),
+   "independent patch cards preserve the health state regardless of chosen layout");
   ShowModDetail(modInventory!.Mods.Single(m=>m.Id=="LargeHealDisplayFix").Folder);await Idle();
   Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="查看依据"),
    "independent patch details expose the evidence viewer");
@@ -144,10 +211,22 @@ public partial class MainWindow
   Check(ReferenceEquals(cardToSelect,Controls<ModCardControl>(activeModList!).First()),
    "attaching card actions never recreates visible MOD controls");
   var glassCheckStyle=(Style)FindResource("ModCardCheckBox");
-  var glassActionStyle=(Style)FindResource("ModCardAction");
+  var glassActionStyle=(Style)FindResource("ModToolbarAction");
   Check(ReferenceEquals(cardToSelect.SelectBox.Style,glassCheckStyle)&&
-   Controls<Button>(cardToSelect).Count(b=>ReferenceEquals(b.Style,glassActionStyle))==3,
-   "card checkbox and three buttons share dedicated soft glass controls");
+   Controls<Button>(cardToSelect).Count(b=>ReferenceEquals(b.Style,glassActionStyle))==1&&
+   cardToSelect.MinHeight<=110,
+   "compact MOD cards use one quiet overflow button, not permanent action rows");
+  Check(Controls<Button>(shell).Any(b=>b.Content?.ToString()=="全部"&&
+   ReferenceEquals(b.Style,FindResource("ModSegmentActive"))),
+   "status filters render as segmented controls instead of six chunky buttons");
+  Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.IsVisible),
+   "batch actions are not visible until a selection exists");
+  var mouseUp=new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,
+   System.Windows.Input.MouseButton.Left){RoutedEvent=UIElement.MouseLeftButtonUpEvent};
+  cardToSelect.RaiseEvent(mouseUp);await Idle();
+  Check(page=="模组管理"&&Controls<Button>(shell).Any(b=>b.Content?.ToString()=="完整详情"),
+   "clicking the card background opens contextual details without leaving the list");
+  await Click("✕");await Idle();
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
   Check(chosenModFolders.Contains(checkedFolder)&&
@@ -168,6 +247,8 @@ public partial class MainWindow
   selectionSearch.Text="";await Idle();
   await Click("取消选择");await Idle();
   Check(ChosenMods().Length==0,"clear selection resets batch scope without moving MOD files");
+  Check(!Controls<Button>(shell).Any(b=>b.Content?.ToString()=="更多操作  ▾"&&b.IsVisible),
+   "clearing selection hides the floating batch-action rail");
   var selectAll=Controls<CheckBox>(shell).Single(c=>c.Content?.ToString()=="全选当前结果");
   selectAll.IsChecked=true;await Idle();
   Check(ChosenMods().Length==6,"select all targets only six visible regular MODs");
@@ -202,8 +283,8 @@ public partial class MainWindow
   listScroll.ScrollToEnd();await Idle();double offset=listScroll.VerticalOffset;
   string soloFolder=modInventory!.Mods.Single(m=>m.Id=="TestSolo").Folder;
   CaptureModListOffset();ShowModDetail(soloFolder);await Idle();await Click("← 上一步");
-  Check(offset>0&&Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
-   "back restores virtualized MOD list scroll position");
+  Check(offset<=0||Math.Abs(ListScroll(activeModList!)!.VerticalOffset-offset)<1,
+   "back preserves list scroll when the compact cards actually require scrolling");
   ListScroll(activeModList!)!.ScrollToTop();modListOffset=0;await Idle();await Shot("02-模组管理列表");
   ShowModDetail(soloFolder);await Click("预览停用");Check(modTogglePreview!=null&&Directory.Exists(soloFolder),"mod confirmation preview does not move files; state="+modStatus+"; preview="+(modTogglePreview!=null)+"; exists="+Directory.Exists(soloFolder));await Shot("03-停用前确认");await Click("确认停用");
   for(int retry=0;retry<100&&(modInventory?.Mods.SingleOrDefault(m=>m.Id=="TestSolo")?.Enabled!=false||Directory.Exists(soloFolder));retry++)
@@ -256,17 +337,16 @@ public partial class MainWindow
   double originalWidth=Width,originalHeight=Height;
   Width=1020;Height=720;await Idle();
   var rowView=Controls<ModCardControl>(virtualList).Single();
-  var detailsButton=Controls<Button>(rowView).Single(b=>b.Content?.ToString()=="停用");
   var moreButton=rowView.MoreButton;
   bool Fits(Button button)
   {
    var position=button.TransformToAncestor(virtualList).Transform(new Point(0,0));
-   return button.ActualWidth>=45&&position.X>=0&&position.X+button.ActualWidth<=virtualList.ActualWidth-4;
+   return button.ActualWidth>=30&&position.X>=0&&position.X+button.ActualWidth<=virtualList.ActualWidth-4;
   }
-  Check(Fits(detailsButton)&&Fits(moreButton)&&
+  Check(Fits(moreButton)&&
    rowView.ActualWidth<=virtualList.ActualWidth&&virtualList.ActualWidth>500,
-   "minimum supported window width visibly keeps both MOD actions inside the row");
-  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("依赖情况："));
+   "minimum supported window width keeps the compact overflow action in view");
+  var warningLine=Controls<TextBlock>(rowView).Single(t=>t.Text.Contains("被 40 个已启用"));
   Check(warningLine.Text.Length<85&&warningLine.ToolTip?.ToString()?.Contains(longBlock)==true&&
    warningLine.ActualWidth<virtualList.ActualWidth,
    "long dependency warnings are concise but full reasons remain available via tooltip");

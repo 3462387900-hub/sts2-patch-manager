@@ -21,7 +21,10 @@ internal static class ModDependencyGraphPresentation
 
 public partial class MainWindow
 {
-    void ShowDependencyGraph(string filter = "全部关系")
+    ModInventory? dependencyCacheInventory;
+    ModDependencyGraphReport? dependencyCacheReport;
+
+    void ShowDependencyGraph(string filter = "全部关系", int requestedPage = 1)
     {
         if (selectedInstallRoot is null || modInventory is null)
         {
@@ -29,12 +32,15 @@ public partial class MainWindow
             return;
         }
 
-        var report = ModDependencyGraph.Analyze(modInventory);
-        var root = V(Header(
-            "MOD DEPENDENCY MAP",
-            "依赖关系图",
+        // The scan instance changes after refresh; filter/page navigation reuses analysis.
+        if (!ReferenceEquals(dependencyCacheInventory, modInventory) || dependencyCacheReport is null)
+        {
+            dependencyCacheInventory = modInventory;
+            dependencyCacheReport = ModDependencyGraph.Analyze(modInventory);
+        }
+        var report = dependencyCacheReport;
+        var root = V(ModWorkspaceHeader("依赖关系图",
             "箭头方向：前置模组 → 依赖它的 MOD。只分析清单声明和已收录修复补丁的兼容规则，不推断未声明依赖。"));
-        Space(root, 10);
         root.Children.Add(ModWorkspaceTabs("依赖关系"));
         root.Children.Add(H(Btn("重新扫描", RefreshMods, "Ghost")));
         Space(root, 12);
@@ -99,13 +105,15 @@ public partial class MainWindow
         {
             var cyclePanel = V(T("循环依赖", 16, ink, true),
                 T("以下 MOD 形成闭环。管理器不会擅自决定应该移除哪一条依赖。", 12, muted));
-            foreach (var cycle in visibleCycles)
+            foreach (var cycle in visibleCycles.Take(6))
             {
                 cyclePanel.Children.Add(Card(V(
                     T(string.Join("  ↔  ", cycle.Names), 14, gold, true),
                     T(string.Join(" · ", cycle.ModIds), 11, muted)), padding: 12));
                 Space(cyclePanel, 6);
             }
+            if (visibleCycles.Length > 6)
+                cyclePanel.Children.Add(T($"共 {visibleCycles.Length} 组循环依赖；仅预览前 6 组，所有异常关系仍可通过下方分页查看。", 12, muted));
             root.Children.Add(Card(cyclePanel, padding: 14));
             Space(root, 12);
         }
@@ -121,8 +129,43 @@ public partial class MainWindow
         };
 
         var visible = filtered.ToArray();
-        root.Children.Add(T($"依赖连线 · 显示 {visible.Length} / {report.Edges.Length} 条", 15, ink, true));
+        int page = ModDependencyPaging.Clamp(requestedPage, visible.Length);
+        int pageCount = ModDependencyPaging.Count(visible.Length);
+        var pageEdges = ModDependencyPaging.Items(visible, page);
+        root.Children.Add(T($"依赖连线 · 当前 {visible.Length} / {report.Edges.Length} 条 · 本页 {pageEdges.Length} 条", 15, ink, true));
         Space(root, 8);
+
+        UIElement Pager()
+        {
+            var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 9) };
+            var prev = Btn("← 上一页", () => ShowDependencyGraph(filter, page - 1), UiThemes.IsClassic ? "Ghost" : "ModToolbarAction");
+            prev.IsEnabled = page > 1;
+            prev.Margin = new Thickness(0, 0, 7, 0);
+            buttons.Children.Add(prev);
+            var counter = T($"第 {page} / {pageCount} 页", 12, muted);
+            counter.Margin = new Thickness(0, 7, 9, 0);
+            buttons.Children.Add(counter);
+            var jump = new ComboBox
+            {
+                Width = 76,
+                MinHeight = 30,
+                ItemsSource = Enumerable.Range(1, pageCount).ToArray(),
+                SelectedItem = page,
+                ToolTip = "跳转到指定页"
+            };
+            jump.SelectionChanged += (_, _) =>
+            {
+                if (jump.SelectedItem is int target && target != page)
+                    ShowDependencyGraph(filter, target);
+            };
+            jump.Margin = new Thickness(0, 0, 8, 0);
+            buttons.Children.Add(jump);
+            var next = Btn("下一页 →", () => ShowDependencyGraph(filter, page + 1), UiThemes.IsClassic ? "Ghost" : "ModToolbarAction");
+            next.IsEnabled = page < pageCount;
+            buttons.Children.Add(next);
+            return buttons;
+        }
+        if (pageCount > 1) root.Children.Add(Pager());
 
         if (visible.Length == 0)
         {
@@ -134,7 +177,7 @@ public partial class MainWindow
                     : "可以切换筛选条件查看其他依赖关系。", 12, muted)), padding: 18));
         }
 
-        foreach (var edge in visible)
+        foreach (var edge in pageEdges)
         {
             string status = edge.IsCycle
                 ? "循环依赖"
@@ -194,13 +237,19 @@ public partial class MainWindow
             Space(root, 5);
         }
 
+        if (pageCount > 1)
+        {
+            Space(root, 8);
+            root.Children.Add(Pager());
+        }
+
         root.Children.Add(Card(V(
             T("状态说明", 14, ink, true),
             T("已满足：前置已安装、启用，且满足清单声明的版本范围。", 12, muted),
             T("前置未安装 / 前置已停用：对已启用 MOD 属于当前环境异常；对停用 MOD 则是启用前待处理项。", 12, muted),
             T("版本不符 / 版本无法核对 / ID 重复：不能确认依赖条件成立。循环依赖单独标出。", 12, muted)), padding: 14));
 
-        SetPage("模组管理", root, "mod-dependencies", () => ShowDependencyGraph(filter));
+        SetPage("模组管理", root, "mod-dependencies", () => ShowDependencyGraph(filter, page));
     }
 
     StackPanel DependencyMetric(string value, string label)

@@ -64,18 +64,18 @@ public static class ManagerAutoUpdate
   Require(!File.Exists(Path.Combine(root,"SlayTheSpire2.exe")),"请将管理器单独解压到文件夹后再自动更新。");
   Require(!fixture||File.Exists(Child(root,FixtureMarker)),"自动更新测试只能使用带标记的隔离目录。");
   var previous=ReadManifest(root,fixture?null:ManagerUpdates.CurrentVersion,fixture);
-  Require(ManagerUpdates.IsNewer(release,previous.Version),"目标版本不高于当前版本，不能自动更新。");VerifyFiles(root,previous.Files,ct);
+  Require(ManagerUpdates.StableVersion(ManagerUpdates.CoreVersion(release.Version))>ManagerUpdates.StableVersion(previous.Version),"目标程序版本不高于当前版本，不能自动覆盖或降级。");VerifyFiles(root,previous.Files,ct);
   Require(new FileInfo(archive).Length==release.Size&&Catalog.Hash(archive).Equals(release.Sha256,StringComparison.OrdinalIgnoreCase),"更新 ZIP 校验失败，请重新下载。");
   string job=Child(root,"数据/管理器更新/"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(job);string payload=Child(job,"payload");Directory.CreateDirectory(payload);
   try{
-   Extract(archive,payload,release.Version,ct);var next=ReadManifest(payload,release.Version,fixture);VerifyFiles(payload,next.Files,ct);
+   string targetVersion=ManagerUpdates.CoreVersion(release.Version);Extract(archive,payload,targetVersion,ct);var next=ReadManifest(payload,targetVersion,fixture);VerifyFiles(payload,next.Files,ct);
    var actual=Directory.EnumerateFiles(payload,"*",SearchOption.AllDirectories).Select(p=>Path.GetRelativePath(payload,p).Replace('\\','/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
    Require(actual.SetEquals(next.Files.Keys.Append(ManifestName)),"更新包包含未列入清单的文件。");
    var oldFiles=new Dictionary<string,string>(previous.Files,StringComparer.OrdinalIgnoreCase){[ManifestName]=Catalog.Hash(Child(root,ManifestName))};
    var newFiles=new Dictionary<string,string>(next.Files,StringComparer.OrdinalIgnoreCase){[ManifestName]=Catalog.Hash(Child(payload,ManifestName))};
    var files=oldFiles.Keys.Union(newFiles.Keys,StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).Select(name=>new ManagerUpdateFile(name,oldFiles.GetValueOrDefault(name),newFiles.GetValueOrDefault(name))).ToArray();
    foreach(var file in files)if(file.OldHash==null)Require(!File.Exists(Child(root,file.Path))&&!Directory.Exists(Child(root,file.Path)),"新版文件位置被已有内容占用："+file.Path);
-   using var current=Process.GetCurrentProcess();var request=new ManagerUpdateRequest(1,root,previous.Version,release.Version,current.Id,current.StartTime.ToUniversalTime().Ticks,files,fixture);
+   using var current=Process.GetCurrentProcess();var request=new ManagerUpdateRequest(1,root,previous.Version,ManagerUpdates.CoreVersion(release.Version),current.Id,current.StartTime.ToUniversalTime().Ticks,files,fixture);
    string requestPath=Child(job,"request.json");File.WriteAllText(requestPath,JsonSerializer.Serialize(request,Json),new UTF8Encoding(false));
    using var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("SpirePatch.ManagerUpdateWorker.ps1")!;using var reader=new StreamReader(stream);string script=Child(job,"UpdateWorker.ps1");File.WriteAllText(script,reader.ReadToEnd(),new UTF8Encoding(true));
    string requestHash=Catalog.Hash(requestPath);

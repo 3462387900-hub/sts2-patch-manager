@@ -28,12 +28,19 @@ internal static class ModListView
    dependency?.Invoke(mod)??"未分析",dependencyIssue?.Invoke(mod)??false))
   .OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
 
- internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query)=>
+ // State (enabled/disabled) and attention filters compose instead of competing.
+ // Preserve the original four-argument API for existing callers.
+ internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query,
+  string attention="所有状态")=>
   rows.Where(row=>row.IsFix==(section=="修复补丁")&&
    (state=="全部"||(state=="启用"&&row.Mod.Enabled)||(state=="停用"&&!row.Mod.Enabled)||
    (state=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
    (state=="有问题"&&row.BlockReason!=null)||
    (state=="依赖异常"&&row.DependencyIssue))&&
+   (attention=="所有状态"||
+    (attention=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
+    (attention=="有问题"&&row.BlockReason!=null)||
+    (attention=="依赖异常"&&row.DependencyIssue))&&
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
   .ToArray();
 
