@@ -86,15 +86,15 @@ public partial class MainWindow
 
   var header=new Border{
    Background=SpireGlassTheme.GlassPanel(),BorderBrush=SpireGlassTheme.PanelStroke(),
-   BorderThickness=new Thickness(0,0,0,1),Padding=new Thickness(16,9,14,9)
+   BorderThickness=new Thickness(0,0,0,1),Padding=new Thickness(18,11,16,11)
   };
   var headerGrid=new Grid();
-  headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(178)});
+  headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(184)});
   headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   var brand=new StackPanel{VerticalAlignment=VerticalAlignment.Center};
-  brand.Children.Add(AtlasText("SPIRE REPAIR STATION",11,AtlasBrass,true));
-  brand.Children.Add(AtlasText("尖塔修补站  /  ATLAS",16,AtlasInk,true));
+  brand.Children.Add(AtlasText("SPIRE REPAIR STATION",12,AtlasBrass,true));
+  brand.Children.Add(AtlasText("尖塔修补站  /  ATLAS",18,AtlasInk,true));
   headerGrid.Children.Add(brand);
 
   var nav=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
@@ -105,15 +105,15 @@ public partial class MainWindow
    var button=AtlasButton(label,()=>AtlasNativeNavigate(key),"nav");
    button.Padding=new Thickness(7,7,7,7);
    button.Margin=new Thickness(0,0,1,0);
-   button.FontSize=12;
-   button.MinWidth=52;
+   button.FontSize=13;
+   button.MinWidth=54;
    atlasNativeNavButtons[key]=button;
    nav.Children.Add(button);
   }
   Grid.SetColumn(nav,1);headerGrid.Children.Add(nav);
 
   var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
-  var gameInfo=new StackPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,8,0),MaxWidth=140};
+  var gameInfo=new StackPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,8,0),MaxWidth=155};
   atlasNativeGameState=AtlasText("尚未定位游戏",11,AtlasMuted,true);
   atlasNativeGamePath=AtlasText("选择游戏目录以开始",11,AtlasMuted);
   atlasNativeGamePath.TextTrimming=TextTrimming.CharacterEllipsis;
@@ -129,7 +129,7 @@ public partial class MainWindow
   Grid.SetColumn(actions,2);headerGrid.Children.Add(actions);
   header.Child=headerGrid;Grid.SetRow(header,0);root.Children.Add(header);
 
-  var body=new Grid{Margin=new Thickness(20,17,20,10)};
+  var body=new Grid{Margin=new Thickness(22,19,22,12)};
   body.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   body.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
   atlasNativePageHost=new ContentControl();
@@ -205,9 +205,9 @@ public partial class MainWindow
   root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   root.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   var stack=new StackPanel();
-  stack.Children.Add(AtlasText(eyebrow.ToUpperInvariant(),10,AtlasBrass,true));
-  var titleText=AtlasText(title,25,AtlasInk,true);titleText.Margin=new Thickness(0,3,0,2);stack.Children.Add(titleText);
-  stack.Children.Add(AtlasText(subtitle,12,AtlasMuted));
+  stack.Children.Add(AtlasText(eyebrow.ToUpperInvariant(),11,AtlasBrass,true));
+  var titleText=AtlasText(title,29,AtlasInk,true);titleText.Margin=new Thickness(0,4,0,3);stack.Children.Add(titleText);
+  stack.Children.Add(AtlasText(subtitle,14,AtlasMuted));
   root.Children.Add(stack);
   if(actions.Length>0){
    var panel=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
@@ -441,11 +441,11 @@ public partial class MainWindow
  Border AtlasStat(string value,string label,string note)
  {
   var stack=new StackPanel();
-  stack.Children.Add(AtlasText(value,27,AtlasInk,true));
-  stack.Children.Add(AtlasText(label,12,AtlasMuted,true));
-  stack.Children.Add(AtlasText(note,10,AtlasMuted));
-  var panel=AtlasPanel(stack,14,"#1B1F24");
-  panel.Width=170;panel.Margin=new Thickness(0,0,10,0);
+  stack.Children.Add(AtlasText(value,31,AtlasInk,true));
+  stack.Children.Add(AtlasText(label,14,AtlasMuted,true));
+  stack.Children.Add(AtlasText(note,12,AtlasMuted));
+  var panel=AtlasPanel(stack,16,"#1B1F24");
+  panel.Width=190;panel.Margin=new Thickness(0,0,12,0);
   return panel;
  }
 
