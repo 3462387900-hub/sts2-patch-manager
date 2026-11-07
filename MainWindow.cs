@@ -139,7 +139,9 @@ public partial class MainWindow : Window
     if(atlasNativeBody!=null)atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(0);
    }
    var frame=new Grid();
+   bool showPatchTabs=IsPatchCenterPage(active)&&active!="本地补丁";
    frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+   if(showPatchTabs)frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
    frame.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
    var breadcrumb=new Border{
     Background=SpireGlassTheme.GlassPanel("#A91E2B3A"),
@@ -157,6 +159,14 @@ public partial class MainWindow : Window
    back.Padding=new Thickness(10,5,10,5);
    Grid.SetColumn(back,1);breadcrumbGrid.Children.Add(back);
    breadcrumb.Child=breadcrumbGrid;frame.Children.Add(breadcrumb);
+   int contentRow=1;
+   if(showPatchTabs)
+   {
+    var tabs=PatchCenterTabs(active);
+    tabs.Margin=new Thickness(0,0,0,10);
+    Grid.SetRow(tabs,1);frame.Children.Add(tabs);
+    contentRow=2;
+   }
    UIElement pageContent=element;
    if((active is "模组管理" or "本地补丁")&&element is Grid modPage)
     modPage.Height=Math.Max(440,atlasNativePageHost.ActualHeight-58);
@@ -165,7 +175,7 @@ public partial class MainWindow : Window
      Content=element,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
      HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,CanContentScroll=true
     };
-   Grid.SetRow(pageContent,1);frame.Children.Add(pageContent);
+   Grid.SetRow(pageContent,contentRow);frame.Children.Add(pageContent);
    atlasNativePageHost.Content=frame;
    Content=atlasNativeRoot;
    UpdateAtlasNativeHeader();
