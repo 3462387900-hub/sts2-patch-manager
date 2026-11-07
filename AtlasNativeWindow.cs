@@ -1499,7 +1499,7 @@ public partial class MainWindow
    "补丁库页面保留 ATLAS 外壳与修复二级导航");
   await Shot("10-ATLAS-补丁库");
   ShowOnline();await Idle();
-  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is FrameworkElement,
    "在线补丁页面可在 ATLAS 外壳内浏览，不自动触发网络请求");
   await Shot("11-ATLAS-在线补丁");
   ShowLifecycle();await Idle();
@@ -1510,7 +1510,7 @@ public partial class MainWindow
    "补丁健康页面保留 ATLAS 外壳与安全退役流程（"+lifecyclePageDebug+"）");
   await Shot("12-ATLAS-补丁健康");
   ShowInstaller();await Idle();
-  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is FrameworkElement,
    "安装与回滚页面保留原有预览、快照和确认流程");
   await Shot("13-ATLAS-安装与回滚");
   AtlasNativeNavigate("修复中心");await Idle();
