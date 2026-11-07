@@ -66,6 +66,7 @@ public partial class App : Application
             if(e.Args.Contains("--capture-coop")) { await window.CheckCoopAsync(e.Args.Last(),true); Shutdown(); }
             if(e.Args.Contains("--capture-updates")) { await window.CaptureUpdateChecksAsync(e.Args.Last()); Shutdown(); }
             if(e.Args.Contains("--capture-workspace")) { await window.CaptureWorkspaceAsync(e.Args[1],e.Args[2]); Shutdown(); }
+            if(e.Args.Contains("--capture-atlas-native")) { await window.CaptureAtlasNativeAsync(e.Args[1],e.Args[2]); Shutdown(); }
             if(e.Args.Contains("--capture-mods")) { await window.CaptureLiveModsAsync(e.Args[1],e.Args[2]); Shutdown(); }
             if(e.Args.Contains("--capture-selection")) { await window.CaptureSelectionAsync(e.Args[1],e.Args[2],e.Args[3]); Shutdown(); }
             if(e.Args.Contains("--capture-maintenance")) { await window.CaptureMaintenanceAsync(e.Args[1],e.Args[2],e.Args[3]); Shutdown(); }
