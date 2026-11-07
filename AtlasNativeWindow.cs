@@ -612,51 +612,87 @@ public partial class MainWindow
   return result.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
  }
 
+ bool AtlasNativeToggleAllowed(ManagedMod mod,out string? reason)
+ {
+  reason=null;
+  if(selectedInstallRoot==null){reason="尚未选择游戏目录。";return false;}
+  if(modInventory==null){reason="MOD 清单尚未读取。";return false;}
+  if(modInventoryDirty){reason="MOD 文件发生变化，请刷新后再操作。";return false;}
+  try
+  {
+   reason=ModManager.BlockReason(selectedInstallRoot,mod,modInventory);
+   return reason==null&&!busy&&!transactionWriting;
+  }
+  catch(Exception ex){reason=ex.Message;return false;}
+ }
+
  Border BuildAtlasNativeModCard(AtlasNativeModRow row)
  {
+  bool canToggle=AtlasNativeToggleAllowed(row.Mod,out string? blocked);
   var outer=new Border{
-   Width=278,MinHeight=158,Margin=new Thickness(0,0,11,11),
-   Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#343A41"),
-   BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(11),Padding=new Thickness(13),
+   Width=365,MinHeight=218,Margin=new Thickness(0,0,13,13),
+   Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#43505D"),
+   BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15),
    Cursor=Cursors.Hand
   };
   var root=new Grid();
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
-  var top=new Grid();top.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-  var title=AtlasText(row.Name,14,AtlasInk,true);title.TextTrimming=TextTrimming.CharacterEllipsis;title.MaxWidth=205;top.Children.Add(title);
-  var check=new CheckBox{Style=(Style)FindResource("ModCardCheckBox"),IsChecked=row.IsSelected,VerticalAlignment=VerticalAlignment.Top,Foreground=AtlasBrass,ToolTip="加入批量选择"};
+  var top=new Grid();
+  top.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  var title=AtlasText(row.Name,16,AtlasInk,true);
+  title.TextTrimming=TextTrimming.CharacterEllipsis;title.MaxWidth=300;
+  title.ToolTip=row.Name;top.Children.Add(title);
+  var check=new CheckBox{
+   Style=(Style)FindResource("ModCardCheckBox"),IsChecked=row.IsSelected,
+   VerticalAlignment=VerticalAlignment.Top,Foreground=AtlasBrass,ToolTip="加入批量选择"
+  };
   check.Checked+=(_,_)=>{row.IsSelected=true;UpdateAtlasNativeSelection();};
   check.Unchecked+=(_,_)=>{row.IsSelected=false;UpdateAtlasNativeSelection();};
   Grid.SetColumn(check,1);top.Children.Add(check);root.Children.Add(top);
 
-  var details=new StackPanel{Margin=new Thickness(0,10,0,8)};
-  details.Children.Add(AtlasText(row.Meta,10,AtlasMuted));
-  details.Children.Add(AtlasText("版本  "+row.Version+"    ·    "+row.Source,11,AtlasMuted));
-  var status=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
+  var details=new StackPanel{Margin=new Thickness(0,11,0,11)};
+  details.Children.Add(AtlasText(row.Id+"  ·  "+row.Author,11,AtlasMuted));
+  details.Children.Add(AtlasText("版本 "+row.Version+"    来源 "+row.Source,13,AtlasInk));
+  string description=string.IsNullOrWhiteSpace(row.Description)?"作者未提供简介。":row.Description;
+  var desc=AtlasText(description,12,AtlasMuted);desc.MaxHeight=38;desc.TextTrimming=TextTrimming.CharacterEllipsis;
+  desc.Margin=new Thickness(0,5,0,0);details.Children.Add(desc);
+  var status=new WrapPanel{Margin=new Thickness(0,9,0,0)};
   status.Children.Add(AtlasBadge(row.State,row.Mod.Enabled?"ok":"neutral"));
   status.Children.Add(AtlasBadge(row.UpdateStatus,row.HasUpdate?"warn":"neutral"));
   details.Children.Add(status);
+  if(blocked!=null){
+   var reason=AtlasText(blocked,11,AtlasRed);reason.Margin=new Thickness(0,6,0,0);
+   reason.MaxHeight=34;details.Children.Add(reason);
+  }
   Grid.SetRow(details,1);root.Children.Add(details);
-  var open=AtlasButton("查看详情  →",()=>ShowAtlasNativeModInspector(row),"quiet");
-  open.HorizontalAlignment=HorizontalAlignment.Left;Grid.SetRow(open,2);root.Children.Add(open);
+
+  var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
+  var toggle=AtlasButton(row.Mod.Enabled?"预览停用":"预览启用",
+   ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(row.Mod)),row.Mod.Enabled?"quiet":"primary");
+  toggle.IsEnabled=canToggle;toggle.Margin=new Thickness(0,0,7,0);
+  actions.Children.Add(toggle);
+  var open=AtlasButton("查看详情",()=>ShowAtlasNativeModInspector(row),"quiet");
+  actions.Children.Add(open);
+  Grid.SetRow(actions,2);root.Children.Add(actions);
   outer.Child=root;
-  outer.MouseEnter+=(_,_)=>outer.BorderBrush=AtlasBrush("#8A704B");
-  outer.MouseLeave+=(_,_)=>outer.BorderBrush=AtlasBrush("#343A41");
+  outer.MouseEnter+=(_,_)=>outer.BorderBrush=AtlasBrush("#A98B5B");
+  outer.MouseLeave+=(_,_)=>outer.BorderBrush=AtlasBrush("#43505D");
   return outer;
  }
 
  DataGrid BuildAtlasNativeDataGrid(AtlasNativeModRow[] rows)
  {
   var grid=new DataGrid{
-   ItemsSource=rows,Height=Math.Max(300,Math.Min(560,ActualHeight>0?ActualHeight-300:460)),
+   ItemsSource=rows,Height=Math.Max(340,Math.Min(640,ActualHeight>0?ActualHeight-285:500)),
    AutoGenerateColumns=false,CanUserAddRows=false,CanUserDeleteRows=false,
    IsReadOnly=true,SelectionMode=DataGridSelectionMode.Single,SelectionUnit=DataGridSelectionUnit.FullRow,
    HeadersVisibility=DataGridHeadersVisibility.Column,GridLinesVisibility=DataGridGridLinesVisibility.None,
    Background=AtlasBrush("#191D22"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#30363D"),
    BorderThickness=new Thickness(1),RowBackground=AtlasBrush("#1B1F24"),
-   AlternatingRowBackground=AtlasBrush("#20242A"),RowHeight=52,
+   AlternatingRowBackground=AtlasBrush("#20242A"),RowHeight=62,
    EnableRowVirtualization=true,EnableColumnVirtualization=true
   };
   VirtualizingPanel.SetIsVirtualizing(grid,true);
@@ -668,7 +704,7 @@ public partial class MainWindow
   headerStyle.Setters.Add(new Setter(Control.BorderBrushProperty,AtlasBrush("#343A41")));
   headerStyle.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0,0,0,1)));
   headerStyle.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(10,9,10,9)));
-  headerStyle.Setters.Add(new Setter(Control.FontSizeProperty,11d));
+  headerStyle.Setters.Add(new Setter(Control.FontSizeProperty,13d));
   headerStyle.Setters.Add(new Setter(Control.FontWeightProperty,FontWeights.SemiBold));
   grid.ColumnHeaderStyle=headerStyle;
   var rowStyle=new Style(typeof(DataGridRow));
@@ -680,7 +716,8 @@ public partial class MainWindow
   var cellStyle=new Style(typeof(DataGridCell));
   cellStyle.Setters.Add(new Setter(Control.ForegroundProperty,AtlasInk));
   cellStyle.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0)));
-  cellStyle.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(9,5,9,5)));
+  cellStyle.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(11,7,11,7)));
+  cellStyle.Setters.Add(new Setter(Control.FontSizeProperty,13d));
   cellStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty,VerticalAlignment.Center));
   grid.CellStyle=cellStyle;
 
