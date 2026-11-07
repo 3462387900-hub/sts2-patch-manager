@@ -1375,7 +1375,12 @@ public partial class MainWindow
   ShowModDetail(solo.Folder);await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
    "现有 MOD 完整详情可嵌入 ATLAS 外壳，不切换到旧版主界面");
-  AtlasNativeNavigate("模组库");await Idle();
+  AtlasNativeNavigate("模组库");
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePage=="模组库",
+   "从完整 MOD 详情返回原生模组库时同步切换页面状态");
+  await Idle();
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is ScrollViewer,
+   "模组库返回后的异步布局稳定");
 
   AtlasNativeNavigate("修复中心");await Idle();
   var localPatches=modInventory!.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
