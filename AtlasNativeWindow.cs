@@ -655,7 +655,7 @@ public partial class MainWindow
  {
   bool canToggle=AtlasNativeToggleAllowed(row.Mod,out string? blocked);
   var outer=new Border{
-   Width=365,MinHeight=218,Margin=new Thickness(0,0,13,13),
+   Width=390,MinHeight=225,Margin=new Thickness(0,0,13,13),
    Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#43505D"),
    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15),
    Cursor=Cursors.Hand
@@ -679,8 +679,10 @@ public partial class MainWindow
   Grid.SetColumn(check,1);top.Children.Add(check);root.Children.Add(top);
 
   var details=new StackPanel{Margin=new Thickness(0,11,0,11)};
-  details.Children.Add(AtlasText(row.Id+"  ·  "+row.Author,11,AtlasMuted));
-  details.Children.Add(AtlasText("版本 "+row.Version+"    来源 "+row.Source,13,AtlasInk));
+  details.Children.Add(AtlasText(row.Id+"  ·  "+row.Author,12,AtlasMuted));
+  details.Children.Add(AtlasText("版本 "+row.Version+"    来源 "+row.Source,14,AtlasInk));
+  if(row.WorkshopId.Length>0)details.Children.Add(AtlasText("Workshop ID  "+row.WorkshopId,11,AtlasMuted));
+  if(row.GitHubRepository.Length>0)details.Children.Add(AtlasText("GitHub  "+row.GitHubRepository,11,AtlasMuted));
   string description=string.IsNullOrWhiteSpace(row.Description)?"作者未提供简介。":row.Description;
   var desc=AtlasText(description,12,AtlasMuted);desc.MaxHeight=38;desc.TextTrimming=TextTrimming.CharacterEllipsis;
   desc.Margin=new Thickness(0,5,0,0);details.Children.Add(desc);
