@@ -192,8 +192,13 @@ public partial class MainWindow : Window
  string AtlasNativeSectionForPage(string active,string? key)
  {
   if(key?.StartsWith("patch-",StringComparison.Ordinal)==true)return "修复中心";
-  if(key?.StartsWith("mod:",StringComparison.Ordinal)==true||
-     key is "mod-dependencies" or "mod-snapshots" or "mod-snapshot-preview")return "模组库";
+  if(key?.StartsWith("mod:",StringComparison.Ordinal)==true)
+  {
+   string folder=key["mod:".Length..];
+   var selected=modInventory?.Mods.FirstOrDefault(x=>x.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase));
+   return selected!=null&&ModPresentation.IsIndependentPatch(selected)?"修复中心":"模组库";
+  }
+  if(key is "mod-dependencies" or "mod-snapshots" or "mod-snapshot-preview")return "模组库";
   if(active is "模组管理" or "本地补丁")
    return modSection=="修复补丁"||active=="本地补丁"?"修复中心":"模组库";
   if(active=="更新中心")return "更新中心";
