@@ -527,7 +527,7 @@ public partial class MainWindow
    :rows.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)).ToArray();
  }
 
- AtlasNativeModRow[] BuildAtlasNativeRows()
+ List<AtlasNativeModRow> BuildAtlasNativeRows()
  {
   if(modInventory==null||selectedInstallRoot==null)return [];
   WorkshopModSources? workshop=null;WorkshopModUpdates? workshopUpdates=null;GitHubModUpdates? github=null;
@@ -552,7 +552,7 @@ public partial class MainWindow
    row.IsSelected=atlasNativeSelectedFolders.Contains(mod.Folder);
    result.Add(row);
   }
-  return result.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+  return result.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
  }
 
  Border BuildAtlasNativeModCard(AtlasNativeModRow row)
