@@ -119,6 +119,58 @@ public partial class MainWindow : Window
  {
   if(active!="工具与设置"&&bareGlassTestActive)SetBareGlassTest(false,false);
   TrackPage(key??active,restore??(()=>Navigate(active)));page=active;
+  // ATLAS keeps its shell and hosts the existing, fully functional WPF workflows
+  // inside the content area. This avoids cloning download, install, backup and rollback logic.
+  if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null&&atlasNativePageHost!=null)
+  {
+   string section=AtlasNativeSectionForPage(active,key);
+   atlasNativePage=section;
+   foreach(var pair in atlasNativeNavButtons)
+   {
+    bool selected=pair.Key==section;
+    pair.Value.Background=selected?AtlasBrush("#3B3021"):Brushes.Transparent;
+    pair.Value.BorderBrush=selected?AtlasBrush("#6D5737"):Brushes.Transparent;
+    pair.Value.Foreground=selected?AtlasBrush("#E6C58F"):AtlasMuted;
+   }
+   if(atlasNativeInspector!=null)
+   {
+    atlasNativeInspector.Visibility=Visibility.Collapsed;
+    atlasNativeInspector.Child=null;
+    if(atlasNativeBody!=null)atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(0);
+   }
+   var frame=new Grid();
+   frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+   frame.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
+   var breadcrumb=new Border{
+    Background=SpireGlassTheme.GlassPanel("#A91E2B3A"),
+    BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
+    CornerRadius=new CornerRadius(9),Padding=new Thickness(12,7,12,7),
+    Margin=new Thickness(0,0,0,10)
+   };
+   var breadcrumbGrid=new Grid();
+   breadcrumbGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+   breadcrumbGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+   var sectionLabel=AtlasText("ATLAS WORKSPACE  /  "+active,11,AtlasMuted,true);
+   sectionLabel.VerticalAlignment=VerticalAlignment.Center;
+   breadcrumbGrid.Children.Add(sectionLabel);
+   var back=AtlasButton("← 返回 "+atlasNativeSubpageReturnPage,()=>AtlasNativeNavigate(atlasNativeSubpageReturnPage),"quiet");
+   back.Padding=new Thickness(10,5,10,5);
+   Grid.SetColumn(back,1);breadcrumbGrid.Children.Add(back);
+   breadcrumb.Child=breadcrumbGrid;frame.Children.Add(breadcrumb);
+   UIElement pageContent=element;
+   if((active is "模组管理" or "本地补丁")&&element is FrameworkElement modPage)
+    modPage.Height=Math.Max(440,atlasNativePageHost.ActualHeight-58);
+   else
+    pageContent=new ScrollViewer{
+     Content=element,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+     HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,CanContentScroll=true
+    };
+   Grid.SetRow(pageContent,1);frame.Children.Add(pageContent);
+   atlasNativePageHost.Content=frame;
+   Content=atlasNativeRoot;
+   UpdateAtlasNativeHeader();
+   return;
+  }
   // The virtualized MOD list owns scrolling; other pages keep the normal page scrollbar.
   pageScroll!.VerticalScrollBarVisibility=(active=="模组管理"||active=="本地补丁")&&(key??active)==active
    ?ScrollBarVisibility.Disabled:ScrollBarVisibility.Auto;
@@ -136,6 +188,18 @@ public partial class MainWindow : Window
   }
   modeLabel.Text=active=="检查更新"?"管理器更新 · 自愿下载":active=="模组管理"?"本地模组 · 保留文件 · 可恢复启停":active=="本地补丁"?"本地独立补丁 · 安全启停 · 健康检查":active=="安装与回滚"?"真实操作 · 检查后确认 · 保留备份":active=="在线补丁"?"公开仓库 · 下载校验 · 整合包安装":demo?"演示环境 · 安装流程不会修改游戏":"本地扫描 · 文件状态";
   folderLabel.Text=selectedInstallRoot??(demo?"联机小队 · 示例配置\n尚未选择游戏目录":"尚未选择游戏目录");folderLabel.ToolTip=selectedInstallRoot;
+ }
+ string AtlasNativeSectionForPage(string active,string? key)
+ {
+  if(key?.StartsWith("patch-",StringComparison.Ordinal)==true)return "修复中心";
+  if(key?.StartsWith("mod:",StringComparison.Ordinal)==true||
+     key is "mod-dependencies" or "mod-snapshots" or "mod-snapshot-preview")return "模组库";
+  if(active is "模组管理" or "本地补丁")
+   return modSection=="修复补丁"||active=="本地补丁"?"修复中心":"模组库";
+  if(active=="更新中心")return "更新中心";
+  if(active is "修复中心" or "修复补丁" or "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚")return "修复中心";
+  if(active is "工具与设置" or "检查更新" or "游戏目录" or "联机检查" or "诊断" or "诊断与日志")return "设置";
+  return "总览";
  }
  void Navigate(string name){if(busy)return;switch(name){case "检查更新":ShowManagerUpdates();break;case "模组管理":modSection="普通 MOD";ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "本地补丁":modSection="修复补丁";ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "修复中心":case "修复补丁":ShowLibrary();break;case "更新中心":ShowModUpdatesCenter();break;case "诊断与日志":ShowDiagnosis();break;case "工具与设置":ShowTools();break;case "补丁健康":ShowLifecycle();if(lifecycleReport==null)RefreshLifecycle();break;case "游戏目录":ShowLocations();break;case "在线补丁":ShowOnline();if(onlineCatalog==null&&!onlineBusy)RefreshOnline();break;case "安装与回滚":ShowInstaller();break;case "总览":ShowOverview();break;case "补丁库":ShowLibrary();break;case "诊断":ShowDiagnosis();break;case "联机检查":ShowCoop();break;}}
  UIElement Header(string eyebrow,string title,string subtitle,UIElement? action=null)
