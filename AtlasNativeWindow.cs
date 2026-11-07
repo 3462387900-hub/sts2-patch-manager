@@ -81,10 +81,10 @@ public partial class MainWindow
 
   var header=new Border{
    Background=AtlasBrush("#171A1F"),BorderBrush=AtlasBrush("#30363D"),
-   BorderThickness=new Thickness(0,0,0,1),Padding=new Thickness(20,11,18,11)
+   BorderThickness=new Thickness(0,0,0,1),Padding=new Thickness(16,9,14,9)
   };
   var headerGrid=new Grid();
-  headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(205)});
+  headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(178)});
   headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   headerGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   var brand=new StackPanel{VerticalAlignment=VerticalAlignment.Center};
@@ -98,25 +98,28 @@ public partial class MainWindow
    ("更新中心","更新中心"),("下载中心","下载中心"),("设置","设置")})
   {
    var button=AtlasButton(label,()=>AtlasNativeNavigate(key),"nav");
-   button.Padding=new Thickness(10,9,10,9);
-   button.Margin=new Thickness(1,0,2,0);
-   button.MinWidth=64;
+   button.Padding=new Thickness(7,7,7,7);
+   button.Margin=new Thickness(0,0,1,0);
+   button.FontSize=12;
+   button.MinWidth=52;
    atlasNativeNavButtons[key]=button;
    nav.Children.Add(button);
   }
   Grid.SetColumn(nav,1);headerGrid.Children.Add(nav);
 
   var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
-  var gameInfo=new StackPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,0),MaxWidth=190};
+  var gameInfo=new StackPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,8,0),MaxWidth=140};
   atlasNativeGameState=AtlasText("尚未定位游戏",11,AtlasMuted,true);
   atlasNativeGamePath=AtlasText("选择游戏目录以开始",11,AtlasMuted);
   atlasNativeGamePath.TextTrimming=TextTrimming.CharacterEllipsis;
   gameInfo.Children.Add(atlasNativeGameState);gameInfo.Children.Add(atlasNativeGamePath);
   actions.Children.Add(gameInfo);
   atlasNativeLaunchButton=AtlasButton("▶ 启动游戏",LaunchGame,"primary");
-  atlasNativeLaunchButton.Margin=new Thickness(0,0,7,0);
+  atlasNativeLaunchButton.Padding=new Thickness(10,7,10,7);atlasNativeLaunchButton.MinWidth=94;
+  atlasNativeLaunchButton.Margin=new Thickness(0,0,6,0);
   actions.Children.Add(atlasNativeLaunchButton);
-  actions.Children.Add(AtlasButton("旧版工作台",()=>ChangeUiTheme(UiThemes.Workspace),"quiet"));
+  var legacyButton=AtlasButton("旧版工作台",()=>ChangeUiTheme(UiThemes.Workspace),"quiet");
+  legacyButton.Padding=new Thickness(8,7,8,7);legacyButton.MinWidth=78;actions.Children.Add(legacyButton);
   Grid.SetColumn(actions,2);headerGrid.Children.Add(actions);
   header.Child=headerGrid;Grid.SetRow(header,0);root.Children.Add(header);
 
