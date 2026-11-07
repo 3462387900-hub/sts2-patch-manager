@@ -1063,7 +1063,6 @@ public partial class MainWindow
   searchHint.Margin=new Thickness(12,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
   searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
   searchHost.Children.Add(searchHint);
-  var resultsHost=new ContentControl();
   search.TextChanged+=(_,_)=>{
    atlasNativeUpdateQuery=search.Text;
    searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
