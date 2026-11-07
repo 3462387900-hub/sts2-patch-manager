@@ -33,10 +33,9 @@ public partial class MainWindow
     ["AccentTabUnderline"]="#86B9F4",["AccentToolbarPrimaryBackground"]="#6742638A",
     ["AccentSegmentActiveBackground"]="#75517598",["AccentSegmentActiveForeground"]="#F5F9FF"
    };
-  var converter=new ColorConverter();
   foreach(var pair in palette)
   {
-   var color=(Color)converter.ConvertFromString(pair.Value)!;
+   var color=(Color)ColorConverter.ConvertFromString(pair.Value)!;
    Application.Current.Resources[pair.Key]=new SolidColorBrush(color);
   }
  }
