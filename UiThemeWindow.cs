@@ -9,6 +9,38 @@ public partial class MainWindow
  string uiTheme=UiThemes.Workspace;
  Button? classicThemeButton,workspaceThemeButton,atlasNativeThemeButton;
 
+ void ApplyThemeAccentPalette(string theme)
+ {
+  bool atlas=theme==UiThemes.AtlasNative;
+  var palette=atlas
+   ?new Dictionary<string,string>{
+    ["AccentPrimary"]="#C6A36B",["AccentPrimaryForeground"]="#1A1B1C",
+    ["AccentPrimaryBorder"]="#D9B77F",["AccentHoverBorder"]="#E6C58F",
+    ["AccentFocusBorder"]="#F0D6A7",["AccentSelectedTabBackground"]="#5C4630",
+    ["AccentSelectedTabBorder"]="#C6A36B",["AccentSelectedTabForeground"]="#F0EEE8",
+    ["AccentCaret"]="#D6B579",["AccentCheckboxHoverBorder"]="#B08A52",
+    ["AccentCheckboxCheckedBackground"]="#A77A3E",["AccentCheckboxCheckedBorder"]="#E6C58F",
+    ["AccentTabUnderline"]="#C6A36B",["AccentToolbarPrimaryBackground"]="#6B5130",
+    ["AccentSegmentActiveBackground"]="#7559462E",["AccentSegmentActiveForeground"]="#F0EEE8"
+   }
+   :new Dictionary<string,string>{
+    ["AccentPrimary"]="#83B9F8",["AccentPrimaryForeground"]="#10243F",
+    ["AccentPrimaryBorder"]="#408AB8ED",["AccentHoverBorder"]="#648FB6E2",
+    ["AccentFocusBorder"]="#B0A7D3FF",["AccentSelectedTabBackground"]="#76446993",
+    ["AccentSelectedTabBorder"]="#5A90B7E1",["AccentSelectedTabForeground"]="#EAF4FF",
+    ["AccentCaret"]="#83B9F8",["AccentCheckboxHoverBorder"]="#7789B9E5",
+    ["AccentCheckboxCheckedBackground"]="#BC47769C",["AccentCheckboxCheckedBorder"]="#9EA6D5F2",
+    ["AccentTabUnderline"]="#86B9F4",["AccentToolbarPrimaryBackground"]="#6742638A",
+    ["AccentSegmentActiveBackground"]="#75517598",["AccentSegmentActiveForeground"]="#F5F9FF"
+   };
+  var converter=new ColorConverter();
+  foreach(var pair in palette)
+  {
+   var color=(Color)converter.ConvertFromString(pair.Value)!;
+   Application.Current.Resources[pair.Key]=new SolidColorBrush(color);
+  }
+ }
+
  UIElement ThemeSwitcher()
  {
   var root=V();
@@ -69,6 +101,7 @@ public partial class MainWindow
   string previous=uiTheme;
   uiTheme=theme;
   UiThemes.Active=theme;
+  ApplyThemeAccentPalette(theme);
   selectedModDetailFolder=null;
   RefreshThemeButtons();
   if(theme==UiThemes.AtlasNative){
