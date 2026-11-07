@@ -814,6 +814,13 @@ public partial class MainWindow
    AtlasButton("刷新文件",()=>_=RefreshAtlasNativeDataAsync()),
    AtlasButton("重新检查健康",AtlasNativeRefreshLifecycle,"primary"),
    AtlasButton("整理补丁",()=>AtlasNativeRunWorkflow(PreparePatchOrganization),"quiet")));
+  var repairTabs=new WrapPanel{Margin=new Thickness(0,0,0,10)};
+  repairTabs.Children.Add(AtlasButton("本地补丁",()=>AtlasNativeNavigate("修复中心"),"primary"));
+  repairTabs.Children.Add(AtlasButton("补丁库",()=>AtlasNativeRunWorkflow(()=>Navigate("补丁库")),"quiet"));
+  repairTabs.Children.Add(AtlasButton("在线补丁",()=>AtlasNativeRunWorkflow(()=>Navigate("在线补丁")),"quiet"));
+  repairTabs.Children.Add(AtlasButton("补丁健康",()=>AtlasNativeRunWorkflow(()=>Navigate("补丁健康")),"quiet"));
+  repairTabs.Children.Add(AtlasButton("安装与回滚",()=>AtlasNativeRunWorkflow(()=>Navigate("安装与回滚")),"quiet"));
+  root.Children.Add(repairTabs);
   if(selectedInstallRoot==null||modInventory==null)
   {
    root.Children.Add(AtlasEmpty("尚未读取本地补丁","选择游戏目录并刷新后，显示实际安装的独立修复补丁。",
