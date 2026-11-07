@@ -87,12 +87,19 @@ public partial class MainWindow
   Check(SpireGlassTheme.GlassPanel() is LinearGradientBrush surface&&
    surface.GradientStops.All(stop=>stop.Color.A<235),
    "glass cards allow blurred and ambient backdrop to show through");
+  SolidColorBrush ResolveBrush(object? value)
+  {
+   if(value is SolidColorBrush brush)return brush;
+   if(value is DynamicResourceExtension dynamicResource&&
+      FindResource(dynamicResource.ResourceKey) is SolidColorBrush resolved)return resolved;
+   throw new InvalidOperationException("样式画笔无法解析："+value?.GetType().Name);
+  }
   var baseButton=(Style)FindResource(typeof(Button));
-  var defaultBorder=(SolidColorBrush)((Setter)baseButton.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  var defaultBorder=ResolveBrush(((Setter)baseButton.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value);
   Check(defaultBorder.Color.A<=85,
    "normal buttons use soft translucent strokes rather than sharp opaque outlines");
   var primaryStyle=(Style)FindResource("Primary");
-  var primaryBorder=(SolidColorBrush)((Setter)primaryStyle.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  var primaryBorder=ResolveBrush(((Setter)primaryStyle.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value);
   Check(primaryBorder.Color.A<=100,
    "primary action buttons avoid opaque duplicate fill outlines");
   Check(SpireGlassTheme.Background(true) is LinearGradientBrush newTint&&
@@ -108,7 +115,7 @@ public partial class MainWindow
    b.FocusVisualStyle!=null&&b.BorderThickness.Left==3),
    "borderless navigation keeps a narrow accent and a keyboard-only custom focus visual");
   var selectedTabStyle=(Style)FindResource("SelectedTab");
-  Check(((SolidColorBrush)((Setter)selectedTabStyle.Setters.Cast<Setter>().Single(x=>
+  Check(ResolveBrush(((Setter)selectedTabStyle.Setters.Cast<Setter>().Single(x=>
    x.Property==Button.BackgroundProperty)).Value).Color.A<180,
    "selected filters use a subtle translucent fill rather than primary blue");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");
