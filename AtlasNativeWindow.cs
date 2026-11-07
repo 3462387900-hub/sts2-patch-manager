@@ -390,7 +390,7 @@ public partial class MainWindow
   heroGrid.Children.Add(hero);
   var heroActions=new StackPanel{VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right};
   heroActions.Children.Add(AtlasButton(selectedInstallRoot==null?"选择游戏目录":"更换游戏目录",ChooseAtlasNativeFolder,"primary"));
-  var old=AtlasButton("打开完整 MOD 管理",()=>OpenAtlasLegacyPage("模组管理"));
+  var old=AtlasButton("进入模组库",()=>AtlasNativeNavigate("模组库"));
   old.Margin=new Thickness(0,8,0,0);heroActions.Children.Add(old);
   Grid.SetColumn(heroActions,1);heroGrid.Children.Add(heroActions);
   root.Children.Add(AtlasPanel(heroGrid,21,"#20242A"));
