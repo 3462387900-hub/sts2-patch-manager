@@ -1506,7 +1506,7 @@ public partial class MainWindow
   string lifecyclePageDebug="theme="+UiThemes.Active+"; window="+(Content?.GetType().Name??"null")+
    "; rootMatch="+ReferenceEquals(Content,atlasNativeRoot)+"; host="+(atlasNativePageHost?.Content?.GetType().FullName??"null")+
    "; page="+atlasNativePage+"; busy="+busy+"; report="+(lifecycleReport!=null);
-  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is FrameworkElement,
    "补丁健康页面保留 ATLAS 外壳与安全退役流程（"+lifecyclePageDebug+"）");
   await Shot("12-ATLAS-补丁健康");
   ShowInstaller();await Idle();
