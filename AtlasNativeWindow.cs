@@ -771,45 +771,150 @@ public partial class MainWindow
  {
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
   root.Children.Add(AtlasPageTitle("REPAIR WORKSPACE","修复中心",
-   "独立补丁单独管理。文件匹配、生命周期记录与游戏内验证是不同概念。",
-   AtlasButton("在完整工作台管理",()=>OpenAtlasLegacyPage("本地补丁"))));
-  if(selectedInstallRoot==null||modInventory==null){
-   root.Children.Add(AtlasEmpty("尚未读取本地补丁","选择游戏目录并刷新后，显示实际安装的独立修复补丁。",AtlasButton("刷新环境",()=>_=RefreshAtlasNativeDataAsync(),"primary")));
+   "独立补丁、文件匹配、健康生命周期和安全停用依据。普通 MOD 不会混入补丁列表。",
+   AtlasButton("刷新文件",()=>_=RefreshAtlasNativeDataAsync()),
+   AtlasButton("重新检查健康",AtlasNativeRefreshLifecycle,"primary"),
+   AtlasButton("整理补丁",()=>AtlasNativeRunWorkflow(PreparePatchOrganization),"quiet")));
+  if(selectedInstallRoot==null||modInventory==null)
+  {
+   root.Children.Add(AtlasEmpty("尚未读取本地补丁","选择游戏目录并刷新后，显示实际安装的独立修复补丁。",
+    AtlasButton("刷新环境",()=>_=RefreshAtlasNativeDataAsync(),"primary")));
    return AtlasScroll(root);
   }
-  var patches=modInventory.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
+
+  var patches=modInventory.Mods.Where(ModPresentation.IsIndependentPatch)
+   .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
   var active=patches.Count(x=>x.Enabled);
-  var stale=patches.Count(x=>LifecycleTag(x.Id) is "需重新检查" or "MOD 已变化，需核对" or "疑似上游修复");
+  var needsReview=patches.Count(x=>{
+   string tag=LifecycleTag(x.Id);
+   return tag.Contains("复查",StringComparison.Ordinal)||tag.Contains("核对",StringComparison.Ordinal)||
+    tag.Contains("疑似",StringComparison.Ordinal)||tag=="未检查"||tag=="暂无确认证据";
+  });
+  var retireable=lifecycleReport?.Patches.Count(x=>x.CanRetire)??0;
   var stats=new WrapPanel{Margin=new Thickness(0,0,0,13)};
-  stats.Children.Add(AtlasStat(patches.Length.ToString(),"本地独立补丁","已安装"));
-  stats.Children.Add(AtlasStat(active.ToString(),"当前启用","补丁文件"));
-  stats.Children.Add(AtlasStat(stale.ToString(),"需要复查","生命周期记录"));
+  stats.Children.Add(AtlasStat(patches.Length.ToString(),"本地独立补丁","只统计补丁，不含普通 MOD"));
+  stats.Children.Add(AtlasStat(active.ToString(),"当前启用","文件仍保留在管理器目录"));
+  stats.Children.Add(AtlasStat(needsReview.ToString(),"需要复查","健康结论以最近一次检查为准"));
+  stats.Children.Add(AtlasStat(retireable.ToString(),"有依据可退役","仍需预览和再次校验"));
   root.Children.Add(stats);
-  if(patches.Length==0){
-   root.Children.Add(AtlasEmpty("当前没有独立补丁","普通 MOD 不会混入这里。可在旧版工作台查看补丁库和在线补丁。",AtlasButton("打开补丁库",()=>OpenAtlasLegacyPage("补丁库"))));
+
+  var status=new StackPanel();
+  status.Children.Add(AtlasText("补丁健康状态",14,AtlasInk,true));
+  status.Children.Add(AtlasText(HasValidLifecycleReport
+   ?"最近检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")+" · "+lifecycleStatus
+   :lifecycleStale?"文件变化后，旧健康结论已失效。请重新检查。":"尚未生成健康报告。首次检查会建立 MOD 文件指纹基线。",
+   12,AtlasMuted));
+  if(report?.Issues.Count>0)
+   status.Children.Add(AtlasText("文件扫描问题："+string.Join("；",report.Issues.Take(3)),12,AtlasRed));
+  var autoStop=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+  var autoButton=AtlasButton("删除目标 MOD 后自动停用："+(autoStop?"开启":"关闭"),()=>{
+   try{
+    OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!autoStop);
+    orphanPatchNotice=autoStop?"已关闭孤立补丁自动停用。":"已开启孤立补丁自动停用；文件仍会保留。";
+    toast.Text=orphanPatchNotice;RenderAtlasNative();
+   }catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
+  },"quiet");
+  autoButton.Margin=new Thickness(0,9,0,0);status.Children.Add(autoButton);
+  root.Children.Add(AtlasPanel(status,15));
+
+  if(patches.Length==0)
+  {
+   root.Children.Add(AtlasEmpty("当前没有独立补丁","普通 MOD 不会显示在这里。可前往在线补丁库查看已审核的修复方案。",
+    AtlasButton("打开在线补丁库",()=>AtlasNativeRunWorkflow(()=>Navigate("在线补丁")),"primary")));
    return AtlasScroll(root);
   }
-  foreach(var mod in patches.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)){
-   var state=report?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
-   string fileStatus=state?.Status??"尚未扫描";
-   string health=LifecycleTag(mod.Id);
-   string[] targets=state?.Patch.Requirements??[];
-   var item=new Grid();
-   item.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-   item.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-   var info=new StackPanel();
-   info.Children.Add(AtlasText(mod.Name,14,AtlasInk,true));
-   info.Children.Add(AtlasText(mod.Id+"  ·  v"+mod.Version,10,AtlasMuted));
-   info.Children.Add(AtlasText("文件状态："+fileStatus+"  ·  生命周期："+health,11,health.Contains("复查")?AtlasBrass:AtlasMuted));
-   info.Children.Add(AtlasText(targets.Length==0?"关联目标：未声明": "关联目标："+string.Join("、",targets),10,AtlasMuted));
-   item.Children.Add(info);
-   var actions=new StackPanel{Orientation=Orientation.Vertical,VerticalAlignment=VerticalAlignment.Center};
-   actions.Children.Add(AtlasBadge(mod.Enabled?"已启用":"已停用",mod.Enabled?"ok":"neutral"));
-   var detail=AtlasButton("查看依据",()=>ShowAtlasNativePatchInspector(mod,state),"quiet");detail.Margin=new Thickness(0,7,0,0);actions.Children.Add(detail);
-   Grid.SetColumn(actions,1);item.Children.Add(actions);
-   root.Children.Add(AtlasPanel(item,13));var gap=new Border{Height=8};root.Children.Add(gap);
+
+  var filters=new WrapPanel{Margin=new Thickness(0,13,0,8)};
+  foreach(string filter in new[]{"全部","已启用","已停用","需要复查","可安全退役"})
+  {
+   string selected=filter;
+   var button=AtlasButton(filter,()=>{
+    atlasNativePatchFilter=selected;RenderAtlasNative();
+   },atlasNativePatchFilter==filter?"active":"quiet");
+   button.Margin=new Thickness(0,0,7,5);filters.Children.Add(button);
   }
+  root.Children.Add(filters);
+  var search=new TextBox{
+   Text=atlasNativePatchQuery,Height=40,FontSize=14,Padding=new Thickness(12,8,12,8),
+   Background=AtlasBrush("#20252B"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#59636E"),
+   BorderThickness=new Thickness(1),ToolTip="搜索补丁名称、ID 或关联 MOD"
+  };
+  var resultsHost=new ContentControl();
+  search.TextChanged+=(_,_)=>{
+   atlasNativePatchQuery=search.Text;
+   RenderAtlasNativePatchResults(resultsHost,patches);
+  };
+  root.Children.Add(search);
+  root.Children.Add(AtlasText("每张补丁卡片都提供文件状态、关联 MOD、健康结论和安全操作。",11,AtlasMuted));
+  root.Children.Add(resultsHost);
+  RenderAtlasNativePatchResults(resultsHost,patches);
   return AtlasScroll(root);
+ }
+
+ void RenderAtlasNativePatchResults(ContentControl host,ManagedMod[] patches)
+ {
+  bool Matches(ManagedMod mod)
+  {
+   string tag=LifecycleTag(mod.Id);
+   var life=lifecycleReport?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
+   bool review=tag.Contains("复查",StringComparison.Ordinal)||tag.Contains("核对",StringComparison.Ordinal)||
+    tag.Contains("疑似",StringComparison.Ordinal)||tag=="未检查"||tag=="暂无确认证据";
+   bool filter=atlasNativePatchFilter switch{
+    "已启用"=>mod.Enabled,"已停用"=>!mod.Enabled,"需要复查"=>review,
+    "可安全退役"=>life?.CanRetire==true,_=>true
+   };
+   string query=atlasNativePatchQuery.Trim();
+   var state=report?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
+   string targets=state?.Patch.Requirements.Length>0?string.Join(" ",state.Patch.Requirements):"";
+   return filter&&(query.Length==0||(mod.Name+" "+mod.Id+" "+targets).Contains(query,StringComparison.OrdinalIgnoreCase));
+  }
+  var shown=patches.Where(Matches).ToArray();
+  var wrap=new WrapPanel{Margin=new Thickness(0,9,0,10)};
+  foreach(var mod in shown)
+  {
+   var state=report?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
+   var lifecycle=lifecycleReport?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
+   string health=LifecycleTag(mod.Id);
+   string fileStatus=state?.Status??"尚未扫描";
+   string[] targets=state?.Patch.Requirements??[];
+   var card=new Border{
+    Width=420,MinHeight=225,Margin=new Thickness(0,0,12,12),
+    Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#46515D"),
+    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15)
+   };
+   var body=new StackPanel();
+   var heading=new Grid();
+   heading.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+   heading.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+   var name=AtlasText(mod.Name,16,AtlasInk,true);name.MaxWidth=280;name.TextTrimming=TextTrimming.CharacterEllipsis;
+   name.ToolTip=mod.Name;heading.Children.Add(name);
+   var enabled=AtlasBadge(mod.Enabled?"已启用":"已停用",mod.Enabled?"ok":"neutral");
+   Grid.SetColumn(enabled,1);heading.Children.Add(enabled);body.Children.Add(heading);
+   body.Children.Add(AtlasText(mod.Id+"  ·  v"+mod.Version,11,AtlasMuted));
+   var healthKind=health.Contains("已验证")||health.Contains("匹配")?"ok":
+    health.Contains("疑似")||health.Contains("复查")||health.Contains("核对")||health=="未检查"?"warn":"neutral";
+   var badges=new WrapPanel{Margin=new Thickness(0,8,0,7)};
+   badges.Children.Add(AtlasBadge("文件："+fileStatus,fileStatus.Contains("一致")||fileStatus=="已安装"?"ok":"neutral"));
+   badges.Children.Add(AtlasBadge("健康："+health,healthKind));
+   body.Children.Add(badges);
+   body.Children.Add(AtlasText(targets.Length==0?"关联目标：补丁清单未声明目标 MOD":"关联目标："+string.Join("、",targets),12,AtlasMuted));
+   string reason=lifecycle?.Message??state?.Reason??"暂无可展示的详细扫描依据。";
+   var explanation=AtlasText(reason,12,AtlasMuted);explanation.Margin=new Thickness(0,6,0,7);
+   explanation.MaxHeight=50;explanation.TextTrimming=TextTrimming.CharacterEllipsis;explanation.ToolTip=reason;
+   body.Children.Add(explanation);
+   var actions=new WrapPanel();
+   actions.Children.Add(AtlasButton("查看依据",()=>ShowAtlasNativePatchInspector(mod,state),"quiet"));
+   var toggle=AtlasButton(mod.Enabled?"预览停用":"预览启用",
+    ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
+   toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);actions.Children.Add(toggle);
+   if(lifecycle?.CanRetire==true)
+    actions.Children.Add(AtlasButton("预览安全退役",()=>AtlasNativeRunWorkflow(()=>PrepareRetirement(lifecycle)),"quiet"));
+   body.Children.Add(actions);
+   card.Child=body;wrap.Children.Add(card);
+  }
+  host.Content=shown.Length==0
+   ?AtlasEmpty("没有符合条件的补丁","清除筛选条件，或重新检查补丁健康状态。")
+   :wrap;
  }
 
  UIElement BuildAtlasNativeUpdatesPage()
