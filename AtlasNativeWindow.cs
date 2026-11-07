@@ -1336,8 +1336,9 @@ public partial class MainWindow
   AtlasNativeNavigate("修复中心");await Idle();
 
   AtlasNativeNavigate("更新中心");await Idle();
+  string updatePageDebug="page="+atlasNativePage+"; content="+(atlasNativePageHost?.Content?.GetType().FullName??"null");
   Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is ScrollViewer,
-   "更新中心以只读方式呈现已有缓存，不触发自动联网检查");
+   "更新中心以只读方式呈现已有缓存，不触发自动联网检查（"+updatePageDebug+"）");
   AtlasNativeNavigate("下载中心");await Idle();
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
    "下载中心提供 Workshop、GitHub 与本地 ZIP 的真实流程入口");
