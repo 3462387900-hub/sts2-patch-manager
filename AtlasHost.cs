@@ -240,8 +240,8 @@ public partial class MainWindow
       modId=targets.FirstOrDefault()??"",targets,targetNames,enabled,
       status=state.Status,reason=state.Reason,filesMatch=state.FilesMatch,
       file=state.FilesMatch?"ok":"warn",runtime="untested",
-      bound=targets.Length==0?"游戏文件":string.Join("、",targets),
-      checked=scan!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+      bound=targets.Length==0?"游戏文件":normalMods.FirstOrDefault(m=>m.Id.Equals(targets[0],StringComparison.OrdinalIgnoreCase))?.Version??targets[0],
+      @checked=scan!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
      };
     }).ToArray();
 
