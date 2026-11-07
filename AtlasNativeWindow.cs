@@ -383,7 +383,9 @@ public partial class MainWindow
   var hero=new StackPanel();
   hero.Children.Add(AtlasBadge(selectedInstallRoot==null?"尚未关联游戏目录":GameEnvironment.Running(selectedInstallRoot)?"游戏正在运行":"游戏目录已关联",selectedInstallRoot==null?"warn":"ok"));
   var gameTitle=AtlasText("Slay the Spire 2",27,AtlasInk,true);gameTitle.Margin=new Thickness(0,12,0,3);hero.Children.Add(gameTitle);
-  hero.Children.Add(AtlasText(selectedInstallRoot??"选择游戏安装目录，开始读取本地 MOD 环境。",12,AtlasMuted));
+  var gamePath=AtlasText(selectedInstallRoot==null?"选择游戏安装目录，开始读取本地 MOD 环境。":Path.GetFileName(selectedInstallRoot.TrimEnd(Path.DirectorySeparatorChar)),13,AtlasMuted);
+  gamePath.TextTrimming=TextTrimming.CharacterEllipsis;gamePath.TextWrapping=TextWrapping.NoWrap;
+  gamePath.ToolTip=selectedInstallRoot??"尚未选择游戏目录";hero.Children.Add(gamePath);
   var heroNote=AtlasText(modInventoryDirty?"检测到文件变化，当前清单需要重新读取。":
    report==null?"文件扫描结果尚未生成。":"本地扫描完成；文件匹配不等于游戏内兼容性验证。",11,AtlasMuted);
   heroNote.Margin=new Thickness(0,10,0,0);hero.Children.Add(heroNote);
@@ -453,6 +455,17 @@ public partial class MainWindow
   stack.Children.Add(AtlasText(note,12,AtlasMuted));
   var panel=AtlasPanel(stack,16,"#1B1F24");
   panel.Width=190;panel.Margin=new Thickness(0,0,12,0);
+  return panel;
+ }
+
+ Border AtlasCompactStat(string value,string label,string note)
+ {
+  var stack=new StackPanel();
+  stack.Children.Add(AtlasText(value,25,AtlasInk,true));
+  stack.Children.Add(AtlasText(label,12,AtlasMuted,true));
+  stack.Children.Add(AtlasText(note,10,AtlasMuted));
+  var panel=AtlasPanel(stack,10,"#1B1F24");
+  panel.Width=128;panel.Margin=new Thickness(0,0,8,0);
   return panel;
  }
 
@@ -815,31 +828,36 @@ public partial class MainWindow
     tag.Contains("疑似",StringComparison.Ordinal)||tag=="未检查"||tag=="暂无确认证据";
   });
   var retireable=lifecycleReport?.Patches.Count(x=>x.CanRetire)??0;
-  var stats=new WrapPanel{Margin=new Thickness(0,0,0,13)};
-  stats.Children.Add(AtlasStat(patches.Length.ToString(),"本地独立补丁","只统计补丁，不含普通 MOD"));
-  stats.Children.Add(AtlasStat(active.ToString(),"当前启用","文件仍保留在管理器目录"));
-  stats.Children.Add(AtlasStat(needsReview.ToString(),"需要复查","健康结论以最近一次检查为准"));
-  stats.Children.Add(AtlasStat(retireable.ToString(),"有依据可退役","仍需预览和再次校验"));
+  var stats=new WrapPanel{Margin=new Thickness(0,0,0,9)};
+  stats.Children.Add(AtlasCompactStat(patches.Length.ToString(),"本地独立补丁","不含普通 MOD"));
+  stats.Children.Add(AtlasCompactStat(active.ToString(),"当前启用","文件完整保留"));
+  stats.Children.Add(AtlasCompactStat(needsReview.ToString(),"需要复查","最近检查结论"));
+  stats.Children.Add(AtlasCompactStat(retireable.ToString(),"有依据可退役","仍需预览校验"));
   root.Children.Add(stats);
 
+  var statusGrid=new Grid();
+  statusGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+  statusGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   var status=new StackPanel();
-  status.Children.Add(AtlasText("补丁健康状态",14,AtlasInk,true));
+  status.Children.Add(AtlasText("补丁健康状态",13,AtlasInk,true));
   status.Children.Add(AtlasText(HasValidLifecycleReport
    ?"最近检查："+lifecycleReport!.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")+" · "+lifecycleStatus
    :lifecycleStale?"文件变化后，旧健康结论已失效。请重新检查。":"尚未生成健康报告。首次检查会建立 MOD 文件指纹基线。",
-   12,AtlasMuted));
+   11,AtlasMuted));
   if(report?.Issues.Count>0)
-   status.Children.Add(AtlasText("文件扫描问题："+string.Join("；",report.Issues.Take(3)),12,AtlasRed));
-  var autoStop=OrphanPatchAutoStop.Enabled(installer.DataRoot);
-  var autoButton=AtlasButton("删除目标 MOD 后自动停用："+(autoStop?"开启":"关闭"),()=>{
+   status.Children.Add(AtlasText("扫描问题："+string.Join("；",report.Issues.Take(2)),11,AtlasRed));
+  statusGrid.Children.Add(status);
+  bool autoStop=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+  var autoButton=AtlasButton("孤立补丁自动停用："+(autoStop?"开启":"关闭"),()=>{
    try{
     OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!autoStop);
     orphanPatchNotice=autoStop?"已关闭孤立补丁自动停用。":"已开启孤立补丁自动停用；文件仍会保留。";
     toast.Text=orphanPatchNotice;RenderAtlasNative();
    }catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
   },"quiet");
-  autoButton.Margin=new Thickness(0,9,0,0);status.Children.Add(autoButton);
-  root.Children.Add(AtlasPanel(status,15));
+  autoButton.VerticalAlignment=VerticalAlignment.Center;
+  Grid.SetColumn(autoButton,1);statusGrid.Children.Add(autoButton);
+  root.Children.Add(AtlasPanel(statusGrid,10));
 
   if(patches.Length==0)
   {
@@ -848,18 +866,18 @@ public partial class MainWindow
    return AtlasScroll(root);
   }
 
-  var filters=new WrapPanel{Margin=new Thickness(0,13,0,8)};
+  var filters=new WrapPanel{Margin=new Thickness(0,10,0,6)};
   foreach(string filter in new[]{"全部","已启用","已停用","需要复查","可安全退役"})
   {
    string selected=filter;
    var button=AtlasButton(filter,()=>{
     atlasNativePatchFilter=selected;RenderAtlasNative();
    },atlasNativePatchFilter==filter?"primary":"quiet");
-   button.Margin=new Thickness(0,0,7,5);filters.Children.Add(button);
+   button.Margin=new Thickness(0,0,7,4);filters.Children.Add(button);
   }
   root.Children.Add(filters);
   var search=new TextBox{
-   Text=atlasNativePatchQuery,Height=40,FontSize=14,Padding=new Thickness(12,8,12,8),
+   Text=atlasNativePatchQuery,Height=38,FontSize=14,Padding=new Thickness(12,7,12,7),
    Background=AtlasBrush("#20252B"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#59636E"),
    BorderThickness=new Thickness(1),ToolTip="搜索补丁名称、ID 或关联 MOD"
   };
@@ -869,7 +887,6 @@ public partial class MainWindow
    RenderAtlasNativePatchResults(resultsHost,patches);
   };
   root.Children.Add(search);
-  root.Children.Add(AtlasText("每张补丁卡片都提供文件状态、关联 MOD、健康结论和安全操作。",11,AtlasMuted));
   root.Children.Add(resultsHost);
   RenderAtlasNativePatchResults(resultsHost,patches);
   return AtlasScroll(root);
@@ -902,7 +919,7 @@ public partial class MainWindow
    string fileStatus=state?.Status??"尚未扫描";
    string[] targets=state?.Patch.Requirements??[];
    var card=new Border{
-    Width=420,MinHeight=225,Margin=new Thickness(0,0,12,12),
+    Width=450,MinHeight=225,Margin=new Thickness(0,0,12,12),
     Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#46515D"),
     BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15)
    };
@@ -1066,7 +1083,9 @@ public partial class MainWindow
   root.Children.Add(AtlasPageTitle("PREFERENCES","设置","游戏目录、界面风格、网络和诊断工具。"));
   var game=new StackPanel();
   game.Children.Add(AtlasText("游戏目录",17,AtlasInk,true));
-  game.Children.Add(AtlasText(selectedInstallRoot??"尚未选择游戏目录",13,AtlasMuted));
+  var pathLabel=AtlasText(selectedInstallRoot==null?"尚未选择游戏目录":Path.GetFileName(selectedInstallRoot.TrimEnd(Path.DirectorySeparatorChar)),13,AtlasMuted);
+  pathLabel.ToolTip=selectedInstallRoot??"尚未选择游戏目录";pathLabel.TextTrimming=TextTrimming.CharacterEllipsis;
+  game.Children.Add(pathLabel);
   var gameActions=new WrapPanel{Margin=new Thickness(0,10,0,0)};
   gameActions.Children.Add(AtlasButton("选择游戏目录",ChooseAtlasNativeFolder,"primary"));
   gameActions.Children.Add(AtlasButton("重新定位游戏",()=>AtlasNativeRunWorkflow(LocateGame),"quiet"));
