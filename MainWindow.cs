@@ -330,13 +330,28 @@ public partial class MainWindow : Window
  void ShowLibrary()
  {
   var root=V(Header("PATCH LIBRARY","补丁库",$"当前目录 {states.Count} 项修复。按状态筛选，并查看每项适用原因。"));Space(root,22);
-  var search=new TextBox{Text=query,Width=260,ToolTip="按修复名、模组 ID 或问题搜索"};search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索补丁");
+  var search=new TextBox{Text=query,Width=260,Height=36,Padding=new Thickness(10,7,10,7),
+   Background=B("#20252B"),Foreground=ink,BorderBrush=B("#41474F"),BorderThickness=new Thickness(1),
+   ToolTip="按修复名、模组 ID 或问题搜索"};
+  search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索补丁");
+  var searchHost=new Grid{Width=260,Height=36};
+  searchHost.Children.Add(search);
+  var searchHint=T("⌕  搜索补丁名称、MOD ID 或问题",12,muted);
+  searchHint.Margin=new Thickness(11,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
+  searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+  searchHost.Children.Add(searchHint);
   var tabs=new WrapPanel{Margin=new(0,0,0,18)};
   var list=new StackPanel();
   void Render(){list.Children.Clear();var found=states.Where(s=>(filter=="全部"||s.Status==filter)&&(s.Patch.Name+s.Patch.Id+s.Patch.Summary+string.Join(" ",s.Patch.Requirements)).Contains(query,StringComparison.OrdinalIgnoreCase)).ToList();foreach(var s in found){list.Children.Add(PatchRow(s));Space(list,9);}if(found.Count==0)list.Children.Add(Card(V(T("没有找到匹配的补丁",18),T("换个关键词，或查看全部修复。",13,muted))));}
   foreach(var f in new[]{"全部","待修复","需联动","已安装","已停用","不适用","需核对"}){var b=Btn(f,()=>{filter=f;ShowLibrary();},f==filter?"SelectedTab":"Ghost");b.Margin=new(0,0,8,0);tabs.Children.Add(b);}
-  search.TextChanged+=(_,_)=>{query=search.Text;Render();string q=query,f=filter;RememberPage("补丁库",()=>{query=q;filter=f;ShowLibrary();});};
-  var bar=new DockPanel{Margin=new(0,0,0,16)};DockPanel.SetDock(search,Dock.Right);bar.Children.Add(search);bar.Children.Add(T("筛选修复",12,muted));root.Children.Add(bar);root.Children.Add(tabs);root.Children.Add(list);Render();string savedFilter=filter,savedQuery=query;SetPage("补丁库",root,restore:()=>{filter=savedFilter;query=savedQuery;ShowLibrary();});
+  search.TextChanged+=(_,_)=>{
+   query=search.Text;
+   searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+   Render();string q=query,f=filter;RememberPage("补丁库",()=>{query=q;filter=f;ShowLibrary();});
+  };
+  var bar=new DockPanel{Margin=new(0,0,0,16)};
+  DockPanel.SetDock(searchHost,Dock.Right);bar.Children.Add(searchHost);bar.Children.Add(T("筛选修复",12,muted));
+  root.Children.Add(bar);root.Children.Add(tabs);root.Children.Add(list);Render();string savedFilter=filter,savedQuery=query;SetPage("补丁库",root,restore:()=>{filter=savedFilter;query=savedQuery;ShowLibrary();});
  }
  void ShowReview()
  {
