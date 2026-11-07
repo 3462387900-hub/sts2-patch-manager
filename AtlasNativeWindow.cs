@@ -1345,10 +1345,11 @@ public partial class MainWindow
   Check(localPatches.Length==1&&atlasNativePageHost?.Content is ScrollViewer,
    "修复中心只展示独立补丁，不混入普通 MOD");
   var patchState=report!.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(localPatches[0].Id,StringComparison.OrdinalIgnoreCase));
+  await Shot("03-ATLAS-修复中心");
   ShowAtlasNativePatchInspector(localPatches[0],patchState);await Idle();
   Check(atlasNativeInspector?.Visibility==Visibility.Visible,
    "补丁检查器展示扫描依据与生命周期状态");
-  await Shot("03-ATLAS-修复中心");
+  await Shot("04-ATLAS-补丁检查器");
   ShowPatchEvidence(localPatches[0].Id);await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
    "完整补丁证据与生命周期处理页面保留在 ATLAS 外壳内");
@@ -1374,7 +1375,7 @@ public partial class MainWindow
   });
   Check(navFits&&atlasNativeRoot!.ActualWidth<=Width+1,
    "1020×720 最小窗口下顶部导航保持在窗口范围内");
-  await Shot("04-ATLAS-窄窗口");
+  await Shot("05-ATLAS-窄窗口");
   Width=oldWidth;Height=oldHeight;await Idle();
 
   ChangeUiTheme(UiThemes.Workspace);
