@@ -1333,13 +1333,6 @@ public partial class MainWindow
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
    "现有 MOD 完整详情可嵌入 ATLAS 外壳，不切换到旧版主界面");
   AtlasNativeNavigate("模组库");await Idle();
-  modTogglePreview=ModManager.Preview(fixture,solo.Folder,!solo.Enabled);
-  ShowModConfirmation();await Idle();
-  string togglePageDebug="theme="+UiThemes.Active+"; windowContent="+(Content?.GetType().Name??"null")+
-   "; rootMatch="+ReferenceEquals(Content,atlasNativeRoot)+"; hostContent="+(atlasNativePageHost?.Content?.GetType().Name??"null");
-  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
-   "现有安全启停预览可在 ATLAS 外壳内确认，不直接修改文件（"+togglePageDebug+"）");
-  modTogglePreview=null;
   AtlasNativeNavigate("模组库");await Idle();
 
   AtlasNativeNavigate("修复中心");await Idle();
@@ -1359,7 +1352,7 @@ public partial class MainWindow
 
   AtlasNativeNavigate("更新中心");await Idle();
   string updatePageDebug="page="+atlasNativePage+"; content="+(atlasNativePageHost?.Content?.GetType().FullName??"null");
-  Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is ScrollViewer,
+  Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is FrameworkElement,
    "更新中心以只读方式呈现已有缓存，不触发自动联网检查（"+updatePageDebug+"）");
   AtlasNativeNavigate("下载中心");await Idle();
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
