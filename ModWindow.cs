@@ -82,7 +82,7 @@ public partial class MainWindow
       "进入 MOD 详情核对并确认；每次最多查找 8 个，重复点击可继续下一批。";
   }
   catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
-  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();else if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
  }
  async void DiscoverGitHubMod(ManagedMod mod)
  {
@@ -95,7 +95,7 @@ public partial class MainWindow
    else if(result.Retryable)toast.Text=mod.Name+"："+result.Note+"；已有候选可在详情查看。";
   }
   catch(Exception e){toast.Text="查找失败："+e.Message;}
-  finally{busy=false;ShowModDetail(mod.Folder);}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();else ShowModDetail(mod.Folder);}
  }
  async void CheckAllModUpdates()
  {
@@ -141,7 +141,8 @@ public partial class MainWindow
    if(ReferenceEquals(modUpdateCheckCancellation,cancellation))modUpdateCheckCancellation=null;
    modUpdateCheckRunning=false;
    // A background check never changes the active workspace on completion.
-   if(page=="更新中心"&&IsVisible)ShowModUpdatesCenter();
+   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
+   else if(page=="更新中心"&&IsVisible)ShowModUpdatesCenter();
   }
  }
  async void CheckWorkshopMod(ManagedMod mod)
@@ -156,7 +157,7 @@ public partial class MainWindow
    toast.Text=mod.Name+" · 创意工坊："+result.Status+" · "+result.Message;
   }
   catch(Exception e){toast.Text="创意工坊检查失败："+e.Message;}
-  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();else if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  void BindGitHubMod(ManagedMod mod)
  {
@@ -173,7 +174,7 @@ public partial class MainWindow
   var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
   body.Children.Add(H(save,remove,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
   dialog.Content=body;input.Focus();
-  if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
+  if(dialog.ShowDialog()==true){if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();else if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  async void DownloadWorkshopMod(ManagedMod? target=null,ulong? presetWorkshopId=null)
  {
@@ -306,7 +307,8 @@ public partial class MainWindow
    if(changed)RefreshMods();
    else if(gameRoot==selectedInstallRoot)
    {
-    if(target!=null)ShowModDetail(target.Folder);
+    if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
+    else if(target!=null)ShowModDetail(target.Folder);
     else ShowMods();
    }
   }
@@ -398,6 +400,7 @@ public partial class MainWindow
   {
    busy=false;
    if(changed)RefreshMods();
+   else if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
    else if(gameRoot==selectedInstallRoot){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
   }
  }
