@@ -1536,23 +1536,23 @@ public partial class MainWindow
   ];
   atlasNativeUpdateFilter="全部";atlasNativeUpdateQuery="";
   atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
-  int UpdateCardCount()=>Descendants<Border>(atlasNativePageHost).Count(border=>Math.Abs(border.Width-430)<1);
-  Check(UpdateCardCount()==2&&Descendants<Button>(atlasNativePageHost).Any(button=>button.Content?.ToString()=="GitHub")&&
-   Descendants<Button>(atlasNativePageHost).Any(button=>button.Content?.ToString()=="Workshop"),
+  int UpdateCardCount()=>Descendants<Border>(atlasNativePageHost!).Count(border=>Math.Abs(border.Width-430)<1);
+  Check(UpdateCardCount()==2&&Descendants<Button>(atlasNativePageHost!).Any(button=>button.Content?.ToString()=="GitHub")&&
+   Descendants<Button>(atlasNativePageHost!).Any(button=>button.Content?.ToString()=="Workshop"),
    "更新中心按来源显示 GitHub 与 Workshop 卡片及筛选入口");
-  var githubFilter=Descendants<Button>(atlasNativePageHost).Single(button=>button.Content?.ToString()=="GitHub");
+  var githubFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="GitHub");
   githubFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,githubFilter));await Idle();
   Check(atlasNativeUpdateFilter=="GitHub"&&UpdateCardCount()==1,
    "更新中心 GitHub 来源筛选只保留已绑定 GitHub 的 MOD");
-  var updateFilter=Descendants<Button>(atlasNativePageHost).Single(button=>button.Content?.ToString()=="有更新");
+  var updateFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="有更新");
   updateFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,updateFilter));await Idle();
   Check(atlasNativeUpdateFilter=="有更新"&&UpdateCardCount()==1,
    "更新中心有更新筛选基于来源检查状态");
-  var updateSearch=Descendants<TextBox>(atlasNativePageHost).Single();
+  var updateSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
   updateSearch.Text="TestBase";await Idle();
   Check(UpdateCardCount()==0,"更新中心搜索与来源筛选可以组合使用");
   updateSearch.Text="";await Idle();
-  var allFilter=Descendants<Button>(atlasNativePageHost).Single(button=>button.Content?.ToString()=="全部");
+  var allFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="全部");
   allFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,allFilter));await Idle();
   Check(UpdateCardCount()==2,"清除更新筛选后恢复全部已关联 MOD");
   await Shot("06-ATLAS-更新中心");
