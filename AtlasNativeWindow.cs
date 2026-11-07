@@ -1202,7 +1202,7 @@ public partial class MainWindow
     {
      actions.Children.Add(AtlasButton("检查 GitHub",()=>AtlasNativeRunWorkflow(()=>CheckGitHubMod(mod)),"quiet"));
      var update=AtlasButton("下载并更新",()=>AtlasNativeRunWorkflow(()=>UpdateGitHubMod(mod)),"primary");
-     update.IsEnabled=row.HasUpdate&&!busy&&!transactionWriting&&!modInventoryDirty;
+     update.IsEnabled=row.GitHubStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
      actions.Children.Add(update);
     }
     if(row.WorkshopId.Length>0)
