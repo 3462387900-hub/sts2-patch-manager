@@ -307,7 +307,7 @@ public partial class MainWindow
    if(changed)RefreshMods();
    else if(gameRoot==selectedInstallRoot)
    {
-    if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
+    if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();
     else if(target!=null)ShowModDetail(target.Folder);
     else ShowMods();
    }
