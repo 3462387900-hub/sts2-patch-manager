@@ -50,7 +50,7 @@ public partial class MainWindow
  ContentControl? atlasNativePageHost,atlasNativeResultsHost;
  Border? atlasNativeInspector,atlasNativeBatchBar;
  TextBlock? atlasNativeGamePath,atlasNativeGameState,atlasNativeFooter,atlasNativeBatchText,atlasNativeResultsSummary;
- Button? atlasNativeLaunchButton,atlasNativeRefreshButton;
+ Button? atlasNativeLaunchButton;
  readonly Dictionary<string,Button> atlasNativeNavButtons=new(StringComparer.Ordinal);
  string atlasNativePage="总览";
  string atlasNativeViewMode="list";
@@ -259,7 +259,6 @@ public partial class MainWindow
  {
   atlasNativePage=page;
   atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
-  atlasNativeInspectorPinned=false;
   RenderAtlasNative();
   if(page=="模组库"&&selectedInstallRoot!=null&&(modInventory==null||modInventoryDirty))
    _=RefreshAtlasNativeDataAsync();
@@ -553,7 +552,7 @@ public partial class MainWindow
    row.IsSelected=atlasNativeSelectedFolders.Contains(mod.Folder);
    result.Add(row);
   }
-  return result.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
+  return result.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
  }
 
  Border BuildAtlasNativeModCard(AtlasNativeModRow row)
