@@ -12,7 +12,8 @@ using Microsoft.Win32;
 namespace SpirePatch;
 public partial class MainWindow : Window
 {
- readonly Brush ink=B("#F0F5FC"),muted=B("#CBD8E9"),gold=B("#83B9F8"),green=B("#70D8AD");
+ readonly Brush ink=B("#F0F5FC"),muted=B("#CBD8E9"),green=B("#70D8AD");
+ Brush gold=>B(UiThemes.IsAtlasNative?"#C6A36B":"#83B9F8");
  readonly Grid shell=new(); readonly StackPanel navigation=new(); readonly ContentControl content=new();
  readonly TextBlock modeLabel=new(),folderLabel=new(),toast=new();
  readonly Dictionary<string,Button> navButtons=[];
