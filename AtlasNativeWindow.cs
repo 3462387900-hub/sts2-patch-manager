@@ -1291,7 +1291,7 @@ public partial class MainWindow
    var loading=new StackPanel{Margin=new Thickness(2)};
    var loadingHeader=new Grid{Margin=new Thickness(0,0,0,13)};
    loadingHeader.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-   top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+   loadingHeader.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
    loadingHeader.Children.Add(AtlasText("MOD INSPECTOR",11,AtlasBrass,true));
    var closeLoading=AtlasButton("×",CloseAtlasNativeInspector,"quiet");
    closeLoading.Padding=new Thickness(9,3,9,3);Grid.SetColumn(closeLoading,1);loadingHeader.Children.Add(closeLoading);
