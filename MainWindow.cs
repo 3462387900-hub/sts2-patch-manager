@@ -158,7 +158,7 @@ public partial class MainWindow : Window
    Grid.SetColumn(back,1);breadcrumbGrid.Children.Add(back);
    breadcrumb.Child=breadcrumbGrid;frame.Children.Add(breadcrumb);
    UIElement pageContent=element;
-   if((active is "模组管理" or "本地补丁")&&element is FrameworkElement modPage)
+   if((active is "模组管理" or "本地补丁")&&element is Grid modPage)
     modPage.Height=Math.Max(440,atlasNativePageHost.ActualHeight-58);
    else
     pageContent=new ScrollViewer{
