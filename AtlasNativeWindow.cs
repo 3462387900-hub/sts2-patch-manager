@@ -868,8 +868,4 @@ public partial class MainWindow
   panel.Children.Add(group);
  }
 
- void UpdateGlobalControls()
- {
-  if(atlasNativeRoot!=null&&UiThemes.IsAtlasNative)UpdateAtlasNativeHeader();
- }
 }
