@@ -123,11 +123,11 @@ public partial class MainWindow : Window
   // inside the content area. This avoids cloning download, install, backup and rollback logic.
   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null&&atlasNativePageHost!=null)
   {
-   string section=AtlasNativeSectionForPage(active,key);
-   atlasNativePage=section;
+   string atlasSection=AtlasNativeSectionForPage(active,key);
+   atlasNativePage=atlasSection;
    foreach(var pair in atlasNativeNavButtons)
    {
-    bool selected=pair.Key==section;
+    bool selected=pair.Key==atlasSection;
     pair.Value.Background=selected?AtlasBrush("#3B3021"):Brushes.Transparent;
     pair.Value.BorderBrush=selected?AtlasBrush("#6D5737"):Brushes.Transparent;
     pair.Value.Foreground=selected?AtlasBrush("#E6C58F"):AtlasMuted;
