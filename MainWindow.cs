@@ -163,7 +163,7 @@ public partial class MainWindow : Window
    if(showPatchTabs)
    {
     var tabs=PatchCenterTabs(active);
-    tabs.Margin=new Thickness(0,0,0,10);
+    if(tabs is FrameworkElement tabElement)tabElement.Margin=new Thickness(0,0,0,10);
     Grid.SetRow(tabs,1);frame.Children.Add(tabs);
     contentRow=2;
    }
