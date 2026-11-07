@@ -64,6 +64,7 @@ public partial class MainWindow
  string atlasNativePage="总览";
  string atlasNativeSubpageReturnPage="总览";
  string atlasNativePatchFilter="全部",atlasNativePatchQuery="";
+ string atlasNativeUpdateFilter="全部",atlasNativeUpdateQuery="";
  string atlasNativeViewMode="grid";
  string atlasNativeQuery="";
  string atlasNativeStateFilter="全部";
@@ -1040,52 +1041,110 @@ public partial class MainWindow
     AtlasButton("前往模组库",()=>AtlasNativeNavigate("模组库"),"primary")));
    return AtlasScroll(root);
   }
-  var cards=new WrapPanel{Margin=new Thickness(0,10,0,0)};
-  foreach(var row in rows)
+
+  var filters=new WrapPanel{Margin=new Thickness(0,10,0,7)};
+  foreach(string filter in new[]{"全部","有更新","GitHub","Workshop"})
   {
-   var card=new Border{
-    Width=430,MinHeight=185,Margin=new Thickness(0,0,12,12),
-    Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#46515D"),
-    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15)
-   };
-   var body=new StackPanel();
-   body.Children.Add(AtlasText(row.Name,16,AtlasInk,true));
-   body.Children.Add(AtlasText(row.Id+"  ·  本地版本 "+row.Version,11,AtlasMuted));
-   var sources=new StackPanel{Margin=new Thickness(0,9,0,9)};
-   if(row.GitHubRepository.Length>0)
-   {
-    var status=row.GitHubStatus+(row.GitHubLatestVersion.Length>0?" · 最新 "+row.GitHubLatestVersion:"");
-    sources.Children.Add(AtlasText("GitHub  ·  "+status,12,row.GitHubStatus=="有更新"?AtlasBrass:AtlasMuted));
-    sources.Children.Add(AtlasText(row.GitHubRepository,10,AtlasMuted));
-   }
-   if(row.WorkshopId.Length>0)
-   {
-    var status=row.WorkshopStatus+(row.WorkshopLatestVersion.Length>0?" · 最新 "+row.WorkshopLatestVersion:"");
-    sources.Children.Add(AtlasText("Workshop  ·  "+status,12,row.WorkshopStatus=="有更新"?AtlasBrass:AtlasMuted));
-    sources.Children.Add(AtlasText("Workshop ID  "+row.WorkshopId,10,AtlasMuted));
-   }
-   body.Children.Add(sources);
-   var actions=new WrapPanel();
-   actions.Children.Add(AtlasButton("查看详情",()=>ShowAtlasNativeModInspector(row),"quiet"));
-   if(row.GitHubRepository.Length>0)
-   {
-    actions.Children.Add(AtlasButton("检查 GitHub",()=>AtlasNativeRunWorkflow(()=>CheckGitHubMod(row.Mod)),"quiet"));
-    var update=AtlasButton("下载 GitHub 更新",()=>AtlasNativeRunWorkflow(()=>UpdateGitHubMod(row.Mod)),"primary");
-    update.IsEnabled=row.GitHubStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
-    actions.Children.Add(update);
-   }
-   if(row.WorkshopId.Length>0)
-   {
-    actions.Children.Add(AtlasButton("检查 Workshop",()=>AtlasNativeRunWorkflow(()=>CheckWorkshopMod(row.Mod)),"quiet"));
-    var update=AtlasButton("下载 Workshop 更新",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod(row.Mod)),"primary");
-    update.IsEnabled=row.WorkshopStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
-    actions.Children.Add(update);
-   }
-   body.Children.Add(actions);
-   card.Child=body;cards.Children.Add(card);
+   string selected=filter;
+   var button=AtlasButton(filter,()=>{atlasNativeUpdateFilter=selected;RenderResults();},
+    atlasNativeUpdateFilter==filter?"primary":"quiet");
+   button.Margin=new Thickness(0,0,7,4);filters.Children.Add(button);
   }
-  root.Children.Add(cards);
+  root.Children.Add(filters);
+
+  var search=new TextBox{
+   Text=atlasNativeUpdateQuery,Height=38,FontSize=14,Padding=new Thickness(12,7,12,7),
+   Background=AtlasBrush("#20252B"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#59636E"),
+   BorderThickness=new Thickness(1),ToolTip="搜索 MOD 名称、ID、GitHub 仓库或 Workshop ID"
+  };
+  var searchHost=new Grid{Height=38,Margin=new Thickness(0,0,0,5)};
+  searchHost.Children.Add(search);
+  var searchHint=AtlasText("⌕  搜索 MOD 名称、ID、GitHub 仓库或 Workshop ID",12,AtlasMuted);
+  searchHint.Margin=new Thickness(12,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
+  searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+  searchHost.Children.Add(searchHint);
+  var resultsHost=new ContentControl();
+  search.TextChanged+=(_,_)=>{
+   atlasNativeUpdateQuery=search.Text;
+   searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+   RenderResults();
+  };
+  root.Children.Add(searchHost);
+  root.Children.Add(resultsHost);
+  RenderResults();
   return AtlasScroll(root);
+
+  void RenderResults()
+  {
+   IEnumerable<AtlasNativeModRow> filtered=rows;
+   if(atlasNativeUpdateFilter=="有更新")filtered=filtered.Where(x=>x.HasUpdate);
+   else if(atlasNativeUpdateFilter=="GitHub")filtered=filtered.Where(x=>x.GitHubRepository.Length>0);
+   else if(atlasNativeUpdateFilter=="Workshop")filtered=filtered.Where(x=>x.WorkshopId.Length>0);
+   string query=atlasNativeUpdateQuery.Trim();
+   if(query.Length>0)
+    filtered=filtered.Where(x=>(x.Name+" "+x.Id+" "+x.GitHubRepository+" "+x.WorkshopId+
+     " "+x.GitHubStatus+" "+x.WorkshopStatus).Contains(query,StringComparison.OrdinalIgnoreCase));
+   var visible=filtered.ToArray();
+   if(visible.Length==0)
+   {
+    resultsHost.Content=AtlasEmpty("没有符合条件的 MOD","尝试切换来源筛选，或清空搜索条件。");
+    return;
+   }
+   var cards=new WrapPanel{Margin=new Thickness(0,10,0,0)};
+   foreach(var row in visible)
+   {
+    var card=new Border{
+     Width=430,MinHeight=185,Margin=new Thickness(0,0,12,12),
+     Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#46515D"),
+     BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15)
+    };
+    var body=new StackPanel();
+    var heading=new Grid();
+    heading.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+    heading.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+    var name=AtlasText(row.Name,16,AtlasInk,true);
+    name.TextTrimming=TextTrimming.CharacterEllipsis;name.ToolTip=row.Name;
+    heading.Children.Add(name);
+    if(row.HasUpdate){var badge=AtlasBadge("发现更新","warn");Grid.SetColumn(badge,1);heading.Children.Add(badge);}
+    body.Children.Add(heading);
+    body.Children.Add(AtlasText(row.Id+"  ·  本地版本 "+row.Version,11,AtlasMuted));
+    var sources=new StackPanel{Margin=new Thickness(0,9,0,9)};
+    if(row.GitHubRepository.Length>0)
+    {
+     var status=row.GitHubStatus+(row.GitHubLatestVersion.Length>0?" · 最新 "+row.GitHubLatestVersion:"");
+     sources.Children.Add(AtlasText("GitHub  ·  "+status,12,row.GitHubStatus=="有更新"?AtlasBrass:AtlasMuted));
+     var repoText=AtlasText(row.GitHubRepository,10,AtlasMuted);
+     repoText.TextTrimming=TextTrimming.CharacterEllipsis;repoText.ToolTip=row.GitHubRepository;
+     sources.Children.Add(repoText);
+    }
+    if(row.WorkshopId.Length>0)
+    {
+     var status=row.WorkshopStatus+(row.WorkshopLatestVersion.Length>0?" · 最新 "+row.WorkshopLatestVersion:"");
+     sources.Children.Add(AtlasText("Workshop  ·  "+status,12,row.WorkshopStatus=="有更新"?AtlasBrass:AtlasMuted));
+     sources.Children.Add(AtlasText("Workshop ID  "+row.WorkshopId,10,AtlasMuted));
+    }
+    body.Children.Add(sources);
+    var actions=new WrapPanel();
+    actions.Children.Add(AtlasButton("查看详情",()=>ShowAtlasNativeModInspector(row),"quiet"));
+    if(row.GitHubRepository.Length>0)
+    {
+     actions.Children.Add(AtlasButton("检查 GitHub",()=>AtlasNativeRunWorkflow(()=>CheckGitHubMod(row.Mod)),"quiet"));
+     var update=AtlasButton("下载 GitHub 更新",()=>AtlasNativeRunWorkflow(()=>UpdateGitHubMod(row.Mod)),"primary");
+     update.IsEnabled=row.GitHubStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
+     actions.Children.Add(update);
+    }
+    if(row.WorkshopId.Length>0)
+    {
+     actions.Children.Add(AtlasButton("检查 Workshop",()=>AtlasNativeRunWorkflow(()=>CheckWorkshopMod(row.Mod)),"quiet"));
+     var update=AtlasButton("下载 Workshop 更新",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod(row.Mod)),"primary");
+     update.IsEnabled=row.WorkshopStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
+     actions.Children.Add(update);
+    }
+    body.Children.Add(actions);
+    card.Child=body;cards.Children.Add(card);
+   }
+   resultsHost.Content=cards;
+  }
  }
 
  UIElement BuildAtlasNativeDownloadsPage()
