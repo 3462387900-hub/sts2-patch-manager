@@ -51,21 +51,33 @@ public partial class MainWindow
   async Task OpenReadyPreview(string folder,bool enable)
   {
    string label=enable?"预览启用":"预览停用";
+   string lastPreviewFailure="";
    for(int attempt=0;attempt<180;attempt++)
    {
     await Idle();
-    if(!busy&&!transactionWriting&&!modInventoryDirty&&
+    if(!busy&&!transactionWriting&&!modInventoryDirty&&selectedInstallRoot!=null&&
        modInventory?.Mods.Any(mod=>mod.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
     {
-     ShowModDetail(folder);await Idle();
-     if(Controls<Button>(shell).Any(button=>button.Content?.ToString()==label&&button.IsEnabled))
-      return;
+     try
+     {
+      // The filesystem watcher can briefly hold the environment mutex while
+      // refreshing the same fixture. Probe the real read-only preview first;
+      // only inspect the button after the transaction lock is demonstrably free.
+      _=await Task.Run(()=>ModManager.Preview(selectedInstallRoot,folder,enable));
+      ShowModDetail(folder);await Idle();
+      if(Controls<Button>(shell).Any(button=>button.Content?.ToString()==label&&button.IsEnabled))
+       return;
+     }
+     catch(Exception error) when(error is InvalidOperationException or IOException or UnauthorizedAccessException)
+     {
+      lastPreviewFailure=error.Message;
+     }
     }
     await Task.Delay(60);
    }
    throw new InvalidOperationException("安全预览按钮在稳定扫描后仍不可用："+label+
     "; busy="+busy+"; writing="+transactionWriting+"; dirty="+modInventoryDirty+
-    "; page="+page+"; folder="+folder);
+    "; page="+page+"; preview="+lastPreviewFailure+"; folder="+folder);
   }
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
   // Regression: a visually opaque overlay hid the native acrylic throughout v0.12.0.
