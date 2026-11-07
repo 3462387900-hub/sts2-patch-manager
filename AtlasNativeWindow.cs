@@ -1289,13 +1289,13 @@ public partial class MainWindow
   if(modInventory==null)
   {
    var loading=new StackPanel{Margin=new Thickness(2)};
-   var top=new Grid{Margin=new Thickness(0,0,0,13)};
-   top.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+   var loadingHeader=new Grid{Margin=new Thickness(0,0,0,13)};
+   loadingHeader.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
    top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-   top.Children.Add(AtlasText("MOD INSPECTOR",11,AtlasBrass,true));
-   var close=AtlasButton("×",CloseAtlasNativeInspector,"quiet");
-   close.Padding=new Thickness(9,3,9,3);Grid.SetColumn(close,1);top.Children.Add(close);
-   loading.Children.Add(top);
+   loadingHeader.Children.Add(AtlasText("MOD INSPECTOR",11,AtlasBrass,true));
+   var closeLoading=AtlasButton("×",CloseAtlasNativeInspector,"quiet");
+   closeLoading.Padding=new Thickness(9,3,9,3);Grid.SetColumn(closeLoading,1);loadingHeader.Children.Add(closeLoading);
+   loading.Children.Add(loadingHeader);
    loading.Children.Add(AtlasText("正在刷新本地清单",17,AtlasInk,true));
    loading.Children.Add(AtlasText("已保留当前选择。扫描完成后会自动显示最新的 MOD 与补丁依据。",12,AtlasMuted));
    atlasNativeInspector.Child=loading;
