@@ -6,8 +6,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SharpCompress" Version="0.50.7" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3595.46" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="Ui/Atlas/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Keep the standalone console probe isolated from the WPF application's default compile glob. -->
     <Compile Remove="tools/**/*.cs" />
   </ItemGroup>
