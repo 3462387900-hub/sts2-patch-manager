@@ -83,7 +83,7 @@ public partial class MainWindow : Window
    navigation.Children.Add(ThemeSwitcher());
   layout.Children.Add(new ScrollViewer{Content=navigation,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
  }
- static bool IsPatchCenterPage(string name)=>name is "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚" or "本地补丁";
+ static bool IsPatchCenterPage(string name)=>name is "修复中心" or "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚" or "本地补丁";
  UIElement PatchCenterTabs(string active)
  {
   var tabs=new WrapPanel{Margin=new(0,0,0,11)};
@@ -162,7 +162,7 @@ public partial class MainWindow : Window
    int contentRow=1;
    if(showPatchTabs)
    {
-    var tabs=PatchCenterTabs(active);
+    var tabs=PatchCenterTabs(active=="修复中心"?"补丁库":active);
     if(tabs is FrameworkElement tabElement)tabElement.Margin=new Thickness(0,0,0,10);
     Grid.SetRow(tabs,1);frame.Children.Add(tabs);
     contentRow=2;
@@ -185,7 +185,7 @@ public partial class MainWindow : Window
   pageScroll!.VerticalScrollBarVisibility=(active=="模组管理"||active=="本地补丁")&&(key??active)==active
    ?ScrollBarVisibility.Disabled:ScrollBarVisibility.Auto;
   if(IsPatchCenterPage(active)&&active!="本地补丁"){
-   var group=V(PatchCenterTabs(active),element);
+   var group=V(PatchCenterTabs(active=="修复中心"?"补丁库":active),element);
    content.Content=group;
   }else content.Content=element;
   string section=IsPatchCenterPage(active)?"修复补丁":active is "诊断"?"诊断与日志":active is "游戏目录" or "检查更新"?"工具与设置":active;
