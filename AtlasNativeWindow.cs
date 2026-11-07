@@ -5,6 +5,8 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace SpirePatch;
@@ -870,6 +872,113 @@ public partial class MainWindow
   group.Children.Add(AtlasText(label,10,AtlasBrass,true));
   group.Children.Add(AtlasText(value,12,AtlasMuted));
   panel.Children.Add(group);
+ }
+
+ public async Task CaptureAtlasNativeAsync(string fixtures,string output)
+ {
+  Directory.CreateDirectory(fixtures);Directory.CreateDirectory(output);
+  var checks=new List<string>();
+  void Check(bool ok,string name)
+  {
+   if(!ok)throw new InvalidOperationException(name);
+   checks.Add("PASS "+name);
+   File.WriteAllLines(Path.Combine(output,"ATLAS 原生界面验证.txt"),checks);
+  }
+  async Task Idle()
+  {
+   await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+   UpdateLayout();atlasNativeRoot?.UpdateLayout();
+  }
+  async Task Shot(string name)
+  {
+   await Idle();
+   if(atlasNativeRoot==null||atlasNativeRoot.ActualWidth<1||atlasNativeRoot.ActualHeight<1)
+    throw new InvalidOperationException("ATLAS 原生窗口尚未完成布局。");
+   var image=new RenderTargetBitmap((int)atlasNativeRoot.ActualWidth,(int)atlasNativeRoot.ActualHeight,96,96,PixelFormats.Pbgra32);
+   image.Render(atlasNativeRoot);
+   var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));
+   using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);
+  }
+
+  string fixture=WorkspaceChecks.Fixture(fixtures);
+  UseGameRoot(fixture);
+  modInventory=await Task.Run(()=>ModManager.Scan(fixture));
+  report=await Task.Run(()=>Catalog.Scan(fixture));
+  states=report.Patches;demo=false;modInventoryDirty=false;
+  modStatus=$"共 {modInventory.Mods.Count} 项 · ATLAS 隔离界面验证";
+  atlasNativeSelectedFolders.Clear();atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
+  atlasNativePage="总览";atlasNativeViewMode="list";atlasNativeQuery="";
+  atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";atlasNativeUnboundOnly=false;
+  uiTheme=UiThemes.AtlasNative;UiThemes.Active=UiThemes.AtlasNative;
+  ShowAtlasNative();await Idle();
+  Check(atlasNativeRoot!=null&&ReferenceEquals(Content,atlasNativeRoot),
+   "ATLAS 使用原生 WPF 视觉树，不依赖 WebView2");
+  Check(atlasNativeNavButtons.Count==6&&atlasNativePageHost!=null,
+   "原生工作台创建六个一级导航与独立页面容器");
+  await Shot("01-ATLAS-总览");
+
+  AtlasNativeNavigate("模组库");await Idle();
+  Check(atlasNativeRows.Count==6&&GetFilteredAtlasNativeRows().Length==6,
+   "模组库读取真实扫描模型并将独立补丁从普通 MOD 中分离");
+  Check(atlasNativeResultsHost?.Content is DataGrid,
+   "默认专业列表使用原生 DataGrid");
+  atlasNativeQuery="TestSolo";RenderAtlasNativeModResults();
+  Check(GetFilteredAtlasNativeRows().Length==1&&GetFilteredAtlasNativeRows()[0].Id=="TestSolo",
+   "搜索可以按本地 MOD ID 精确筛选");
+  atlasNativeQuery="";atlasNativeUnboundOnly=true;RenderAtlasNativeModResults();
+  Check(GetFilteredAtlasNativeRows().Length==6,
+   "未绑定 Workshop ID 筛选基于真实来源关联数据");
+  atlasNativeUnboundOnly=false;atlasNativeViewMode="grid";RenderAtlasNativeModResults();
+  Check(atlasNativeResultsHost?.Content is WrapPanel,
+   "库视图使用原生 WPF 卡片容器");
+  await Shot("02-ATLAS-库视图");
+  atlasNativeViewMode="list";RenderAtlasNativeModResults();
+  Check(atlasNativeResultsHost?.Content is DataGrid,
+   "列表与库视图切换复用同一份模组数据");
+  ShowAtlasNativeModInspector(atlasNativeRows[0]);await Idle();
+  Check(atlasNativeInspector?.Visibility==Visibility.Visible&&
+   Math.Abs(atlasNativeBody!.ColumnDefinitions[1].Width.Value-330)<1,
+   "模组详情检查器按需展开，不默认占用主列表空间");
+  CloseAtlasNativeInspector();await Idle();
+  Check(atlasNativeInspector?.Visibility==Visibility.Collapsed,
+   "详情检查器可以关闭并恢复列表宽度");
+
+  AtlasNativeNavigate("修复中心");await Idle();
+  var localPatches=modInventory!.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
+  Check(localPatches.Length==1&&atlasNativePageHost?.Content is ScrollViewer,
+   "修复中心只展示独立补丁，不混入普通 MOD");
+  var patchState=report!.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(localPatches[0].Id,StringComparison.OrdinalIgnoreCase));
+  ShowAtlasNativePatchInspector(localPatches[0],patchState);await Idle();
+  Check(atlasNativeInspector?.Visibility==Visibility.Visible,
+   "补丁检查器展示扫描依据与生命周期状态");
+  await Shot("03-ATLAS-修复中心");
+
+  AtlasNativeNavigate("更新中心");await Idle();
+  Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is ScrollViewer,
+   "更新中心以只读方式呈现已有缓存，不触发自动联网检查");
+  AtlasNativeNavigate("设置");await Idle();
+  Check(atlasNativePage=="设置"&&atlasNativePageHost?.Content is ScrollViewer,
+   "设置页面保留游戏目录与旧版功能入口");
+
+  double oldWidth=Width,oldHeight=Height;
+  Width=1020;Height=720;await Idle();RenderAtlasNative();await Idle();
+  var navFits=atlasNativeNavButtons.Values.All(button=>
+  {
+   var bounds=button.TransformToAncestor(atlasNativeRoot!).TransformBounds(new Rect(0,0,button.ActualWidth,button.ActualHeight));
+   return bounds.Left>=0&&bounds.Right<=atlasNativeRoot!.ActualWidth+1;
+  });
+  Check(navFits&&atlasNativeRoot!.ActualWidth<=Width+1,
+   "1020×720 最小窗口下顶部导航保持在窗口范围内");
+  await Shot("04-ATLAS-窄窗口");
+  Width=oldWidth;Height=oldHeight;await Idle();
+
+  ChangeUiTheme(UiThemes.Workspace);
+  Check(ReferenceEquals(Content,shell)&&UiThemes.IsWorkspace,
+   "ATLAS 可无重启返回原有 WPF 工作台");
+  ChangeUiTheme(UiThemes.AtlasNative);
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&UiThemes.IsAtlasNative,
+   "可从原工作台重新切回 ATLAS 原生界面");
+  CloseModWatch();
  }
 
 }
