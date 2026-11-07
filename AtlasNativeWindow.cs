@@ -1344,8 +1344,15 @@ public partial class MainWindow
   Check(atlasNativeFooter?.GetBindingExpression(TextBlock.TextProperty)!=null,
    "ATLAS 状态栏绑定到现有下载、更新和安装任务状态");
   await Shot("01-ATLAS-总览");
+  Check(File.Exists(Path.Combine(output,"01-ATLAS-总览.png")),
+   "ATLAS 总览截图已生成");
 
-  AtlasNativeNavigate("模组库");await Idle();
+  AtlasNativeNavigate("模组库");
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePage=="模组库",
+   "从总览同步切换到原生模组库");
+  await Idle();
+  Check(atlasNativePageHost?.Content is ScrollViewer,
+   "模组库页面完成布局");
   Check(atlasNativeRows.Count==6&&GetFilteredAtlasNativeRows().Length==6,
    "模组库读取真实扫描模型并将独立补丁从普通 MOD 中分离");
   Check(atlasNativeResultsHost?.Content is DataGrid,
