@@ -1212,7 +1212,7 @@ public partial class MainWindow
   AddInspectorField(content,"版本",mod.Version);
   AddInspectorField(content,"作者",mod.Author);
   AddInspectorField(content,"说明",mod.Description.Length==0?"作者未提供简介。":mod.Description);
-  AddInspectorField(content,"安装路径",mod.Folder);
+  AddInspectorField(content,"安装路径",Path.GetFileName(mod.Folder),mod.Folder);
   string dependencies=string.Join("、",mod.Dependencies.Select(x=>x.Id));
   AddInspectorField(content,"依赖",dependencies.Length>0?dependencies:"未声明必需前置");
 
@@ -1280,7 +1280,7 @@ public partial class MainWindow
   var scroller=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
   atlasNativeInspector.Child=scroller;
   atlasNativeInspector.Visibility=Visibility.Visible;
-  atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(365);
+  atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(Math.Clamp(ActualWidth<=1150?310:ActualWidth<=1400?330:350,300,350));
  }
 
  void AtlasNativeRefreshLifecycle()
@@ -1292,11 +1292,17 @@ public partial class MainWindow
   });
  }
 
- void AddInspectorField(Panel panel,string label,string value)
+ void AddInspectorField(Panel panel,string label,string value,string? fullValue=null)
  {
   var group=new StackPanel{Margin=new Thickness(0,0,0,12)};
   group.Children.Add(AtlasText(label,11,AtlasBrass,true));
-  group.Children.Add(AtlasText(value,13,AtlasMuted));
+  var text=AtlasText(value,13,AtlasMuted);
+  if(fullValue!=null){
+   text.TextWrapping=TextWrapping.NoWrap;
+   text.TextTrimming=TextTrimming.CharacterEllipsis;
+   text.ToolTip=fullValue;
+  }
+  group.Children.Add(text);
   panel.Children.Add(group);
  }
 
@@ -1372,7 +1378,7 @@ public partial class MainWindow
    "列表与库视图切换复用同一份模组数据");
   ShowAtlasNativeModInspector(atlasNativeRows[0]);await Idle();
   Check(atlasNativeInspector?.Visibility==Visibility.Visible&&
-   Math.Abs(atlasNativeBody!.ColumnDefinitions[1].Width.Value-365)<1,
+   atlasNativeBody!.ColumnDefinitions[1].Width.Value>=300&&atlasNativeBody.ColumnDefinitions[1].Width.Value<=350,
    "模组详情检查器按需展开，不默认占用主列表空间");
   CloseAtlasNativeInspector();await Idle();
   Check(atlasNativeInspector?.Visibility==Visibility.Collapsed,
