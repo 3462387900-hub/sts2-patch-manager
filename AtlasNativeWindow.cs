@@ -1415,7 +1415,6 @@ public partial class MainWindow
   atlasNativeSelectedFolders.Clear();atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
   atlasNativePage="总览";atlasNativeViewMode="list";atlasNativeQuery="";
   atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";atlasNativeUnboundOnly=false;
-  uiTheme=UiThemes.AtlasNative;UiThemes.Active=UiThemes.AtlasNative;
   ChangeUiTheme(UiThemes.AtlasNative);
   ShowAtlasNative();await Idle();
   Check(atlasNativeRoot!=null&&ReferenceEquals(Content,atlasNativeRoot),
