@@ -1333,6 +1333,11 @@ public partial class MainWindow
    "ATLAS 使用原生 WPF 视觉树，不依赖 WebView2");
   Check(atlasNativeNavButtons.Count==6&&atlasNativePageHost!=null,
    "原生工作台创建六个一级导航与独立页面容器");
+  string previousToast=toast.Text;
+  toast.Text="ATLAS 进度状态联动测试";await Idle();
+  Check(atlasNativeFooter?.Text==toast.Text,
+   "原有下载、更新和安装进度会实时同步到 ATLAS 状态栏");
+  toast.Text=previousToast;await Idle();
   await Shot("01-ATLAS-总览");
 
   AtlasNativeNavigate("模组库");await Idle();
