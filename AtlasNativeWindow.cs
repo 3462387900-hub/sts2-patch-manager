@@ -1043,6 +1043,7 @@ public partial class MainWindow
   }
 
   var resultsHost=new ContentControl();
+  var resultSummary=AtlasText("",11,AtlasMuted);
   var filters=new WrapPanel{Margin=new Thickness(0,10,0,7)};
   var filterButtons=new Dictionary<string,Button>(StringComparer.Ordinal);
   foreach(string filter in new[]{"全部","有更新","GitHub","Workshop"})
@@ -1072,7 +1073,6 @@ public partial class MainWindow
    RenderResults();
   };
   root.Children.Add(searchHost);
-  var resultSummary=AtlasText("",11,AtlasMuted);
   resultSummary.Margin=new Thickness(2,2,0,5);root.Children.Add(resultSummary);
   root.Children.Add(resultsHost);
   RenderResults();
