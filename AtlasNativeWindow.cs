@@ -490,8 +490,18 @@ public partial class MainWindow
    BorderThickness=new Thickness(1),ToolTip="搜索 MOD 名称、ID 或作者"
   };
   search.Text=atlasNativeQuery;
-  search.TextChanged+=(_,_)=>{atlasNativeQuery=search.Text;RenderAtlasNativeModResults();};
-  toolbar.Children.Add(search);
+  var searchHost=new Grid{Width=250,Height=36};
+  searchHost.Children.Add(search);
+  var searchHint=AtlasText("⌕  搜索 MOD 名称、ID 或作者",12,AtlasMuted);
+  searchHint.Margin=new Thickness(11,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
+  searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+  searchHost.Children.Add(searchHint);
+  search.TextChanged+=(_,_)=>{
+   atlasNativeQuery=search.Text;
+   searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+   RenderAtlasNativeModResults();
+  };
+  toolbar.Children.Add(searchHost);
 
   var stateCombo=AtlasCombo(["全部","已启用","已停用","有更新"],atlasNativeStateFilter);
   stateCombo.Width=112;stateCombo.Margin=new Thickness(8,0,0,0);
@@ -806,6 +816,16 @@ public partial class MainWindow
   atlasNativeSelectedFolders.Clear();UpdateAtlasNativeSelection();RenderAtlasNativeModResults();
  }
 
+ bool AtlasNativePatchNeedsReview(string tag)
+ {
+  return tag is "需重新检查" or "未检查" or "未收录" or "暂无确认证据" or "已确认不兼容" ||
+   tag.Contains("需核对",StringComparison.Ordinal) ||
+   tag.Contains("疑似上游修复",StringComparison.Ordinal) ||
+   tag.Contains("复查",StringComparison.Ordinal) ||
+   tag.Contains("失效",StringComparison.Ordinal) ||
+   tag.Contains("过期",StringComparison.Ordinal);
+ }
+
  UIElement BuildAtlasNativePatchesPage()
  {
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
@@ -831,11 +851,7 @@ public partial class MainWindow
   var patches=modInventory.Mods.Where(ModPresentation.IsIndependentPatch)
    .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
   var active=patches.Count(x=>x.Enabled);
-  var needsReview=patches.Count(x=>{
-   string tag=LifecycleTag(x.Id);
-   return tag.Contains("复查",StringComparison.Ordinal)||tag.Contains("核对",StringComparison.Ordinal)||
-    tag.Contains("疑似",StringComparison.Ordinal)||tag=="未检查"||tag=="暂无确认证据";
-  });
+  var needsReview=patches.Count(x=>AtlasNativePatchNeedsReview(LifecycleTag(x.Id)));
   var retireable=lifecycleReport?.Patches.Count(x=>x.CanRetire)??0;
   var stats=new WrapPanel{Margin=new Thickness(0,0,0,9)};
   stats.Children.Add(AtlasCompactStat(patches.Length.ToString(),"本地独立补丁","不含普通 MOD"));
@@ -890,12 +906,19 @@ public partial class MainWindow
    Background=AtlasBrush("#20252B"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#59636E"),
    BorderThickness=new Thickness(1),ToolTip="搜索补丁名称、ID 或关联 MOD"
   };
+  var searchHost=new Grid{Height=38,Margin=new Thickness(0,0,0,2)};
+  searchHost.Children.Add(search);
+  var searchHint=AtlasText("⌕  搜索补丁名称、ID 或关联 MOD",12,AtlasMuted);
+  searchHint.Margin=new Thickness(12,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
+  searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+  searchHost.Children.Add(searchHint);
   var resultsHost=new ContentControl();
   search.TextChanged+=(_,_)=>{
    atlasNativePatchQuery=search.Text;
+   searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
    RenderAtlasNativePatchResults(resultsHost,patches);
   };
-  root.Children.Add(search);
+  root.Children.Add(searchHost);
   root.Children.Add(resultsHost);
   RenderAtlasNativePatchResults(resultsHost,patches);
   return AtlasScroll(root);
@@ -907,8 +930,7 @@ public partial class MainWindow
   {
    string tag=LifecycleTag(mod.Id);
    var life=lifecycleReport?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
-   bool review=tag.Contains("复查",StringComparison.Ordinal)||tag.Contains("核对",StringComparison.Ordinal)||
-    tag.Contains("疑似",StringComparison.Ordinal)||tag=="未检查"||tag=="暂无确认证据";
+   bool review=AtlasNativePatchNeedsReview(tag);
    bool filter=atlasNativePatchFilter switch{
     "已启用"=>mod.Enabled,"已停用"=>!mod.Enabled,"需要复查"=>review,
     "可安全退役"=>life?.CanRetire==true,_=>true
@@ -941,8 +963,8 @@ public partial class MainWindow
    var enabled=AtlasBadge(mod.Enabled?"已启用":"已停用",mod.Enabled?"ok":"neutral");
    Grid.SetColumn(enabled,1);heading.Children.Add(enabled);body.Children.Add(heading);
    body.Children.Add(AtlasText(mod.Id+"  ·  v"+mod.Version,11,AtlasMuted));
-   var healthKind=health.Contains("已验证")||health.Contains("匹配")?"ok":
-    health.Contains("疑似")||health.Contains("复查")||health.Contains("核对")||health=="未检查"?"warn":"neutral";
+   var healthKind=AtlasNativePatchNeedsReview(health)?"warn":
+    health is "已知构建匹配" or "上游修复已验证"?"ok":"neutral";
    var badges=new WrapPanel{Margin=new Thickness(0,8,0,7)};
    badges.Children.Add(AtlasBadge("文件："+fileStatus,fileStatus.Contains("一致")||fileStatus=="已安装"?"ok":"neutral"));
    badges.Children.Add(AtlasBadge("健康："+health,healthKind));
