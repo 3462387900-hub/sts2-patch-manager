@@ -1309,6 +1309,18 @@ public partial class MainWindow
   Check(atlasNativeInspector?.Visibility==Visibility.Collapsed,
    "详情检查器可以关闭并恢复列表宽度");
 
+  var solo=modInventory.Mods.First(x=>x.Id=="TestSolo");
+  ShowModDetail(solo.Folder);await Idle();
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
+   "现有 MOD 完整详情可嵌入 ATLAS 外壳，不切换到旧版主界面");
+  AtlasNativeNavigate("模组库");await Idle();
+  modTogglePreview=ModManager.Preview(fixture,solo.Folder,!solo.Enabled);
+  ShowModConfirmation();await Idle();
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
+   "现有安全启停预览可在 ATLAS 外壳内确认，不直接修改文件");
+  modTogglePreview=null;
+  AtlasNativeNavigate("模组库");await Idle();
+
   AtlasNativeNavigate("修复中心");await Idle();
   var localPatches=modInventory!.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
   Check(localPatches.Length==1&&atlasNativePageHost?.Content is ScrollViewer,
@@ -1318,13 +1330,20 @@ public partial class MainWindow
   Check(atlasNativeInspector?.Visibility==Visibility.Visible,
    "补丁检查器展示扫描依据与生命周期状态");
   await Shot("03-ATLAS-修复中心");
+  ShowPatchEvidence(localPatches[0].Id);await Idle();
+  Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
+   "完整补丁证据与生命周期处理页面保留在 ATLAS 外壳内");
+  AtlasNativeNavigate("修复中心");await Idle();
 
   AtlasNativeNavigate("更新中心");await Idle();
   Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is ScrollViewer,
    "更新中心以只读方式呈现已有缓存，不触发自动联网检查");
+  AtlasNativeNavigate("下载中心");await Idle();
+  Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
+   "下载中心提供 Workshop、GitHub 与本地 ZIP 的真实流程入口");
   AtlasNativeNavigate("设置");await Idle();
   Check(atlasNativePage=="设置"&&atlasNativePageHost?.Content is ScrollViewer,
-   "设置页面保留游戏目录与旧版功能入口");
+   "设置页面保留游戏目录、界面主题和诊断工具入口");
 
   double oldWidth=Width,oldHeight=Height;
   Width=1020;Height=720;await Idle();RenderAtlasNative();await Idle();
