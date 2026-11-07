@@ -3,6 +3,22 @@
   <SolidColorBrush x:Key="Bg" Color="#0D1524"/><SolidColorBrush x:Key="Panel" Color="#D9182942"/>
   <SolidColorBrush x:Key="Line" Color="#344862"/><SolidColorBrush x:Key="Ink" Color="#F0F5FC"/>
   <SolidColorBrush x:Key="Muted" Color="#CBD8E9"/><SolidColorBrush x:Key="Gold" Color="#83B9F8"/>
+  <SolidColorBrush x:Key="AccentPrimary" Color="#83B9F8"/>
+  <SolidColorBrush x:Key="AccentPrimaryForeground" Color="#10243F"/>
+  <SolidColorBrush x:Key="AccentPrimaryBorder" Color="#408AB8ED"/>
+  <SolidColorBrush x:Key="AccentHoverBorder" Color="#648FB6E2"/>
+  <SolidColorBrush x:Key="AccentFocusBorder" Color="#B0A7D3FF"/>
+  <SolidColorBrush x:Key="AccentSelectedTabBackground" Color="#76446993"/>
+  <SolidColorBrush x:Key="AccentSelectedTabBorder" Color="#5A90B7E1"/>
+  <SolidColorBrush x:Key="AccentSelectedTabForeground" Color="#EAF4FF"/>
+  <SolidColorBrush x:Key="AccentCaret" Color="#83B9F8"/>
+  <SolidColorBrush x:Key="AccentCheckboxHoverBorder" Color="#7789B9E5"/>
+  <SolidColorBrush x:Key="AccentCheckboxCheckedBackground" Color="#BC47769C"/>
+  <SolidColorBrush x:Key="AccentCheckboxCheckedBorder" Color="#9EA6D5F2"/>
+  <SolidColorBrush x:Key="AccentTabUnderline" Color="#86B9F4"/>
+  <SolidColorBrush x:Key="AccentToolbarPrimaryBackground" Color="#6742638A"/>
+  <SolidColorBrush x:Key="AccentSegmentActiveBackground" Color="#75517598"/>
+  <SolidColorBrush x:Key="AccentSegmentActiveForeground" Color="#F5F9FF"/>
   <Style TargetType="Window"><Setter Property="Background" Value="#152238"/><Setter Property="Foreground" Value="#F0F5FC"/><Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI"/></Style>
   <Style TargetType="TextBlock"><Setter Property="FontSize" Value="14"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
   <!-- Rounded borders must be anti-aliased in fractional DPI layouts. Avoid hard opaque
@@ -28,10 +44,10 @@
                        SnapsToDevicePixels="True"/>
     </Border><ControlTemplate.Triggers>
      <Trigger Property="IsMouseOver" Value="True">
-      <Setter TargetName="B" Property="BorderBrush" Value="#648FB6E2"/>
+      <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource AccentHoverBorder}"/>
      </Trigger>
      <Trigger Property="IsKeyboardFocused" Value="True">
-      <Setter TargetName="B" Property="BorderBrush" Value="#B0A7D3FF"/>
+      <Setter TargetName="B" Property="BorderBrush" Value="{DynamicResource AccentFocusBorder}"/>
      </Trigger>
      <Trigger Property="IsEnabled" Value="False">
       <Setter TargetName="B" Property="Opacity" Value="0.68"/>
@@ -40,8 +56,8 @@
    </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-   <Setter Property="Background" Value="#83B9F8"/><Setter Property="Foreground" Value="#10243F"/>
-   <Setter Property="BorderBrush" Value="#408AB8ED"/><Setter Property="FontWeight" Value="SemiBold"/>
+   <Setter Property="Background" Value="{DynamicResource AccentPrimary}"/><Setter Property="Foreground" Value="{DynamicResource AccentPrimaryForeground}"/>
+   <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimaryBorder}"/><Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
   <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
    <Setter Property="Background" Value="#942C4363"/><Setter Property="Foreground" Value="#F0F5FC"/>
@@ -74,12 +90,12 @@
   </Style>
   <!-- Tabs and filters indicate selection without competing with the one primary action. -->
   <Style x:Key="SelectedTab" TargetType="Button" BasedOn="{StaticResource Ghost}">
-   <Setter Property="Background" Value="#76446993"/>
-   <Setter Property="BorderBrush" Value="#5A90B7E1"/>
-   <Setter Property="Foreground" Value="#EAF4FF"/>
+   <Setter Property="Background" Value="{DynamicResource AccentSelectedTabBackground}"/>
+   <Setter Property="BorderBrush" Value="{DynamicResource AccentSelectedTabBorder}"/>
+   <Setter Property="Foreground" Value="{DynamicResource AccentSelectedTabForeground}"/>
    <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
-  <Style TargetType="TextBox"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#E01B2E4A"/><Setter Property="BorderBrush" Value="#577B9DBB"/><Setter Property="CaretBrush" Value="#83B9F8"/><Setter Property="Padding" Value="12,10"/><Setter Property="FontSize" Value="14"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="Field" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" SnapsToDevicePixels="False" UseLayoutRounding="False"><ScrollViewer x:Name="PART_ContentHost"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Field" Property="BorderBrush" Value="#83B9F8"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+  <Style TargetType="TextBox"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#E01B2E4A"/><Setter Property="BorderBrush" Value="#577B9DBB"/><Setter Property="CaretBrush" Value="{DynamicResource AccentPrimary}"/><Setter Property="Padding" Value="12,10"/><Setter Property="FontSize" Value="14"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="Field" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" SnapsToDevicePixels="False" UseLayoutRounding="False"><ScrollViewer x:Name="PART_ContentHost"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Field" Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
   <Style x:Key="AtlasComboBoxItem" TargetType="ComboBoxItem">
    <Setter Property="Foreground" Value="#F0EEE8"/><Setter Property="Background" Value="Transparent"/>
    <Setter Property="Padding" Value="9,7"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -165,11 +181,11 @@
     <ControlTemplate.Triggers>
      <Trigger Property="IsMouseOver" Value="True">
       <Setter TargetName="TickSurface" Property="Background" Value="#87506B8B"/>
-      <Setter TargetName="TickSurface" Property="BorderBrush" Value="#7789B9E5"/>
+      <Setter TargetName="TickSurface" Property="BorderBrush" Value="{DynamicResource AccentCheckboxHoverBorder}"/>
      </Trigger>
      <Trigger Property="IsChecked" Value="True">
-      <Setter TargetName="TickSurface" Property="Background" Value="#BC47769C"/>
-      <Setter TargetName="TickSurface" Property="BorderBrush" Value="#9EA6D5F2"/>
+      <Setter TargetName="TickSurface" Property="Background" Value="{DynamicResource AccentCheckboxCheckedBackground}"/>
+      <Setter TargetName="TickSurface" Property="BorderBrush" Value="{DynamicResource AccentCheckboxCheckedBorder}"/>
       <Setter TargetName="TickMark" Property="Visibility" Value="Visible"/>
      </Trigger>
      <Trigger Property="IsEnabled" Value="False"><Setter TargetName="TickSurface" Property="Opacity" Value=".5"/></Trigger>
@@ -232,7 +248,7 @@
   </Style>
   <Style x:Key="ModWorkspaceTabActive" TargetType="Button" BasedOn="{StaticResource ModWorkspaceTab}">
    <Setter Property="Foreground" Value="#F1F7FF"/><Setter Property="FontWeight" Value="SemiBold"/>
-   <Setter Property="BorderBrush" Value="#86B9F4"/>
+   <Setter Property="BorderBrush" Value="{DynamicResource AccentTabUnderline}"/>
   </Style>
   <!-- Quiet toolbar: icons and labels without heavy full outlines. -->
   <Style x:Key="ModToolbarAction" TargetType="Button">
@@ -252,15 +268,15 @@
    </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="ModToolbarPrimary" TargetType="Button" BasedOn="{StaticResource ModToolbarAction}">
-   <Setter Property="Foreground" Value="#F5F9FF"/><Setter Property="FontWeight" Value="SemiBold"/>
-   <Setter Property="Background" Value="#6742638A"/>
+   <Setter Property="Foreground" Value="{DynamicResource AccentSegmentActiveForeground}"/><Setter Property="FontWeight" Value="SemiBold"/>
+   <Setter Property="Background" Value="{DynamicResource AccentToolbarPrimaryBackground}"/>
   </Style>
   <!-- Only the selected segment is filled; unselected choices remain flat. -->
   <Style x:Key="ModSegment" TargetType="Button" BasedOn="{StaticResource ModToolbarAction}">
    <Setter Property="Foreground" Value="#AEC2D9"/><Setter Property="Padding" Value="13,7"/>
   </Style>
   <Style x:Key="ModSegmentActive" TargetType="Button" BasedOn="{StaticResource ModSegment}">
-   <Setter Property="Background" Value="#75517598"/><Setter Property="Foreground" Value="#F5F9FF"/>
+   <Setter Property="Background" Value="{DynamicResource AccentSegmentActiveBackground}"/><Setter Property="Foreground" Value="{DynamicResource AccentSegmentActiveForeground}"/>
    <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
  </Application.Resources>
