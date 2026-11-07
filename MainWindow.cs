@@ -43,7 +43,17 @@ public partial class MainWindow : Window
   pageScroll=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(pageScroll,1);main.Children.Add(pageScroll);
   toast.Foreground=muted;toast.FontSize=12;toast.Margin=new(0,14,0,0);Grid.SetRow(toast,2);main.Children.Add(toast);
   var controlsTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(400)};controlsTimer.Tick+=(_,_)=>UpdateGlobalControls();controlsTimer.Start();Closed+=(_,_)=>{controlsTimer.Stop();CloseModWatch();githubModUpdates?.Dispose();githubDiscovery?.Dispose();};
-  if(onlineStartup){ShowOverview();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();if(page=="总览")ShowOverview();};}else ShowOverview();
+  if(onlineStartup){ShowOverview();Loaded+=async(_,_)=>{
+  _=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);
+  if(page=="在线补丁")RefreshOnline();
+  if(UiThemes.IsAtlasNative){
+   if(selectedInstallRoot!=null&&(modInventory==null||report==null||modInventoryDirty))await RefreshAtlasNativeDataAsync();
+   ShowAtlasNative();
+  }else{
+   if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();
+   if(page=="总览")ShowOverview();
+  }
+ };}else{ShowOverview();if(UiThemes.IsAtlasNative)ShowAtlasNative();}
  }
  static SolidColorBrush B(string hex)=>(SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
  TextBlock T(string text,double size=14,Brush? color=null,bool bold=false)=>new(){Text=text,FontSize=size,Foreground=color??ink,FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal,TextWrapping=TextWrapping.Wrap,LineHeight=size*1.55};
