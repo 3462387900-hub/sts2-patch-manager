@@ -453,8 +453,10 @@ public partial class MainWindow
  {
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
   root.Children.Add(AtlasPageTitle("MOD LIBRARY","模组库",
-   "用游戏库视图浏览，用专业列表快速筛选。真实数据来自本地 MOD 清单。",
-   AtlasButton("↻ 刷新",()=>_=RefreshAtlasNativeDataAsync())));
+   "已安装 MOD、来源绑定、版本检查与安全启停。批量操作会逐项预览并重新校验。",
+   AtlasButton("↻ 刷新",()=>_=RefreshAtlasNativeDataAsync()),
+   AtlasButton("导入 ZIP",()=>AtlasNativeRunWorkflow(ChooseWorkshopZip),"quiet"),
+   AtlasButton("Workshop 下载",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod()),"primary")));
   if(selectedInstallRoot==null){
    root.Children.Add(AtlasEmpty("尚未选择游戏目录","先定位《杀戮尖塔 2》的安装目录，再读取本地模组。",AtlasButton("选择游戏目录",ChooseAtlasNativeFolder,"primary")));
    return AtlasScroll(root);
@@ -506,12 +508,17 @@ public partial class MainWindow
    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),
    Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,0,10),Visibility=Visibility.Collapsed
   };
-  var batch=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
-  atlasNativeBatchText=AtlasText("已选择 0 项",12,AtlasBrush("#E5C48E"),true);
-  batch.Children.Add(atlasNativeBatchText);
-  var selectAll=AtlasButton("全选当前结果",SelectAllAtlasVisibleMods,"quiet");selectAll.Margin=new Thickness(14,0,0,0);batch.Children.Add(selectAll);
-  var batchOpen=AtlasButton("在完整工作台执行批量操作",OpenAtlasLegacyBatch,"primary");batchOpen.Margin=new Thickness(8,0,0,0);batch.Children.Add(batchOpen);
-  var clear=AtlasButton("清空",ClearAtlasNativeSelection,"quiet");clear.Margin=new Thickness(8,0,0,0);batch.Children.Add(clear);
+  var batch=new WrapPanel{VerticalAlignment=VerticalAlignment.Center};
+  atlasNativeBatchText=AtlasText("已选择 0 项",13,AtlasBrush("#E5C48E"),true);
+  atlasNativeBatchText.Margin=new Thickness(0,7,12,7);batch.Children.Add(atlasNativeBatchText);
+  var selectAll=AtlasButton("全选当前结果",SelectAllAtlasVisibleMods,"quiet");selectAll.Margin=new Thickness(0,2,6,2);batch.Children.Add(selectAll);
+  var enable=AtlasButton("批量启用",()=>AtlasNativeRunBatch(()=>BatchToggleMods(true)),"primary");enable.Margin=new Thickness(0,2,6,2);batch.Children.Add(enable);
+  var disable=AtlasButton("批量停用",()=>AtlasNativeRunBatch(()=>BatchToggleMods(false)),"quiet");disable.Margin=new Thickness(0,2,6,2);batch.Children.Add(disable);
+  var discover=AtlasButton("查找 GitHub",()=>AtlasNativeRunBatch(BatchFindGitHub),"quiet");discover.Margin=new Thickness(0,2,6,2);batch.Children.Add(discover);
+  var checkGit=AtlasButton("检查 GitHub",()=>AtlasNativeRunBatch(BatchCheckGitHub),"quiet");checkGit.Margin=new Thickness(0,2,6,2);batch.Children.Add(checkGit);
+  var checkWorkshop=AtlasButton("检查 Workshop",()=>AtlasNativeRunBatch(BatchCheckWorkshop),"quiet");checkWorkshop.Margin=new Thickness(0,2,6,2);batch.Children.Add(checkWorkshop);
+  var updateWorkshop=AtlasButton("批量更新 Workshop",()=>AtlasNativeRunBatch(BatchUpdateWorkshop),"quiet");updateWorkshop.Margin=new Thickness(0,2,6,2);batch.Children.Add(updateWorkshop);
+  var clear=AtlasButton("清空选择",ClearAtlasNativeSelection,"quiet");clear.Margin=new Thickness(0,2,0,2);batch.Children.Add(clear);
   atlasNativeBatchBar.Child=batch;root.Children.Add(atlasNativeBatchBar);
 
   atlasNativeResultsSummary=AtlasText("",11,AtlasMuted);atlasNativeResultsSummary.Margin=new Thickness(2,0,0,8);root.Children.Add(atlasNativeResultsSummary);
