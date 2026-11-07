@@ -59,6 +59,7 @@ public partial class MainWindow
   catch(Exception error)
   {
    Content=shell;
+   uiTheme=UiThemes.Workspace;UiThemes.Active=uiTheme;RefreshThemeButtons();
    MessageBox.Show(this,
     "ATLAS Beta 无法启动。请确认已安装 Microsoft Edge WebView2 Runtime，并检查程序目录是否包含 Ui/Atlas/index.html。\n\n"+error.Message,
     "无法启动 ATLAS Beta",MessageBoxButton.OK,MessageBoxImage.Warning);
