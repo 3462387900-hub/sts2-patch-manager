@@ -921,24 +921,81 @@ public partial class MainWindow
  {
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
   root.Children.Add(AtlasPageTitle("UPDATE CENTER","更新中心",
-   "这里只显示已经缓存的 GitHub / Workshop 检查结果，不会自动联网或触发下载。",
-   AtlasButton("打开完整更新工作台",()=>OpenAtlasLegacyPage("更新中心"))));
-  var rows=atlasNativeRows;
-  var updates=rows.Where(x=>x.UpdateStatus!="尚未检查").OrderByDescending(x=>x.HasUpdate).ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
-  if(updates.Length==0){
-   root.Children.Add(AtlasEmpty("暂无已缓存的更新结果","进入完整更新工作台后，可以按需检查 GitHub 与创意工坊来源。",AtlasButton("打开更新工作台",()=>OpenAtlasLegacyPage("更新中心"),"primary")));
+   "GitHub 与 Steam Workshop 更新检查。检查在后台运行，不会自动下载或覆盖 MOD。",
+   AtlasButton("检查全部更新",()=>AtlasNativeRunWorkflow(CheckAllModUpdates),"primary"),
+   AtlasButton("模组库",()=>AtlasNativeNavigate("模组库"),"quiet")));
+  if(selectedInstallRoot==null||modInventory==null)
+  {
+   root.Children.Add(AtlasEmpty("尚未读取 MOD 清单","先选择游戏目录并刷新本地环境。",
+    AtlasButton("刷新环境",()=>_=RefreshAtlasNativeDataAsync(),"primary")));
    return AtlasScroll(root);
   }
-  foreach(var row in updates){
-   var info=new StackPanel();
-   info.Children.Add(AtlasText(row.Name,14,AtlasInk,true));
-   info.Children.Add(AtlasText(row.Id+"  ·  "+row.Source+"  ·  本地 "+row.Version,11,AtlasMuted));
-   info.Children.Add(AtlasText(row.UpdateStatus+(row.LatestVersion.Length>0?"  ·  最新 "+row.LatestVersion:""),12,row.HasUpdate?AtlasBrass:AtlasMuted));
-   var line=new Grid();line.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});line.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-   line.Children.Add(info);
-   var detail=AtlasButton("查看 MOD",()=>ShowAtlasNativeModInspector(row),"quiet");Grid.SetColumn(detail,1);line.Children.Add(detail);
-   root.Children.Add(AtlasPanel(line,13));var gap=new Border{Height=7};root.Children.Add(gap);
+  var rows=atlasNativeRows.Where(x=>x.GitHubRepository.Length>0||x.WorkshopId.Length>0)
+   .OrderByDescending(x=>x.HasUpdate).ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+  int available=rows.Count(x=>x.HasUpdate);
+  int githubBound=rows.Count(x=>x.GitHubRepository.Length>0);
+  int workshopBound=rows.Count(x=>x.WorkshopId.Length>0);
+  var stats=new WrapPanel{Margin=new Thickness(0,0,0,13)};
+  stats.Children.Add(AtlasStat(available.ToString(),"发现更新","来自已缓存检查结果"));
+  stats.Children.Add(AtlasStat(githubBound.ToString(),"GitHub 已关联","公开仓库"));
+  stats.Children.Add(AtlasStat(workshopBound.ToString(),"Workshop 已关联","创意工坊来源"));
+  root.Children.Add(stats);
+  root.Children.Add(AtlasText(modUpdateCheckRunning
+   ?"正在检查来源更新。你可以切换其他页面，检查完成后结果会保存在这里。"
+   :available>0?"有更新的项目排在前面。下载前仍会核对来源、版本与文件完整性。"
+   :"进入页面不会自动联网；点击“检查全部更新”后才会向已绑定来源查询。",
+   12,AtlasMuted));
+  if(rows.Length==0)
+  {
+   root.Children.Add(AtlasEmpty("没有已关联来源的 MOD","可以在模组详情中查找或手动关联 GitHub，也可以关联 Workshop ID。",
+    AtlasButton("前往模组库",()=>AtlasNativeNavigate("模组库"),"primary")));
+   return AtlasScroll(root);
   }
+  var cards=new WrapPanel{Margin=new Thickness(0,10,0,0)};
+  foreach(var row in rows)
+  {
+   var card=new Border{
+    Width=430,MinHeight=185,Margin=new Thickness(0,0,12,12),
+    Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#46515D"),
+    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15)
+   };
+   var body=new StackPanel();
+   body.Children.Add(AtlasText(row.Name,16,AtlasInk,true));
+   body.Children.Add(AtlasText(row.Id+"  ·  本地版本 "+row.Version,11,AtlasMuted));
+   var sources=new StackPanel{Margin=new Thickness(0,9,0,9)};
+   if(row.GitHubRepository.Length>0)
+   {
+    var status=row.GitHubStatus+(row.GitHubLatestVersion.Length>0?" · 最新 "+row.GitHubLatestVersion:"");
+    sources.Children.Add(AtlasText("GitHub  ·  "+status,12,row.GitHubStatus=="有更新"?AtlasBrass:AtlasMuted));
+    sources.Children.Add(AtlasText(row.GitHubRepository,10,AtlasMuted));
+   }
+   if(row.WorkshopId.Length>0)
+   {
+    var status=row.WorkshopStatus+(row.WorkshopLatestVersion.Length>0?" · 最新 "+row.WorkshopLatestVersion:"");
+    sources.Children.Add(AtlasText("Workshop  ·  "+status,12,row.WorkshopStatus=="有更新"?AtlasBrass:AtlasMuted));
+    sources.Children.Add(AtlasText("Workshop ID  "+row.WorkshopId,10,AtlasMuted));
+   }
+   body.Children.Add(sources);
+   var actions=new WrapPanel();
+   actions.Children.Add(AtlasButton("查看详情",()=>ShowAtlasNativeModInspector(row),"quiet"));
+   if(row.GitHubRepository.Length>0)
+   {
+    actions.Children.Add(AtlasButton("检查 GitHub",()=>AtlasNativeRunWorkflow(()=>CheckGitHubMod(row.Mod)),"quiet"));
+    var update=AtlasButton("下载 GitHub 更新",()=>AtlasNativeRunWorkflow(()=>UpdateGitHubMod(row.Mod)),"primary");
+    update.IsEnabled=row.GitHubStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
+    actions.Children.Add(update);
+   }
+   if(row.WorkshopId.Length>0)
+   {
+    actions.Children.Add(AtlasButton("检查 Workshop",()=>AtlasNativeRunWorkflow(()=>CheckWorkshopMod(row.Mod)),"quiet"));
+    var update=AtlasButton("下载 Workshop 更新",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod(row.Mod)),"primary");
+    update.IsEnabled=row.WorkshopStatus=="有更新"&&!busy&&!transactionWriting&&!modInventoryDirty;
+    actions.Children.Add(update);
+   }
+   body.Children.Add(actions);
+   card.Child=body;cards.Children.Add(card);
+  }
+  root.Children.Add(cards);
   return AtlasScroll(root);
  }
 
