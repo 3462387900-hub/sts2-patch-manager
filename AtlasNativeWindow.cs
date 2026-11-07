@@ -46,8 +46,8 @@ public partial class MainWindow
  static readonly Brush AtlasBrass=AtlasBrush("#C6A36B");
  static readonly Brush AtlasGreen=AtlasBrush("#82C69A");
  static readonly Brush AtlasRed=AtlasBrush("#D78378");
- static readonly Brush AtlasPanelBrush=AtlasBrush("#1B1F24");
- static readonly Brush AtlasPanelAltBrush=AtlasBrush("#22272D");
+ static readonly Brush AtlasPanelBrush=SpireGlassTheme.GlassPanel();
+ static readonly Brush AtlasPanelAltBrush=SpireGlassTheme.GlassPanel("#B5222C37");
  Grid? atlasNativeRoot,atlasNativeBody;
  ContentControl? atlasNativePageHost,atlasNativeResultsHost;
  Border? atlasNativeInspector,atlasNativeBatchBar;
@@ -76,13 +76,14 @@ public partial class MainWindow
 
  void BuildAtlasNativeShell()
  {
-  var root=new Grid{Background=AtlasBrush("#111418"),ClipToBounds=true};
+  var root=new Grid{Background=SpireGlassTheme.Background(nativeAcrylicActive),ClipToBounds=true};
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   root.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+  var ambient=SpireGlassTheme.AddAmbientGlow(root);Grid.SetRowSpan(ambient,3);
 
   var header=new Border{
-   Background=AtlasBrush("#171A1F"),BorderBrush=AtlasBrush("#30363D"),
+   Background=SpireGlassTheme.GlassPanel(),BorderBrush=SpireGlassTheme.PanelStroke(),
    BorderThickness=new Thickness(0,0,0,1),Padding=new Thickness(16,9,14,9)
   };
   var headerGrid=new Grid();
@@ -114,6 +115,7 @@ public partial class MainWindow
   atlasNativeGameState=AtlasText("尚未定位游戏",11,AtlasMuted,true);
   atlasNativeGamePath=AtlasText("选择游戏目录以开始",11,AtlasMuted);
   atlasNativeGamePath.TextTrimming=TextTrimming.CharacterEllipsis;
+  atlasNativeGamePath.TextWrapping=TextWrapping.NoWrap;
   gameInfo.Children.Add(atlasNativeGameState);gameInfo.Children.Add(atlasNativeGamePath);
   actions.Children.Add(gameInfo);
   atlasNativeLaunchButton=AtlasButton("▶ 启动游戏",LaunchGame,"primary");
@@ -131,7 +133,7 @@ public partial class MainWindow
   atlasNativePageHost=new ContentControl();
   body.Children.Add(atlasNativePageHost);
   atlasNativeInspector=new Border{
-   Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#343A41"),
+   Background=AtlasPanelBrush,BorderBrush=SpireGlassTheme.PanelStroke(),
    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),
    Margin=new Thickness(15,0,0,0),Visibility=Visibility.Collapsed
   };
@@ -139,7 +141,7 @@ public partial class MainWindow
   atlasNativeBody=body;Grid.SetRow(body,1);root.Children.Add(body);
 
   var footer=new Border{
-   Background=AtlasBrush("#171A1F"),BorderBrush=AtlasBrush("#30363D"),
+   Background=SpireGlassTheme.GlassPanel(),BorderBrush=SpireGlassTheme.PanelStroke(),
    BorderThickness=new Thickness(0,1,0,0),Padding=new Thickness(20,7,20,7)
   };
   atlasNativeFooter=AtlasText("ATLAS 原生工作台  ·  本地数据",11,AtlasMuted);
@@ -179,7 +181,7 @@ public partial class MainWindow
  Border AtlasPanel(UIElement child,int padding=16,string background="#1B1F24")
  {
   return new Border{
-   Background=AtlasBrush(background),BorderBrush=AtlasBrush("#30363D"),
+   Background=SpireGlassTheme.GlassPanel(background=="#20242A"?"#B5222C37":"#B01B2531"),BorderBrush=SpireGlassTheme.PanelStroke(),
    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),
    Padding=new Thickness(padding),Child=child
   };
@@ -439,6 +441,7 @@ public partial class MainWindow
   toolbar.Children.Add(sourceCombo);
 
   var unbound=new CheckBox{
+   Style=(Style)FindResource("ModCardCheckBox"),
    Content="未绑定 Workshop ID",IsChecked=atlasNativeUnboundOnly,
    Foreground=AtlasMuted,FontSize=12,VerticalAlignment=VerticalAlignment.Center,
    Margin=new Thickness(12,0,8,0),Cursor=Cursors.Hand
@@ -483,6 +486,8 @@ public partial class MainWindow
   var combo=new ComboBox{
    ItemsSource=items.ToArray(),SelectedItem=selected,
    Height=36,FontSize=12,Padding=new Thickness(7,4,7,4),
+   Style=(Style)FindResource("AtlasComboBox"),
+   ItemContainerStyle=(Style)FindResource("AtlasComboBoxItem"),
    Background=AtlasBrush("#20252B"),Foreground=AtlasInk,
    BorderBrush=AtlasBrush("#41474F"),BorderThickness=new Thickness(1)
   };
@@ -574,7 +579,7 @@ public partial class MainWindow
   root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
   var top=new Grid();top.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   var title=AtlasText(row.Name,14,AtlasInk,true);title.TextTrimming=TextTrimming.CharacterEllipsis;title.MaxWidth=205;top.Children.Add(title);
-  var check=new CheckBox{IsChecked=row.IsSelected,VerticalAlignment=VerticalAlignment.Top,Foreground=AtlasBrass,ToolTip="加入批量选择"};
+  var check=new CheckBox{Style=(Style)FindResource("ModCardCheckBox"),IsChecked=row.IsSelected,VerticalAlignment=VerticalAlignment.Top,Foreground=AtlasBrass,ToolTip="加入批量选择"};
   check.Checked+=(_,_)=>{row.IsSelected=true;UpdateAtlasNativeSelection();};
   check.Unchecked+=(_,_)=>{row.IsSelected=false;UpdateAtlasNativeSelection();};
   Grid.SetColumn(check,1);top.Children.Add(check);root.Children.Add(top);
@@ -633,6 +638,7 @@ public partial class MainWindow
   grid.CellStyle=cellStyle;
 
   var checkFactory=new FrameworkElementFactory(typeof(CheckBox));
+  checkFactory.SetValue(FrameworkElement.StyleProperty,(Style)FindResource("ModCardCheckBox"));
   checkFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty,HorizontalAlignment.Center);
   checkFactory.SetValue(FrameworkElement.VerticalAlignmentProperty,VerticalAlignment.Center);
   checkFactory.SetBinding(ToggleButton.IsCheckedProperty,new Binding(nameof(AtlasNativeModRow.IsSelected)){Mode=BindingMode.TwoWay,UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged});
