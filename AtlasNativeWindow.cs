@@ -217,8 +217,8 @@ public partial class MainWindow
   stack.Children.Add(AtlasText(subtitle,14,AtlasMuted));
   root.Children.Add(stack);
   if(actions.Length>0){
-   var panel=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
-   foreach(var action in actions)panel.Children.Add(action);
+   var panel=new WrapPanel{VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right};
+   foreach(var action in actions){if(action is FrameworkElement item)item.Margin=new Thickness(0,3,6,3);panel.Children.Add(action);}
    Grid.SetColumn(panel,1);root.Children.Add(panel);
   }
   return root;
@@ -463,7 +463,8 @@ public partial class MainWindow
    "已安装 MOD、来源绑定、版本检查与安全启停。批量操作会逐项预览并重新校验。",
    AtlasButton("↻ 刷新",()=>_=RefreshAtlasNativeDataAsync()),
    AtlasButton("导入 ZIP",()=>AtlasNativeRunWorkflow(ChooseWorkshopZip),"quiet"),
-   AtlasButton("Workshop 下载",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod()),"primary")));
+   AtlasButton("Workshop 下载",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod()),"quiet"),
+   AtlasButton("检查全部更新",()=>AtlasNativeRunWorkflow(CheckAllModUpdates),"primary")));
   if(selectedInstallRoot==null){
    root.Children.Add(AtlasEmpty("尚未选择游戏目录","先定位《杀戮尖塔 2》的安装目录，再读取本地模组。",AtlasButton("选择游戏目录",ChooseAtlasNativeFolder,"primary")));
    return AtlasScroll(root);
@@ -604,12 +605,14 @@ public partial class MainWindow
    GitHubModResult? gitResult=null;WorkshopModUpdateResult? workshopResult=null;
    try{gitResult=github?.Cached(mod.Id);}catch{}
    try{workshopResult=workshopUpdates?.Cached(mod.Id);}catch{}
-   string update=gitResult?.Status=="有更新"?"GitHub 有更新":
-    workshopResult?.Status=="有更新"?"Workshop 有更新":
-    gitResult!=null?"GitHub "+gitResult.Status:
-    workshopResult!=null?"Workshop "+workshopResult.Status:"尚未检查";
-   string latest=gitResult?.Status=="有更新"?gitResult.LatestVersion:
-    workshopResult?.Status=="有更新"?workshopResult.RemoteContentVersion:"";
+   var updateParts=new List<string>();
+   if(repository!=null)updateParts.Add("GitHub "+(gitResult?.Status??"尚未检查"));
+   if(workshopId.HasValue)updateParts.Add("Workshop "+(workshopResult?.Status??"尚未检查"));
+   string update=updateParts.Count==0?"尚未绑定来源":string.Join(" · ",updateParts);
+   var latestParts=new List<string>();
+   if(gitResult?.Status=="有更新"&&gitResult.LatestVersion.Length>0)latestParts.Add("GitHub "+gitResult.LatestVersion);
+   if(workshopResult?.Status=="有更新"&&workshopResult.RemoteContentVersion.Length>0)latestParts.Add("Workshop "+workshopResult.RemoteContentVersion);
+   string latest=string.Join(" / ",latestParts);
    string source=workshopId.HasValue&&repository!=null?"Workshop + GitHub":
     workshopId.HasValue?"Workshop":repository!=null?"GitHub":"本地";
    var row=new AtlasNativeModRow(mod,source,workshopId?.ToString()??"",repository??"",update,latest,
@@ -742,7 +745,28 @@ public partial class MainWindow
   grid.Columns.Add(new DataGridTextColumn{Header="版本",Binding=new Binding(nameof(AtlasNativeModRow.Version)),Width=85});
   grid.Columns.Add(new DataGridTextColumn{Header="来源",Binding=new Binding(nameof(AtlasNativeModRow.Source)),Width=120});
   grid.Columns.Add(new DataGridTextColumn{Header="启用状态",Binding=new Binding(nameof(AtlasNativeModRow.State)),Width=85});
-  grid.Columns.Add(new DataGridTextColumn{Header="更新状态",Binding=new Binding(nameof(AtlasNativeModRow.UpdateStatus)),Width=125});
+  grid.Columns.Add(new DataGridTextColumn{Header="更新状态",Binding=new Binding(nameof(AtlasNativeModRow.UpdateStatus)),Width=220});
+  var actionPanel=new FrameworkElementFactory(typeof(StackPanel));
+  actionPanel.SetValue(StackPanel.OrientationProperty,Orientation.Horizontal);
+  var detailButton=new FrameworkElementFactory(typeof(Button));
+  detailButton.SetValue(ContentControl.ContentProperty,"详情");
+  detailButton.SetValue(FrameworkElement.StyleProperty,FindResource("ModToolbarAction"));
+  detailButton.SetValue(Control.PaddingProperty,new Thickness(7,4,7,4));
+  detailButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,_)=>{
+   if(sender is FrameworkElement element&&element.DataContext is AtlasNativeModRow row)ShowAtlasNativeModInspector(row);
+  }));
+  actionPanel.AppendChild(detailButton);
+  var toggleButton=new FrameworkElementFactory(typeof(Button));
+  toggleButton.SetValue(ContentControl.ContentProperty,"启停预览");
+  toggleButton.SetValue(FrameworkElement.StyleProperty,FindResource("ModToolbarPrimary"));
+  toggleButton.SetValue(Control.PaddingProperty,new Thickness(7,4,7,4));
+  toggleButton.SetValue(FrameworkElement.MarginProperty,new Thickness(5,0,0,0));
+  toggleButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,_)=>{
+   if(sender is FrameworkElement element&&element.DataContext is AtlasNativeModRow row)
+    AtlasNativeRunWorkflow(()=>PrepareModToggle(row.Mod));
+  }));
+  actionPanel.AppendChild(toggleButton);
+  grid.Columns.Add(new DataGridTemplateColumn{Header="操作",Width=155,CellTemplate=new DataTemplate{VisualTree=actionPanel}});
   grid.SelectionChanged+=(_,_)=>{if(grid.SelectedItem is AtlasNativeModRow row)ShowAtlasNativeModInspector(row);};
   return grid;
  }
@@ -830,7 +854,7 @@ public partial class MainWindow
    string selected=filter;
    var button=AtlasButton(filter,()=>{
     atlasNativePatchFilter=selected;RenderAtlasNative();
-   },atlasNativePatchFilter==filter?"active":"quiet");
+   },atlasNativePatchFilter==filter?"primary":"quiet");
    button.Margin=new Thickness(0,0,7,5);filters.Children.Add(button);
   }
   root.Children.Add(filters);
