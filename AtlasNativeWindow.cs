@@ -1360,6 +1360,9 @@ public partial class MainWindow
   ShowAtlasNative();await Idle();
   Check(atlasNativeRoot!=null&&ReferenceEquals(Content,atlasNativeRoot),
    "ATLAS 使用原生 WPF 视觉树，不依赖 WebView2");
+  Check(Application.Current.Resources["AccentPrimary"] is SolidColorBrush atlasAccent&&
+   atlasAccent.Color.R==198&&atlasAccent.Color.G==163&&atlasAccent.Color.B==107,
+   "ATLAS 页面与嵌入式 WPF 工作流统一使用黄铜强调色");
   Check(atlasNativeNavButtons.Count==6&&atlasNativePageHost!=null,
    "原生工作台创建六个一级导航与独立页面容器");
   Check(atlasNativeFooter?.GetBindingExpression(TextBlock.TextProperty)!=null,
@@ -1479,9 +1482,15 @@ public partial class MainWindow
   ChangeUiTheme(UiThemes.Workspace);
   Check(ReferenceEquals(Content,shell)&&UiThemes.IsWorkspace,
    "ATLAS 可无重启返回原有 WPF 工作台");
+  Check(Application.Current.Resources["AccentPrimary"] is SolidColorBrush workspaceAccent&&
+   workspaceAccent.Color.R==131&&workspaceAccent.Color.G==185&&workspaceAccent.Color.B==248,
+   "切回新版工作台后恢复原有蓝色强调色");
   ChangeUiTheme(UiThemes.AtlasNative);
   Check(ReferenceEquals(Content,atlasNativeRoot)&&UiThemes.IsAtlasNative,
    "可从原工作台重新切回 ATLAS 原生界面");
+  Check(Application.Current.Resources["AccentPrimary"] is SolidColorBrush restoredAccent&&
+   restoredAccent.Color.R==198&&restoredAccent.Color.G==163&&restoredAccent.Color.B==107,
+   "切回 ATLAS 后重新应用黄铜强调色");
   CloseModWatch();
  }
 
