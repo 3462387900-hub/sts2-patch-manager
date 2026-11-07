@@ -14,10 +14,13 @@ namespace SpirePatch;
 internal sealed class AtlasNativeModRow
 {
  internal AtlasNativeModRow(ManagedMod mod,string source,string workshopId,string githubRepository,
-  string updateStatus,string latestVersion)
+  string updateStatus,string latestVersion,string githubStatus,string githubLatestVersion,
+  string workshopStatus,string workshopLatestVersion)
  {
   Mod=mod;Source=source;WorkshopId=workshopId;GitHubRepository=githubRepository;
   UpdateStatus=updateStatus;LatestVersion=latestVersion;
+  GitHubStatus=githubStatus;GitHubLatestVersion=githubLatestVersion;
+  WorkshopStatus=workshopStatus;WorkshopLatestVersion=workshopLatestVersion;
  }
  internal ManagedMod Mod {get;}
  public bool IsSelected {get;set;}
@@ -31,11 +34,15 @@ internal sealed class AtlasNativeModRow
  public string GitHubRepository {get;}
  public string UpdateStatus {get;}
  public string LatestVersion {get;}
+ public string GitHubStatus {get;}
+ public string GitHubLatestVersion {get;}
+ public string WorkshopStatus {get;}
+ public string WorkshopLatestVersion {get;}
  public string Meta=>$"{Mod.Id}  ·  {Mod.Author}";
  public string Description=>Mod.Description;
  public string Folder=>Mod.Folder;
  public string Dependencies=>Mod.Dependencies.Length==0?"未声明必需前置":string.Join("、",Mod.Dependencies.Select(x=>x.Id));
- public bool HasUpdate=>UpdateStatus.Contains("有更新",StringComparison.Ordinal);
+ public bool HasUpdate=>GitHubStatus=="有更新"||WorkshopStatus=="有更新";
 }
 
 public partial class MainWindow
@@ -605,7 +612,9 @@ public partial class MainWindow
     workshopResult?.Status=="有更新"?workshopResult.RemoteContentVersion:"";
    string source=workshopId.HasValue&&repository!=null?"Workshop + GitHub":
     workshopId.HasValue?"Workshop":repository!=null?"GitHub":"本地";
-   var row=new AtlasNativeModRow(mod,source,workshopId?.ToString()??"",repository??"",update,latest);
+   var row=new AtlasNativeModRow(mod,source,workshopId?.ToString()??"",repository??"",update,latest,
+    gitResult?.Status??(repository==null?"未关联":"尚未检查"),gitResult?.LatestVersion??"",
+    workshopResult?.Status??(workshopId.HasValue?"尚未检查":"未绑定"),workshopResult?.RemoteContentVersion??"");
    row.IsSelected=atlasNativeSelectedFolders.Contains(mod.Folder);
    result.Add(row);
   }
