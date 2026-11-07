@@ -1303,7 +1303,7 @@ public partial class MainWindow
    "列表与库视图切换复用同一份模组数据");
   ShowAtlasNativeModInspector(atlasNativeRows[0]);await Idle();
   Check(atlasNativeInspector?.Visibility==Visibility.Visible&&
-   Math.Abs(atlasNativeBody!.ColumnDefinitions[1].Width.Value-330)<1,
+   Math.Abs(atlasNativeBody!.ColumnDefinitions[1].Width.Value-365)<1,
    "模组详情检查器按需展开，不默认占用主列表空间");
   CloseAtlasNativeInspector();await Idle();
   Check(atlasNativeInspector?.Visibility==Visibility.Collapsed,
