@@ -12,7 +12,8 @@ using Microsoft.Win32;
 namespace SpirePatch;
 public partial class MainWindow : Window
 {
- readonly Brush ink=B("#F0F5FC"),muted=B("#CBD8E9"),gold=B("#83B9F8"),green=B("#70D8AD");
+ readonly Brush ink=B("#F0F5FC"),muted=B("#CBD8E9"),green=B("#70D8AD");
+ Brush gold=>B(UiThemes.IsAtlasNative?"#C6A36B":"#83B9F8");
  readonly Grid shell=new(); readonly StackPanel navigation=new(); readonly ContentControl content=new();
  readonly TextBlock modeLabel=new(),folderLabel=new(),toast=new();
  readonly Dictionary<string,Button> navButtons=[];
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
    managerUpdateChannel=onlineStartup?ManagerUpdates.LoadChannel(installer.DataRoot):ManagerUpdateChannel.Stable;
    uiTheme=onlineStartup?UiThemes.Load(installer.DataRoot):UiThemes.Workspace;
    UiThemes.Active=uiTheme;
+   ApplyThemeAccentPalette(uiTheme);
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
   Closing+=(_,e)=>{if(transactionWriting){e.Cancel=true;MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");}else {preparationCancellation?.Cancel();managerUpdateCancellation?.Cancel();CancelModUpdateCheck();}};
   Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
@@ -43,7 +45,17 @@ public partial class MainWindow : Window
   pageScroll=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(pageScroll,1);main.Children.Add(pageScroll);
   toast.Foreground=muted;toast.FontSize=12;toast.Margin=new(0,14,0,0);Grid.SetRow(toast,2);main.Children.Add(toast);
   var controlsTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(400)};controlsTimer.Tick+=(_,_)=>UpdateGlobalControls();controlsTimer.Start();Closed+=(_,_)=>{controlsTimer.Stop();CloseModWatch();githubModUpdates?.Dispose();githubDiscovery?.Dispose();};
-  if(onlineStartup){ShowOverview();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();if(page=="总览")ShowOverview();};}else ShowOverview();
+  if(onlineStartup){ShowOverview();Loaded+=async(_,_)=>{
+  _=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);
+  if(page=="在线补丁")RefreshOnline();
+  if(UiThemes.IsAtlasNative){
+   if(selectedInstallRoot!=null&&(modInventory==null||report==null||modInventoryDirty))await RefreshAtlasNativeDataAsync();
+   ShowAtlasNative();
+  }else{
+   if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();
+   if(page=="总览")ShowOverview();
+  }
+ };}else{ShowOverview();if(UiThemes.IsAtlasNative)ShowAtlasNative();}
  }
  static SolidColorBrush B(string hex)=>(SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
  TextBlock T(string text,double size=14,Brush? color=null,bool bold=false)=>new(){Text=text,FontSize=size,Foreground=color??ink,FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal,TextWrapping=TextWrapping.Wrap,LineHeight=size*1.55};
@@ -73,7 +85,7 @@ public partial class MainWindow : Window
    navigation.Children.Add(ThemeSwitcher());
   layout.Children.Add(new ScrollViewer{Content=navigation,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
  }
- static bool IsPatchCenterPage(string name)=>name is "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚" or "本地补丁";
+ static bool IsPatchCenterPage(string name)=>name is "修复中心" or "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚" or "本地补丁";
  UIElement PatchCenterTabs(string active)
  {
   var tabs=new WrapPanel{Margin=new(0,0,0,11)};
@@ -109,11 +121,77 @@ public partial class MainWindow : Window
  {
   if(active!="工具与设置"&&bareGlassTestActive)SetBareGlassTest(false,false);
   TrackPage(key??active,restore??(()=>Navigate(active)));page=active;
+  // ATLAS keeps its shell and hosts the existing, fully functional WPF workflows
+  // inside the content area. This avoids cloning download, install, backup and rollback logic.
+  if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null&&atlasNativePageHost!=null)
+  {
+   string atlasSection=AtlasNativeSectionForPage(active,key);
+   atlasNativePage=atlasSection;
+   foreach(var pair in atlasNativeNavButtons)
+   {
+    bool selected=pair.Key==atlasSection;
+    pair.Value.Background=selected?AtlasBrush("#3B3021"):Brushes.Transparent;
+    pair.Value.BorderBrush=selected?AtlasBrush("#6D5737"):Brushes.Transparent;
+    pair.Value.Foreground=selected?AtlasBrush("#E6C58F"):AtlasMuted;
+   }
+   if(atlasNativeInspector!=null)
+   {
+    atlasNativeInspector.Visibility=Visibility.Collapsed;
+    atlasNativeInspector.Child=null;
+    if(atlasNativeBody!=null)atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(0);
+   }
+   var frame=new Grid();
+   bool showPatchTabs=atlasSection=="修复中心"&&active!="本地补丁";
+   frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+   if(showPatchTabs)frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+   frame.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
+   var breadcrumb=new Border{
+    Background=SpireGlassTheme.GlassPanel("#A91E2B3A"),
+    BorderBrush=SpireGlassTheme.PanelStroke(),BorderThickness=new Thickness(1),
+    CornerRadius=new CornerRadius(9),Padding=new Thickness(12,7,12,7),
+    Margin=new Thickness(0,0,0,10)
+   };
+   var breadcrumbGrid=new Grid();
+   breadcrumbGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+   breadcrumbGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+   var sectionLabel=AtlasText("ATLAS WORKSPACE  /  "+active,11,AtlasMuted,true);
+   sectionLabel.VerticalAlignment=VerticalAlignment.Center;
+   breadcrumbGrid.Children.Add(sectionLabel);
+   var back=AtlasButton("← 返回 "+atlasNativeSubpageReturnPage,()=>AtlasNativeNavigate(atlasNativeSubpageReturnPage),"quiet");
+   back.Padding=new Thickness(10,5,10,5);
+   Grid.SetColumn(back,1);breadcrumbGrid.Children.Add(back);
+   breadcrumb.Child=breadcrumbGrid;frame.Children.Add(breadcrumb);
+   int contentRow=1;
+   if(showPatchTabs)
+   {
+    string patchTab=active=="修复中心"?"补丁库":
+     key?.StartsWith("patch-evidence",StringComparison.Ordinal)==true||
+     key?.StartsWith("patch-retire",StringComparison.Ordinal)==true?"补丁健康":
+     key?.StartsWith("mod:",StringComparison.Ordinal)==true?"本地补丁":active;
+    var tabs=PatchCenterTabs(patchTab);
+    if(tabs is FrameworkElement tabElement)tabElement.Margin=new Thickness(0,0,0,10);
+    Grid.SetRow(tabs,1);frame.Children.Add(tabs);
+    contentRow=2;
+   }
+   UIElement pageContent=element;
+   if((active is "模组管理" or "本地补丁")&&element is Grid modPage)
+    modPage.Height=Math.Max(440,atlasNativePageHost.ActualHeight-58);
+   else
+    pageContent=new ScrollViewer{
+     Content=element,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+     HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,CanContentScroll=true
+    };
+   Grid.SetRow(pageContent,contentRow);frame.Children.Add(pageContent);
+   atlasNativePageHost.Content=frame;
+   Content=atlasNativeRoot;
+   UpdateAtlasNativeHeader();
+   return;
+  }
   // The virtualized MOD list owns scrolling; other pages keep the normal page scrollbar.
   pageScroll!.VerticalScrollBarVisibility=(active=="模组管理"||active=="本地补丁")&&(key??active)==active
    ?ScrollBarVisibility.Disabled:ScrollBarVisibility.Auto;
   if(IsPatchCenterPage(active)&&active!="本地补丁"){
-   var group=V(PatchCenterTabs(active),element);
+   var group=V(PatchCenterTabs(active=="修复中心"?"补丁库":active),element);
    content.Content=group;
   }else content.Content=element;
   string section=IsPatchCenterPage(active)?"修复补丁":active is "诊断"?"诊断与日志":active is "游戏目录" or "检查更新"?"工具与设置":active;
@@ -126,6 +204,23 @@ public partial class MainWindow : Window
   }
   modeLabel.Text=active=="检查更新"?"管理器更新 · 自愿下载":active=="模组管理"?"本地模组 · 保留文件 · 可恢复启停":active=="本地补丁"?"本地独立补丁 · 安全启停 · 健康检查":active=="安装与回滚"?"真实操作 · 检查后确认 · 保留备份":active=="在线补丁"?"公开仓库 · 下载校验 · 整合包安装":demo?"演示环境 · 安装流程不会修改游戏":"本地扫描 · 文件状态";
   folderLabel.Text=selectedInstallRoot??(demo?"联机小队 · 示例配置\n尚未选择游戏目录":"尚未选择游戏目录");folderLabel.ToolTip=selectedInstallRoot;
+ }
+ string AtlasNativeSectionForPage(string active,string? key)
+ {
+  if(key?.StartsWith("patch-",StringComparison.Ordinal)==true)return "修复中心";
+  if(key?.StartsWith("mod:",StringComparison.Ordinal)==true)
+  {
+   string folder=key["mod:".Length..];
+   var selected=modInventory?.Mods.FirstOrDefault(x=>x.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase));
+   return selected!=null&&ModPresentation.IsIndependentPatch(selected)?"修复中心":"模组库";
+  }
+  if(key is "mod-dependencies" or "mod-snapshots" or "mod-snapshot-preview")return "模组库";
+  if(active is "模组管理" or "本地补丁")
+   return modSection=="修复补丁"||active=="本地补丁"?"修复中心":"模组库";
+  if(active=="更新中心")return "更新中心";
+  if(active is "修复中心" or "修复补丁" or "补丁库" or "在线补丁" or "补丁健康" or "安装与回滚")return "修复中心";
+  if(active is "工具与设置" or "检查更新" or "游戏目录" or "联机检查" or "诊断" or "诊断与日志")return "设置";
+  return "总览";
  }
  void Navigate(string name){if(busy)return;switch(name){case "检查更新":ShowManagerUpdates();break;case "模组管理":modSection="普通 MOD";ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "本地补丁":modSection="修复补丁";ShowMods();if(modInventory==null||modInventoryDirty)RefreshMods();break;case "修复中心":case "修复补丁":ShowLibrary();break;case "更新中心":ShowModUpdatesCenter();break;case "诊断与日志":ShowDiagnosis();break;case "工具与设置":ShowTools();break;case "补丁健康":ShowLifecycle();if(lifecycleReport==null)RefreshLifecycle();break;case "游戏目录":ShowLocations();break;case "在线补丁":ShowOnline();if(onlineCatalog==null&&!onlineBusy)RefreshOnline();break;case "安装与回滚":ShowInstaller();break;case "总览":ShowOverview();break;case "补丁库":ShowLibrary();break;case "诊断":ShowDiagnosis();break;case "联机检查":ShowCoop();break;}}
  UIElement Header(string eyebrow,string title,string subtitle,UIElement? action=null)
@@ -237,13 +332,28 @@ public partial class MainWindow : Window
  void ShowLibrary()
  {
   var root=V(Header("PATCH LIBRARY","补丁库",$"当前目录 {states.Count} 项修复。按状态筛选，并查看每项适用原因。"));Space(root,22);
-  var search=new TextBox{Text=query,Width=260,ToolTip="按修复名、模组 ID 或问题搜索"};search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索补丁");
+  var search=new TextBox{Text=query,Width=260,Height=36,Padding=new Thickness(10,7,10,7),
+   Background=B("#20252B"),Foreground=ink,BorderBrush=B("#41474F"),BorderThickness=new Thickness(1),
+   ToolTip="按修复名、模组 ID 或问题搜索"};
+  search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty,"搜索补丁");
+  var searchHost=new Grid{Width=260,Height=36};
+  searchHost.Children.Add(search);
+  var searchHint=T("⌕  搜索补丁名称、MOD ID 或问题",12,muted);
+  searchHint.Margin=new Thickness(11,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
+  searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+  searchHost.Children.Add(searchHint);
   var tabs=new WrapPanel{Margin=new(0,0,0,18)};
   var list=new StackPanel();
   void Render(){list.Children.Clear();var found=states.Where(s=>(filter=="全部"||s.Status==filter)&&(s.Patch.Name+s.Patch.Id+s.Patch.Summary+string.Join(" ",s.Patch.Requirements)).Contains(query,StringComparison.OrdinalIgnoreCase)).ToList();foreach(var s in found){list.Children.Add(PatchRow(s));Space(list,9);}if(found.Count==0)list.Children.Add(Card(V(T("没有找到匹配的补丁",18),T("换个关键词，或查看全部修复。",13,muted))));}
   foreach(var f in new[]{"全部","待修复","需联动","已安装","已停用","不适用","需核对"}){var b=Btn(f,()=>{filter=f;ShowLibrary();},f==filter?"SelectedTab":"Ghost");b.Margin=new(0,0,8,0);tabs.Children.Add(b);}
-  search.TextChanged+=(_,_)=>{query=search.Text;Render();string q=query,f=filter;RememberPage("补丁库",()=>{query=q;filter=f;ShowLibrary();});};
-  var bar=new DockPanel{Margin=new(0,0,0,16)};DockPanel.SetDock(search,Dock.Right);bar.Children.Add(search);bar.Children.Add(T("筛选修复",12,muted));root.Children.Add(bar);root.Children.Add(tabs);root.Children.Add(list);Render();string savedFilter=filter,savedQuery=query;SetPage("补丁库",root,restore:()=>{filter=savedFilter;query=savedQuery;ShowLibrary();});
+  search.TextChanged+=(_,_)=>{
+   query=search.Text;
+   searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+   Render();string q=query,f=filter;RememberPage("补丁库",()=>{query=q;filter=f;ShowLibrary();});
+  };
+  var bar=new DockPanel{Margin=new(0,0,0,16)};
+  DockPanel.SetDock(searchHost,Dock.Right);bar.Children.Add(searchHost);bar.Children.Add(T("筛选修复",12,muted));
+  root.Children.Add(bar);root.Children.Add(tabs);root.Children.Add(list);Render();string savedFilter=filter,savedQuery=query;SetPage("补丁库",root,restore:()=>{filter=savedFilter;query=savedQuery;ShowLibrary();});
  }
  void ShowReview()
  {

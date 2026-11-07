@@ -82,7 +82,7 @@ public partial class MainWindow
       "进入 MOD 详情核对并确认；每次最多查找 8 个，重复点击可继续下一批。";
   }
   catch(Exception e){modStatus=$"查找中断，已检查 {examined} 个："+e.Message;}
-  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();else if(page=="更新中心")ShowModUpdatesCenter();else ShowMods();}
  }
  async void DiscoverGitHubMod(ManagedMod mod)
  {
@@ -95,7 +95,7 @@ public partial class MainWindow
    else if(result.Retryable)toast.Text=mod.Name+"："+result.Note+"；已有候选可在详情查看。";
   }
   catch(Exception e){toast.Text="查找失败："+e.Message;}
-  finally{busy=false;ShowModDetail(mod.Folder);}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();else ShowModDetail(mod.Folder);}
  }
  async void CheckAllModUpdates()
  {
@@ -141,7 +141,8 @@ public partial class MainWindow
    if(ReferenceEquals(modUpdateCheckCancellation,cancellation))modUpdateCheckCancellation=null;
    modUpdateCheckRunning=false;
    // A background check never changes the active workspace on completion.
-   if(page=="更新中心"&&IsVisible)ShowModUpdatesCenter();
+   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
+   else if(page=="更新中心"&&IsVisible)ShowModUpdatesCenter();
   }
  }
  async void CheckWorkshopMod(ManagedMod mod)
@@ -156,7 +157,7 @@ public partial class MainWindow
    toast.Text=mod.Name+" · 创意工坊："+result.Status+" · "+result.Message;
   }
   catch(Exception e){toast.Text="创意工坊检查失败："+e.Message;}
-  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();else if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  void BindGitHubMod(ManagedMod mod)
  {
@@ -173,7 +174,7 @@ public partial class MainWindow
   var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
   body.Children.Add(H(save,remove,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
   dialog.Content=body;input.Focus();
-  if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
+  if(dialog.ShowDialog()==true){if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();else if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
  async void DownloadWorkshopMod(ManagedMod? target=null,ulong? presetWorkshopId=null)
  {
@@ -306,7 +307,8 @@ public partial class MainWindow
    if(changed)RefreshMods();
    else if(gameRoot==selectedInstallRoot)
    {
-    if(target!=null)ShowModDetail(target.Folder);
+    if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();
+    else if(target!=null)ShowModDetail(target.Folder);
     else ShowMods();
    }
   }
@@ -322,7 +324,7 @@ public partial class MainWindow
    toast.Text=mod.Name+" · "+result.Status+" · "+result.Message;
   }
   catch(Exception e){toast.Text="检查失败："+e.Message;}
-  finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
+  finally{busy=false;if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();else if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
  }
 
 
@@ -398,6 +400,7 @@ public partial class MainWindow
   {
    busy=false;
    if(changed)RefreshMods();
+   else if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RefreshAtlasNativeModSurface();
    else if(gameRoot==selectedInstallRoot){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
   }
  }
@@ -478,7 +481,8 @@ public partial class MainWindow
   catch(Exception ex){busy=false;transactionWriting=false;toast.Text="恢复未完成："+ex.Message;ShowModDetail(mod.Folder);}
  }
 
- async void RefreshMods()
+ void RefreshMods()=>_ = RefreshModsAsync();
+ async Task RefreshModsAsync()
  {
   if(busy)return;
   if(selectedInstallRoot==null){LocateGame();return;}
@@ -575,11 +579,33 @@ public partial class MainWindow
    else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
+   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
   }
  }
  readonly HashSet<string> chosenModFolders=new(StringComparer.OrdinalIgnoreCase);
  ManagedMod[] ChosenMods()=>modInventory?.Mods.Where(m=>chosenModFolders.Contains(m.Folder)&&
   ModPresentation.IsIndependentPatch(m)==(modSection=="修复补丁")).ToArray()??[];
+ void RefreshAtlasNativeModSurface()
+ {
+  if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)
+  {
+   string? key=currentVisit?.Key;
+   if(key?.StartsWith("mod:",StringComparison.Ordinal)==true)
+   {
+    string folder=key["mod:".Length..];
+    if(modInventory?.Mods.Any(m=>m.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
+    {
+     string status=toast.Text;
+     ShowModDetail(folder);
+     toast.Text=status;
+     return;
+    }
+   }
+   RenderAtlasNative();
+  }
+  else ShowMods();
+ }
+
  async void BatchFindGitHub()
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
@@ -617,7 +643,7 @@ public partial class MainWindow
    {done++;progress.Record(mod.Name,"未执行","用户取消或网络受限；可重新查找。",done);}
    modStatus=$"来源查找：发现候选 {found} 项，失败或受限 {failed} 项。需在详情逐个确认。";
   }
-  finally{busy=false;progress.Finish(modStatus);ShowMods();}
+  finally{busy=false;progress.Finish(modStatus);RefreshAtlasNativeModSurface();}
  }
  async void BatchCheckGitHub()
  {
@@ -652,7 +678,7 @@ public partial class MainWindow
    {done++;progress.Record(mod.Name,"未执行","用户已停止后续任务。",done);}
    modStatus=$"更新检测：完成 {success} 项，失败或受限 {failed} 项；未安装或修改模组。";
   }
-  finally{busy=false;progress.Finish(modStatus);ShowMods();}
+  finally{busy=false;progress.Finish(modStatus);RefreshAtlasNativeModSurface();}
  }
 
  async void BatchCheckWorkshop()
@@ -714,7 +740,7 @@ public partial class MainWindow
   {
    busy=false;
    progress.Finish(modStatus);
-   ShowMods();
+   RefreshAtlasNativeModSurface();
   }
  }
 
@@ -926,7 +952,7 @@ public partial class MainWindow
   {
    transactionWriting=false;busy=false;
    progress.Finish(modStatus);
-   ShowMods();
+   RefreshAtlasNativeModSurface();
   }
  }
 
@@ -954,13 +980,13 @@ public partial class MainWindow
      return new ModBatchReview(mod.Name,"可处理","初步校验通过；执行时仍将重新检查文件及依赖。");
     }catch(Exception e){return new ModBatchReview(mod.Name,"跳过",e.Message);}
    }).ToArray());
-  }catch(Exception e){modStatus="批量预览失败："+e.Message;return;}
+  }catch(Exception e){modStatus="批量预览失败："+e.Message;RefreshAtlasNativeModSurface();return;}
   finally{busy=false;}
-  if(modInventoryDirty||selectedInstallRoot!=root){modStatus="模组环境发生变化，已取消旧预览。请刷新后重试。";ShowMods();return;}
+  if(modInventoryDirty||selectedInstallRoot!=root){modStatus="模组环境发生变化，已取消旧预览。请刷新后重试。";RefreshAtlasNativeModSurface();return;}
   if(!ModBatchDialogs.Confirm(this,"批量"+name+" · 执行前预览",
    "预览不移动文件。依赖待复核项可能在其他模组处理后才能通过；每一项执行前仍会调用安全预检。操作成功的项不会因为后续失败自动回滚。",
    reviews))return;
-  if(modInventoryDirty||busy||transactionWriting||selectedInstallRoot!=root){modStatus="执行前环境发生变化，请重新预览。";ShowMods();return;}
+  if(modInventoryDirty||busy||transactionWriting||selectedInstallRoot!=root){modStatus="执行前环境发生变化，请重新预览。";RefreshAtlasNativeModSurface();return;}
   var eligible=selected.Where((m,i)=>reviews[i].State!="跳过").ToArray();
   var result=new Dictionary<string,(string State,string Detail)>(StringComparer.OrdinalIgnoreCase);
   var errors=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -1016,7 +1042,7 @@ public partial class MainWindow
   {
    transactionWriting=false;busy=false;
    progress.Finish(modStatus);
-   ShowMods();
+   RefreshAtlasNativeModSurface();
   }
  }
  double modListOffset;
@@ -1908,12 +1934,12 @@ public partial class MainWindow
     throw new InvalidOperationException("游戏目录或 MOD 文件发生变化，请重新选择 ZIP。");
    zipImportPreview=plan;ShowWorkshopZipConfirmation();
   }
-  catch(Exception e){toast.Text="ZIP 预检未通过："+e.Message;ShowMods();}
+  catch(Exception e){toast.Text="ZIP 预检未通过："+e.Message;RefreshAtlasNativeModSurface();}
   finally{busy=false;}
  }
  void ShowWorkshopZipConfirmation()
  {
-  if(zipImportPreview==null){ShowMods();return;}
+  if(zipImportPreview==null){RefreshAtlasNativeModSurface();return;}
   var plan=zipImportPreview;
   var root=V(Header("IMPORT LOCAL MOD ZIP","确认导入 MOD",plan.ModName));
   Space(root,18);
@@ -1925,7 +1951,7 @@ public partial class MainWindow
    T("声明前置："+(plan.Dependencies.Length==0?"未声明":string.Join("、",plan.Dependencies)),12,muted),
    T("来自浏览器或第三方站点的 ZIP 未经过 Steam 官方身份验证，需自行确认来源与兼容性。",12,gold),
    H(Btn("确认导入",ApplyWorkshopZip,"Primary"),
-     Btn("取消",()=>{zipImportPreview=null;ShowMods();},"Ghost")))));
+     Btn("取消",()=>{zipImportPreview=null;RefreshAtlasNativeModSurface();},"Ghost")))));
   SetPage("模组管理",root,"mod-zip-confirm",ShowWorkshopZipConfirmation);
  }
  async void ApplyWorkshopZip()
@@ -1968,7 +1994,7 @@ public partial class MainWindow
    modStatus=imported?"ZIP 已导入，但后续处理失败："+e.Message:"MOD 导入未完成："+e.Message;
    toast.Text=modStatus;
   }
-  finally{busy=false;transactionWriting=false;ShowMods();}
+  finally{busy=false;transactionWriting=false;RefreshAtlasNativeModSurface();}
  }
 
  async void PrepareModToggle(ManagedMod mod)
@@ -1976,16 +2002,16 @@ public partial class MainWindow
   if(busy||selectedInstallRoot==null)return;busy=true;modTogglePreview=null;
   try{modTogglePreview=await Task.Run(()=>ModManager.Preview(selectedInstallRoot,mod.Folder,!mod.Enabled));}
   catch(Exception e){modStatus=e.Message;}
-  finally{busy=false;if(modTogglePreview!=null)ShowModConfirmation();else ShowMods();}
+  finally{busy=false;if(modTogglePreview!=null)ShowModConfirmation();else RefreshAtlasNativeModSurface();}
  }
  void ShowModConfirmation()
  {
-  if(modTogglePreview==null){ShowMods();return;}var plan=modTogglePreview;
+  if(modTogglePreview==null){RefreshAtlasNativeModSurface();return;}var plan=modTogglePreview;
   var root=V(Header("REVIEW MOD CHANGE",plan.Enable?"确认启用模组":"确认停用模组",plan.Name));Space(root,22);
   var detail=V(T(plan.Enable?"将模组恢复到原来的 mods 位置。":"将整个模组目录移出 mods，放入游戏目录中的停用保留区。",17,ink,true));Space(detail,14);
   detail.Children.Add(T($"涉及 {plan.FileCount} 个文件，文件内容保持不变。\n当前目录：{plan.Folder}",13,muted));Space(detail,14);
   detail.Children.Add(T(plan.Enable?"原位置被其他文件占用或停用内容被修改时，会停止恢复。":"此操作保留完整模组文件和原位置记录；重新启用时可以恢复。保存的游戏进度不会被修改，进入存档仍需保留该存档所需模组。",13,muted));Space(detail,20);
-  detail.Children.Add(H(Btn(plan.Enable?"确认启用":"确认停用",ApplyModToggle,"Primary"),Btn("取消",()=>{modTogglePreview=null;if(backHistory.Count>0)GoBack();else ShowMods();},"Ghost")));root.Children.Add(Card(detail));SetPage("模组管理",root,"mod-confirm",ShowModConfirmation);toast.Text="确认后才会移动模组目录，所有文件会保留。";
+  detail.Children.Add(H(Btn(plan.Enable?"确认启用":"确认停用",ApplyModToggle,"Primary"),Btn("取消",()=>{modTogglePreview=null;if(backHistory.Count>0)GoBack();else RefreshAtlasNativeModSurface();},"Ghost")));root.Children.Add(Card(detail));SetPage("模组管理",root,"mod-confirm",ShowModConfirmation);toast.Text="确认后才会移动模组目录，所有文件会保留。";
  }
  async void ApplyModToggle()
  {
@@ -1994,6 +2020,6 @@ public partial class MainWindow
    await Task.Run(()=>ModManager.Apply(plan));installPreview=null;lastInstallResult=null;ClearSelection();ClearCoop();report=null;states=[];demo=false;
    modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));modStatus=plan.Name+(plan.Enable?" 已启用。":" 已停用，文件已完整保留。");
   }catch(Exception e){modStatus="操作未完成："+e.Message;}
-  finally{InvalidateLifecycle();busy=false;transactionWriting=false;ShowMods();}
+  finally{InvalidateLifecycle();busy=false;transactionWriting=false;RefreshAtlasNativeModSurface();}
  }
 }

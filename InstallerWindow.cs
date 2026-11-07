@@ -18,7 +18,11 @@ public partial class MainWindow
  {
   var root=V(Header("INSTALL & ROLLBACK","安装与回滚","检查适配 → 查看改动 → 自动备份 → 安装并校验。"));Space(root,20);
   var folder=selectedInstallRoot??(!demo?report?.Directory:null);
-  var location=V(Badge("真实文件操作",gold),T(folder??"尚未选择游戏目录",17,ink,true));Space(location,9);
+  string folderLabel=folder==null?"尚未选择游戏目录":Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+  var folderText=T(folderLabel,17,ink,true);
+  folderText.TextWrapping=TextWrapping.NoWrap;folderText.TextTrimming=TextTrimming.CharacterEllipsis;
+  folderText.ToolTip=folder??"尚未选择游戏目录";
+  var location=V(Badge("真实文件操作",gold),folderText);Space(location,9);
   location.Children.Add(T("退出游戏后操作。可选择本版已审核的补丁，必要关联项会自动加入。回滚恢复最近一次安装批次。",13,muted));Space(location,14);
   location.Children.Add(H(Btn("选择游戏目录",ChooseInstallRoot),Btn("选择已下载的 ZIP",ChooseInstallZip,"Ghost")));
   if(localPackage!=null)location.Children.Add(T("本地修复包："+localPackage,11,muted));
