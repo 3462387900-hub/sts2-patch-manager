@@ -210,18 +210,33 @@ public partial class MainWindow
 
  UIElement AtlasPageTitle(string eyebrow,string title,string subtitle,params UIElement[] actions)
  {
-  var root=new Grid{Margin=new Thickness(0,0,0,17)};
-  root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-  root.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+  bool compact=ActualWidth>0&&ActualWidth<=1150;
+  var root=new Grid{Margin=new Thickness(0,0,0,compact?12:17)};
   var stack=new StackPanel();
   stack.Children.Add(AtlasText(eyebrow.ToUpperInvariant(),11,AtlasBrass,true));
-  var titleText=AtlasText(title,29,AtlasInk,true);titleText.Margin=new Thickness(0,4,0,3);stack.Children.Add(titleText);
-  stack.Children.Add(AtlasText(subtitle,14,AtlasMuted));
+  var titleText=AtlasText(title,compact?26:29,AtlasInk,true);
+  titleText.Margin=new Thickness(0,4,0,3);stack.Children.Add(titleText);
+  stack.Children.Add(AtlasText(subtitle,compact?12:14,AtlasMuted));
   root.Children.Add(stack);
   if(actions.Length>0){
-   var panel=new WrapPanel{VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right};
-   foreach(var action in actions){if(action is FrameworkElement item)item.Margin=new Thickness(0,3,6,3);panel.Children.Add(action);}
-   Grid.SetColumn(panel,1);root.Children.Add(panel);
+   var panel=new WrapPanel{
+    VerticalAlignment=VerticalAlignment.Center,
+    HorizontalAlignment=compact?HorizontalAlignment.Left:HorizontalAlignment.Right
+   };
+   foreach(var action in actions){
+    if(action is FrameworkElement item)item.Margin=new Thickness(0,compact?5:3,6,compact?2:3);
+    panel.Children.Add(action);
+   }
+   if(compact){
+    root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+    root.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+    Grid.SetRow(panel,1);
+   }else{
+    root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+    root.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+    Grid.SetColumn(panel,1);
+   }
+   root.Children.Add(panel);
   }
   return root;
  }
