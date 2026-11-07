@@ -1364,12 +1364,14 @@ public partial class MainWindow
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
    "现有 MOD 完整详情可嵌入 ATLAS 外壳，不切换到旧版主界面");
   AtlasNativeNavigate("模组库");await Idle();
-  AtlasNativeNavigate("模组库");await Idle();
 
   AtlasNativeNavigate("修复中心");await Idle();
   var localPatches=modInventory!.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
   Check(localPatches.Length==1&&atlasNativePageHost?.Content is ScrollViewer,
    "修复中心只展示独立补丁，不混入普通 MOD");
+  Check(AtlasNativePatchNeedsReview("需重新检查")&&AtlasNativePatchNeedsReview("已确认不兼容")&&
+   !AtlasNativePatchNeedsReview("已知构建匹配"),
+   "补丁健康待复查统计覆盖失效、未检查和已确认不兼容状态");
   var patchState=report!.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(localPatches[0].Id,StringComparison.OrdinalIgnoreCase));
   await Shot("03-ATLAS-修复中心");
   ShowAtlasNativePatchInspector(localPatches[0],patchState);await Idle();
@@ -1385,12 +1387,15 @@ public partial class MainWindow
   string updatePageDebug="page="+atlasNativePage+"; content="+(atlasNativePageHost?.Content?.GetType().FullName??"null");
   Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is FrameworkElement,
    "更新中心以只读方式呈现已有缓存，不触发自动联网检查（"+updatePageDebug+"）");
+  await Shot("06-ATLAS-更新中心");
   AtlasNativeNavigate("下载中心");await Idle();
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
    "下载中心提供 Workshop、GitHub 与本地 ZIP 的真实流程入口");
+  await Shot("07-ATLAS-下载中心");
   AtlasNativeNavigate("设置");await Idle();
   Check(atlasNativePage=="设置"&&atlasNativePageHost?.Content is ScrollViewer,
    "设置页面保留游戏目录、界面主题和诊断工具入口");
+  await Shot("08-ATLAS-设置");
 
   double oldWidth=Width,oldHeight=Height;
   Width=1020;Height=720;await Idle();RenderAtlasNative();await Idle();
@@ -1401,7 +1406,7 @@ public partial class MainWindow
   });
   Check(navFits&&atlasNativeRoot!.ActualWidth<=Width+1,
    "1020×720 最小窗口下顶部导航保持在窗口范围内");
-  await Shot("05-ATLAS-窄窗口");
+  await Shot("09-ATLAS-窄窗口");
   Width=oldWidth;Height=oldHeight;await Idle();
 
   ChangeUiTheme(UiThemes.Workspace);
