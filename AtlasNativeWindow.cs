@@ -1395,6 +1395,15 @@ public partial class MainWindow
    await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
    UpdateLayout();atlasNativeRoot?.UpdateLayout();
   }
+  IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject
+  {
+   for(int index=0;index<VisualTreeHelper.GetChildrenCount(parent);index++)
+   {
+    var child=VisualTreeHelper.GetChild(parent,index);
+    if(child is T match)yield return match;
+    foreach(var nested in Descendants<T>(child))yield return nested;
+   }
+  }
   async Task Shot(string name)
   {
    await Idle();
@@ -1519,6 +1528,33 @@ public partial class MainWindow
   string updatePageDebug="page="+atlasNativePage+"; content="+(atlasNativePageHost?.Content?.GetType().FullName??"null");
   Check(atlasNativePage=="更新中心"&&atlasNativePageHost?.Content is FrameworkElement,
    "更新中心以只读方式呈现已有缓存，不触发自动联网检查（"+updatePageDebug+"）");
+  var githubMod=modInventory!.Mods.First(x=>x.Id=="TestSolo");
+  var workshopMod=modInventory.Mods.First(x=>x.Id=="TestBase");
+  atlasNativeRows=[
+   new AtlasNativeModRow(githubMod,"GitHub","","example/atlas-test","GitHub 有更新","1.1.0","有更新","1.1.0","未绑定",""),
+   new AtlasNativeModRow(workshopMod,"Workshop","1234567890","","Workshop 已是最新","1.0.0","未关联","","已是最新","1.0.0")
+  ];
+  atlasNativeUpdateFilter="全部";atlasNativeUpdateQuery="";
+  atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
+  int UpdateCardCount()=>Descendants<Border>(atlasNativePageHost).Count(border=>Math.Abs(border.Width-430)<1);
+  Check(UpdateCardCount()==2&&Descendants<Button>(atlasNativePageHost).Any(button=>button.Content?.ToString()=="GitHub")&&
+   Descendants<Button>(atlasNativePageHost).Any(button=>button.Content?.ToString()=="Workshop"),
+   "更新中心按来源显示 GitHub 与 Workshop 卡片及筛选入口");
+  var githubFilter=Descendants<Button>(atlasNativePageHost).Single(button=>button.Content?.ToString()=="GitHub");
+  githubFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,githubFilter));await Idle();
+  Check(atlasNativeUpdateFilter=="GitHub"&&UpdateCardCount()==1,
+   "更新中心 GitHub 来源筛选只保留已绑定 GitHub 的 MOD");
+  var updateFilter=Descendants<Button>(atlasNativePageHost).Single(button=>button.Content?.ToString()=="有更新");
+  updateFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,updateFilter));await Idle();
+  Check(atlasNativeUpdateFilter=="有更新"&&UpdateCardCount()==1,
+   "更新中心有更新筛选基于来源检查状态");
+  var updateSearch=Descendants<TextBox>(atlasNativePageHost).Single();
+  updateSearch.Text="TestBase";await Idle();
+  Check(UpdateCardCount()==0,"更新中心搜索与来源筛选可以组合使用");
+  updateSearch.Text="";await Idle();
+  var allFilter=Descendants<Button>(atlasNativePageHost).Single(button=>button.Content?.ToString()=="全部");
+  allFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,allFilter));await Idle();
+  Check(UpdateCardCount()==2,"清除更新筛选后恢复全部已关联 MOD");
   await Shot("06-ATLAS-更新中心");
   AtlasNativeNavigate("下载中心");await Idle();
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
