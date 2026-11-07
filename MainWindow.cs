@@ -139,7 +139,7 @@ public partial class MainWindow : Window
     if(atlasNativeBody!=null)atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(0);
    }
    var frame=new Grid();
-   bool showPatchTabs=IsPatchCenterPage(active)&&active!="本地补丁";
+   bool showPatchTabs=atlasSection=="修复中心"&&active!="本地补丁";
    frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
    if(showPatchTabs)frame.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
    frame.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
@@ -162,7 +162,11 @@ public partial class MainWindow : Window
    int contentRow=1;
    if(showPatchTabs)
    {
-    var tabs=PatchCenterTabs(active=="修复中心"?"补丁库":active);
+    string patchTab=active=="修复中心"?"补丁库":
+     key?.StartsWith("patch-evidence",StringComparison.Ordinal)==true||
+     key?.StartsWith("patch-retire",StringComparison.Ordinal)==true?"补丁健康":
+     key?.StartsWith("mod:",StringComparison.Ordinal)==true?"本地补丁":active;
+    var tabs=PatchCenterTabs(patchTab);
     if(tabs is FrameworkElement tabElement)tabElement.Margin=new Thickness(0,0,0,10);
     Grid.SetRow(tabs,1);frame.Children.Add(tabs);
     contentRow=2;
