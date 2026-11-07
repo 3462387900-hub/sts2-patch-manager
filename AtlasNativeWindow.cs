@@ -1044,12 +1044,14 @@ public partial class MainWindow
 
   var resultsHost=new ContentControl();
   var filters=new WrapPanel{Margin=new Thickness(0,10,0,7)};
+  var filterButtons=new Dictionary<string,Button>(StringComparer.Ordinal);
   foreach(string filter in new[]{"全部","有更新","GitHub","Workshop"})
   {
    string selected=filter;
-   var button=AtlasButton(filter,()=>{atlasNativeUpdateFilter=selected;RenderResults();},
+   var button=AtlasButton(filter,()=>SetFilter(selected),
     atlasNativeUpdateFilter==filter?"primary":"quiet");
    button.Margin=new Thickness(0,0,7,4);filters.Children.Add(button);
+   filterButtons[selected]=button;
   }
   root.Children.Add(filters);
 
@@ -1070,9 +1072,25 @@ public partial class MainWindow
    RenderResults();
   };
   root.Children.Add(searchHost);
+  var resultSummary=AtlasText("",11,AtlasMuted);
+  resultSummary.Margin=new Thickness(2,2,0,5);root.Children.Add(resultSummary);
   root.Children.Add(resultsHost);
   RenderResults();
   return AtlasScroll(root);
+
+  void SetFilter(string selected)
+  {
+   atlasNativeUpdateFilter=selected;
+   foreach(var pair in filterButtons)
+   {
+    bool active=pair.Key==selected;
+    pair.Value.Background=active?AtlasBrass:Brushes.Transparent;
+    pair.Value.BorderBrush=active?AtlasBrush("#D9B77F"):Brushes.Transparent;
+    pair.Value.Foreground=active?AtlasBrush("#1A1B1C"):AtlasMuted;
+    pair.Value.FontWeight=active?FontWeights.SemiBold:FontWeights.Medium;
+   }
+   RenderResults();
+  }
 
   void RenderResults()
   {
@@ -1085,6 +1103,7 @@ public partial class MainWindow
     filtered=filtered.Where(x=>(x.Name+" "+x.Id+" "+x.GitHubRepository+" "+x.WorkshopId+
      " "+x.GitHubStatus+" "+x.WorkshopStatus).Contains(query,StringComparison.OrdinalIgnoreCase));
    var visible=filtered.ToArray();
+   resultSummary.Text=$"显示 {visible.Length} / {rows.Length} 项";
    if(visible.Length==0)
    {
     resultsHost.Content=AtlasEmpty("没有符合条件的 MOD","尝试切换来源筛选，或清空搜索条件。");
