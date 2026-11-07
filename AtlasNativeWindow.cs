@@ -1213,7 +1213,7 @@ public partial class MainWindow
    content.Children.Add(actions);
    var secondary=new WrapPanel{Margin=new Thickness(0,7,0,0)};
    secondary.Children.Add(AtlasButton("完整详情",()=>OpenAtlasLegacyMod(mod.Folder),"quiet"));
-   secondary.Children.Add(AtlasButton("依赖关系图",()=>AtlasNativeRunWorkflow(ShowDependencyGraph),"quiet"));
+   secondary.Children.Add(AtlasButton("依赖关系图",()=>AtlasNativeRunWorkflow(()=>ShowDependencyGraph()),"quiet"));
    secondary.Children.Add(AtlasButton("打开 MOD 文件夹",()=>OpenUrl(mod.Folder),"quiet"));
    content.Children.Add(secondary);
   }
