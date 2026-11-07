@@ -478,7 +478,8 @@ public partial class MainWindow
   catch(Exception ex){busy=false;transactionWriting=false;toast.Text="恢复未完成："+ex.Message;ShowModDetail(mod.Folder);}
  }
 
- async void RefreshMods()
+ void RefreshMods()=>_ = RefreshModsAsync();
+ async Task RefreshModsAsync()
  {
   if(busy)return;
   if(selectedInstallRoot==null){LocateGame();return;}
@@ -575,6 +576,7 @@ public partial class MainWindow
    else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
+   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
   }
  }
  readonly HashSet<string> chosenModFolders=new(StringComparer.OrdinalIgnoreCase);
