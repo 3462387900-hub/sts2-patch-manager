@@ -311,7 +311,7 @@ public partial class MainWindow
  async Task RefreshAtlasNativeDataAsync()
  {
   if(busy||transactionWriting){
-   if(atlasNativeFooter!=null)atlasNativeFooter.Text="管理器正在执行其他操作，请稍后刷新。";
+   toast.Text="管理器正在执行其他操作，请稍后刷新。";
    return;
   }
   if(selectedInstallRoot==null){RenderAtlasNative();return;}
