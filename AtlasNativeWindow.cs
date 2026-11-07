@@ -221,6 +221,7 @@ public partial class MainWindow
  {
   if(atlasNativeRoot==null||atlasNativePageHost==null)return;
   Content=atlasNativeRoot;
+  atlasNativeRows=BuildAtlasNativeRows();
   UpdateAtlasNativeHeader();
   foreach(var pair in atlasNativeNavButtons){
    bool active=pair.Key==atlasNativePage;
@@ -571,7 +572,6 @@ public partial class MainWindow
   var check=new CheckBox{IsChecked=row.IsSelected,VerticalAlignment=VerticalAlignment.Top,Foreground=AtlasBrass,ToolTip="加入批量选择"};
   check.Checked+=(_,_)=>{row.IsSelected=true;UpdateAtlasNativeSelection();};
   check.Unchecked+=(_,_)=>{row.IsSelected=false;UpdateAtlasNativeSelection();};
-  check.PreviewMouseLeftButtonDown+=(_,e)=>e.Handled=true;
   Grid.SetColumn(check,1);top.Children.Add(check);root.Children.Add(top);
 
   var details=new StackPanel{Margin=new Thickness(0,10,0,8)};
@@ -587,14 +587,14 @@ public partial class MainWindow
   outer.Child=root;
   outer.MouseEnter+=(_,_)=>outer.BorderBrush=AtlasBrush("#8A704B");
   outer.MouseLeave+=(_,_)=>outer.BorderBrush=AtlasBrush("#343A41");
-  outer.MouseLeftButtonUp+=(_,e)=>{e.Handled=true;ShowAtlasNativeModInspector(row);};
   return outer;
  }
 
  DataGrid BuildAtlasNativeDataGrid(AtlasNativeModRow[] rows)
  {
   var grid=new DataGrid{
-   ItemsSource=rows,AutoGenerateColumns=false,CanUserAddRows=false,CanUserDeleteRows=false,
+   ItemsSource=rows,Height=Math.Max(300,Math.Min(560,ActualHeight>0?ActualHeight-300:460)),
+   AutoGenerateColumns=false,CanUserAddRows=false,CanUserDeleteRows=false,
    IsReadOnly=true,SelectionMode=DataGridSelectionMode.Single,SelectionUnit=DataGridSelectionUnit.FullRow,
    HeadersVisibility=DataGridHeadersVisibility.Column,GridLinesVisibility=DataGridGridLinesVisibility.None,
    Background=AtlasBrush("#191D22"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#30363D"),
@@ -785,7 +785,7 @@ public partial class MainWindow
   var stack=new StackPanel{HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
   stack.Children.Add(AtlasText(title,17,AtlasInk,true));
   var subtitle=AtlasText(detail,12,AtlasMuted);subtitle.TextAlignment=TextAlignment.Center;subtitle.Margin=new Thickness(0,6,0,12);stack.Children.Add(subtitle);
-  if(action!=null){action.HorizontalAlignment=HorizontalAlignment.Center;stack.Children.Add(action);}
+  if(action is FrameworkElement framework){framework.HorizontalAlignment=HorizontalAlignment.Center;stack.Children.Add(framework);}
   return AtlasPanel(stack,24,"#1B1F24");
  }
 
@@ -836,7 +836,8 @@ public partial class MainWindow
   AddInspectorField(content,"作者",mod.Author);
   AddInspectorField(content,"说明",mod.Description.Length==0?"作者未提供简介。":mod.Description);
   AddInspectorField(content,"安装路径",mod.Folder);
-  AddInspectorField(content,"依赖",string.Join("、",mod.Dependencies.Select(x=>x.Id)) is {Length:>0} deps?deps:"未声明必需前置");
+  string dependencies=string.Join("、",mod.Dependencies.Select(x=>x.Id));
+  AddInspectorField(content,"依赖",dependencies.Length>0?dependencies:"未声明必需前置");
   if(isPatch){
    var state=knownState??report?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
    AddInspectorField(content,"文件扫描状态",state?.Status??"尚未扫描");
