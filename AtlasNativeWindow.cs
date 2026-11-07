@@ -1280,10 +1280,27 @@ public partial class MainWindow
  void RenderAtlasNativeInspector(PatchState? knownState=null)
  {
   if(atlasNativeInspector==null||atlasNativeBody==null)return;
-  if(atlasNativeSelectedFolder==null||modInventory==null){
+  if(atlasNativeSelectedFolder==null){
    atlasNativeInspector.Visibility=Visibility.Collapsed;
    atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(0);
    atlasNativeInspector.Child=null;
+   return;
+  }
+  if(modInventory==null)
+  {
+   var loading=new StackPanel{Margin=new Thickness(2)};
+   var top=new Grid{Margin=new Thickness(0,0,0,13)};
+   top.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+   top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+   top.Children.Add(AtlasText("MOD INSPECTOR",11,AtlasBrass,true));
+   var close=AtlasButton("×",CloseAtlasNativeInspector,"quiet");
+   close.Padding=new Thickness(9,3,9,3);Grid.SetColumn(close,1);top.Children.Add(close);
+   loading.Children.Add(top);
+   loading.Children.Add(AtlasText("正在刷新本地清单",17,AtlasInk,true));
+   loading.Children.Add(AtlasText("已保留当前选择。扫描完成后会自动显示最新的 MOD 与补丁依据。",12,AtlasMuted));
+   atlasNativeInspector.Child=loading;
+   atlasNativeInspector.Visibility=Visibility.Visible;
+   atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(Math.Clamp(ActualWidth<=1150?310:ActualWidth<=1400?330:350,300,350));
    return;
   }
   var mod=modInventory.Mods.FirstOrDefault(x=>x.Folder.Equals(atlasNativeSelectedFolder,StringComparison.OrdinalIgnoreCase));
@@ -1414,6 +1431,19 @@ public partial class MainWindow
    await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
    UpdateLayout();atlasNativeRoot?.UpdateLayout();
   }
+  async Task WaitForStableInventory()
+  {
+   for(int attempt=0;attempt<180;attempt++)
+   {
+    await Idle();
+    if(modInventory!=null&&!modInventoryDirty&&!busy&&!transactionWriting)return;
+    await Task.Delay(50);
+   }
+   throw new InvalidOperationException("本地 MOD 清单未能稳定："+ 
+    "inventory="+(modInventory!=null)+"; dirty="+modInventoryDirty+
+    "; busy="+busy+"; writing="+transactionWriting+"; status="+modStatus+
+    "; changes="+modChangeVersion+"; watchers="+modWatchers.Count);
+  }
   IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject
   {
    for(int index=0;index<VisualTreeHelper.GetChildrenCount(parent);index++)
@@ -1500,7 +1530,7 @@ public partial class MainWindow
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is ScrollViewer,
    "模组库返回后的异步布局稳定");
 
-  AtlasNativeNavigate("修复中心");await Idle();
+  AtlasNativeNavigate("修复中心");await WaitForStableInventory();
   var localPatches=modInventory!.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
   Check(localPatches.Length==1&&atlasNativePageHost?.Content is ScrollViewer,
    "修复中心只展示独立补丁，不混入普通 MOD");
