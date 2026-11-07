@@ -55,7 +55,9 @@ public partial class MainWindow
  Button? atlasNativeLaunchButton;
  readonly Dictionary<string,Button> atlasNativeNavButtons=new(StringComparer.Ordinal);
  string atlasNativePage="总览";
- string atlasNativeViewMode="list";
+ string atlasNativeSubpageReturnPage="总览";
+ string atlasNativePatchFilter="全部",atlasNativePatchQuery="";
+ string atlasNativeViewMode="grid";
  string atlasNativeQuery="";
  string atlasNativeStateFilter="全部";
  string atlasNativeSourceFilter="全部";
@@ -265,10 +267,36 @@ public partial class MainWindow
  void AtlasNativeNavigate(string page)
  {
   atlasNativePage=page;
+  atlasNativeSubpageReturnPage=page;
+  this.page=page switch{
+   "模组库"=>"模组管理","修复中心"=>"本地补丁",
+   "更新中心"=>"更新中心","设置"=>"工具与设置",_=>"总览"
+  };
+  if(page=="模组库")modSection="普通 MOD";
+  if(page=="修复中心")modSection="修复补丁";
   atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
   RenderAtlasNative();
-  if(page=="模组库"&&selectedInstallRoot!=null&&(modInventory==null||modInventoryDirty))
+  if((page=="模组库"||page=="修复中心")&&selectedInstallRoot!=null&&
+     (modInventory==null||modInventoryDirty))
    _=RefreshAtlasNativeDataAsync();
+ }
+
+ void AtlasNativeRunWorkflow(Action action)
+ {
+  atlasNativeSubpageReturnPage=atlasNativePage;
+  action();
+ }
+
+ void AtlasNativeRunBatch(Action action)
+ {
+  var folders=atlasNativeRows.Where(x=>x.IsSelected&&!ModPresentation.IsIndependentPatch(x.Mod))
+   .Select(x=>x.Mod.Folder).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+  if(folders.Length==0){toast.Text="请先选择至少一个普通 MOD。";return;}
+  chosenModFolders.Clear();
+  foreach(string folder in folders)chosenModFolders.Add(folder);
+  modSection="普通 MOD";
+  atlasNativeSubpageReturnPage=atlasNativePage;
+  action();
  }
 
  async Task RefreshAtlasNativeDataAsync()
@@ -302,12 +330,24 @@ public partial class MainWindow
 
  void OpenAtlasLegacyPage(string pageName)
  {
+  if(UiThemes.IsAtlasNative)
+  {
+   atlasNativeSubpageReturnPage=atlasNativePage;
+   Navigate(pageName);
+   return;
+  }
   ChangeUiTheme(UiThemes.Workspace);
   Navigate(pageName);
  }
 
  void OpenAtlasLegacyMod(string folder)
  {
+  if(UiThemes.IsAtlasNative)
+  {
+   atlasNativeSubpageReturnPage=atlasNativePage;
+   ShowModDetail(folder);
+   return;
+  }
   ChangeUiTheme(UiThemes.Workspace);
   ShowModDetail(folder);
  }
