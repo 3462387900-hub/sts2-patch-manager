@@ -1335,8 +1335,10 @@ public partial class MainWindow
   AtlasNativeNavigate("模组库");await Idle();
   modTogglePreview=ModManager.Preview(fixture,solo.Folder,!solo.Enabled);
   ShowModConfirmation();await Idle();
+  string togglePageDebug="theme="+UiThemes.Active+"; windowContent="+(Content?.GetType().Name??"null")+
+   "; rootMatch="+ReferenceEquals(Content,atlasNativeRoot)+"; hostContent="+(atlasNativePageHost?.Content?.GetType().Name??"null");
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
-   "现有安全启停预览可在 ATLAS 外壳内确认，不直接修改文件");
+   "现有安全启停预览可在 ATLAS 外壳内确认，不直接修改文件（"+togglePageDebug+"）");
   modTogglePreview=null;
   AtlasNativeNavigate("模组库");await Idle();
 
