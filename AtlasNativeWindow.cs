@@ -914,16 +914,16 @@ public partial class MainWindow
   var mod=modInventory.Mods.FirstOrDefault(x=>x.Folder.Equals(atlasNativeSelectedFolder,StringComparison.OrdinalIgnoreCase));
   if(mod==null){CloseAtlasNativeInspector();return;}
   bool isPatch=ModPresentation.IsIndependentPatch(mod);
-  var content=new StackPanel();
+  var content=new StackPanel{Margin=new Thickness(2)};
   var top=new Grid{Margin=new Thickness(0,0,0,13)};
   top.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-  top.Children.Add(AtlasText(isPatch?"PATCH INSPECTOR":"MOD INSPECTOR",10,AtlasBrass,true));
+  top.Children.Add(AtlasText(isPatch?"PATCH INSPECTOR":"MOD INSPECTOR",11,AtlasBrass,true));
   var close=AtlasButton("×",CloseAtlasNativeInspector,"quiet");close.Padding=new Thickness(9,3,9,3);Grid.SetColumn(close,1);top.Children.Add(close);
   content.Children.Add(top);
-  content.Children.Add(AtlasText(mod.Name,19,AtlasInk,true));
-  content.Children.Add(AtlasText(mod.Id,10,AtlasMuted));
-  var status=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,10,0,13)};
+  content.Children.Add(AtlasText(mod.Name,21,AtlasInk,true));
+  content.Children.Add(AtlasText(mod.Id,11,AtlasMuted));
+  var status=new WrapPanel{Margin=new Thickness(0,10,0,13)};
   status.Children.Add(AtlasBadge(mod.Enabled?"已启用":"已停用",mod.Enabled?"ok":"neutral"));
   if(isPatch)status.Children.Add(AtlasBadge("独立修复补丁","warn"));
   content.Children.Add(status);
@@ -933,34 +933,88 @@ public partial class MainWindow
   AddInspectorField(content,"安装路径",mod.Folder);
   string dependencies=string.Join("、",mod.Dependencies.Select(x=>x.Id));
   AddInspectorField(content,"依赖",dependencies.Length>0?dependencies:"未声明必需前置");
-  if(isPatch){
+
+  if(isPatch)
+  {
    var state=knownState??report?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
+   var lifecycle=lifecycleReport?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
    AddInspectorField(content,"文件扫描状态",state?.Status??"尚未扫描");
    AddInspectorField(content,"扫描依据",state?.Reason??"当前没有补丁扫描记录。");
    AddInspectorField(content,"补丁健康生命周期",LifecycleTag(mod.Id));
    AddInspectorField(content,"关联 MOD",state?.Patch.Requirements.Length>0?string.Join("、",state.Patch.Requirements):"补丁清单未声明关联 MOD");
-   content.Children.Add(AtlasButton("在完整工作台查看补丁依据",()=>OpenAtlasLegacyMod(mod.Folder),"quiet"));
-  }else{
+   content.Children.Add(AtlasButton("查看完整健康依据",()=>AtlasNativeRunWorkflow(()=>ShowPatchEvidence(mod.Id)),"quiet"));
+   var toggle=AtlasButton(mod.Enabled?"预览停用补丁":"预览启用补丁",
+    ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
+   toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);
+   toggle.Margin=new Thickness(0,7,0,0);content.Children.Add(toggle);
+   if(lifecycle?.CanRetire==true)
+   {
+    var retire=AtlasButton("预览安全退役",()=>AtlasNativeRunWorkflow(()=>PrepareRetirement(lifecycle)),"primary");
+    retire.Margin=new Thickness(0,7,0,0);content.Children.Add(retire);
+   }
+   var scan=AtlasButton("重新检查补丁健康",AtlasNativeRefreshLifecycle,"quiet");
+   scan.Margin=new Thickness(0,7,0,0);content.Children.Add(scan);
+  }
+  else
+  {
    AtlasNativeModRow? row=atlasNativeRows.FirstOrDefault(x=>x.Mod.Folder.Equals(mod.Folder,StringComparison.OrdinalIgnoreCase));
-   if(row!=null){
+   if(row!=null)
+   {
     AddInspectorField(content,"来源",row.Source);
     AddInspectorField(content,"Workshop ID",row.WorkshopId.Length>0?row.WorkshopId:"未绑定");
     AddInspectorField(content,"GitHub 仓库",row.GitHubRepository.Length>0?row.GitHubRepository:"未关联");
-    AddInspectorField(content,"更新状态",row.UpdateStatus+(row.LatestVersion.Length>0?" · "+row.LatestVersion:""));
+    AddInspectorField(content,"更新状态",row.UpdateStatus+(row.LatestVersion.Length>0?" · 最新 "+row.LatestVersion:""));
    }
-   content.Children.Add(AtlasButton("在完整工作台查看详情",()=>OpenAtlasLegacyMod(mod.Folder),"primary"));
+   var actionHeader=AtlasText("常用操作",13,AtlasInk,true);actionHeader.Margin=new Thickness(0,4,0,8);content.Children.Add(actionHeader);
+   var toggle=AtlasButton(mod.Enabled?"预览停用":"预览启用",
+    ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
+   toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);toggle.Margin=new Thickness(0,0,6,6);
+   var actions=new WrapPanel();actions.Children.Add(toggle);
+   if(row!=null)
+   {
+    if(row.GitHubRepository.Length==0)
+     actions.Children.Add(AtlasButton("自动查找 GitHub",()=>AtlasNativeRunWorkflow(()=>DiscoverGitHubMod(mod)),"quiet"));
+    actions.Children.Add(AtlasButton(row.GitHubRepository.Length==0?"关联 GitHub":"修改 GitHub 关联",
+     ()=>AtlasNativeRunWorkflow(()=>BindGitHubMod(mod)),"quiet"));
+    if(row.GitHubRepository.Length>0)
+    {
+     actions.Children.Add(AtlasButton("检查 GitHub",()=>AtlasNativeRunWorkflow(()=>CheckGitHubMod(mod)),"quiet"));
+     var update=AtlasButton("下载并更新",()=>AtlasNativeRunWorkflow(()=>UpdateGitHubMod(mod)),"primary");
+     update.IsEnabled=row.HasUpdate&&!busy&&!transactionWriting&&!modInventoryDirty;
+     actions.Children.Add(update);
+    }
+    if(row.WorkshopId.Length>0)
+     actions.Children.Add(AtlasButton("检查 Workshop",()=>AtlasNativeRunWorkflow(()=>CheckWorkshopMod(mod)),"quiet"));
+    actions.Children.Add(AtlasButton(row.WorkshopId.Length>0?"下载 / 更新 Workshop":"从 Workshop 下载",
+     ()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod(mod)),"quiet"));
+   }
+   content.Children.Add(actions);
+   var secondary=new WrapPanel{Margin=new Thickness(0,7,0,0)};
+   secondary.Children.Add(AtlasButton("完整详情",()=>OpenAtlasLegacyMod(mod.Folder),"quiet"));
+   secondary.Children.Add(AtlasButton("依赖关系图",()=>AtlasNativeRunWorkflow(ShowDependencyGraph),"quiet"));
+   secondary.Children.Add(AtlasButton("打开 MOD 文件夹",()=>OpenUrl(mod.Folder),"quiet"));
+   content.Children.Add(secondary);
   }
   var scroller=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
   atlasNativeInspector.Child=scroller;
   atlasNativeInspector.Visibility=Visibility.Visible;
-  atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(330);
+  atlasNativeBody.ColumnDefinitions[1].Width=new GridLength(365);
+ }
+
+ void AtlasNativeRefreshLifecycle()
+ {
+  atlasNativeSubpageReturnPage="修复中心";
+  _=RefreshLifecycleAsync(()=>{
+   atlasNativePage="修复中心";
+   RenderAtlasNative();
+  });
  }
 
  void AddInspectorField(Panel panel,string label,string value)
  {
   var group=new StackPanel{Margin=new Thickness(0,0,0,12)};
-  group.Children.Add(AtlasText(label,10,AtlasBrass,true));
-  group.Children.Add(AtlasText(value,12,AtlasMuted));
+  group.Children.Add(AtlasText(label,11,AtlasBrass,true));
+  group.Children.Add(AtlasText(value,13,AtlasMuted));
   panel.Children.Add(group);
  }
 
