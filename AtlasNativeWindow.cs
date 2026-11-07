@@ -1387,8 +1387,12 @@ public partial class MainWindow
   var patchState=report!.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(localPatches[0].Id,StringComparison.OrdinalIgnoreCase));
   await Shot("03-ATLAS-修复中心");
   ShowAtlasNativePatchInspector(localPatches[0],patchState);await Idle();
+  string patchInspectorDebug="folder="+(atlasNativeSelectedFolder??"null")+
+   "; inventory="+(modInventory!=null)+"; inspector="+(atlasNativeInspector?.Visibility.ToString()??"null")+
+   "; child="+(atlasNativeInspector?.Child?.GetType().Name??"null")+
+   "; body="+(atlasNativeBody!=null);
   Check(atlasNativeInspector?.Visibility==Visibility.Visible,
-   "补丁检查器展示扫描依据与生命周期状态");
+   "补丁检查器展示扫描依据与生命周期状态（"+patchInspectorDebug+"）");
   await Shot("04-ATLAS-补丁检查器");
   ShowPatchEvidence(localPatches[0].Id);await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
