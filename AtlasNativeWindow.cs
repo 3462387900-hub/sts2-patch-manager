@@ -1436,7 +1436,7 @@ public partial class MainWindow
    for(int attempt=0;attempt<180;attempt++)
    {
     await Idle();
-    if(modInventory!=null&&!modInventoryDirty&&!busy&&!transactionWriting)return;
+    if(modInventory!=null&&!modInventoryDirty&&!busy&&!transactionWriting&&modWatchDebounce?.IsEnabled!=true)return;
     await Task.Delay(50);
    }
    throw new InvalidOperationException("本地 MOD 清单未能稳定："+ 
