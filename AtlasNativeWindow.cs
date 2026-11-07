@@ -1503,8 +1503,11 @@ public partial class MainWindow
    "在线补丁页面可在 ATLAS 外壳内浏览，不自动触发网络请求");
   await Shot("11-ATLAS-在线补丁");
   ShowLifecycle();await Idle();
+  string lifecyclePageDebug="theme="+UiThemes.Active+"; window="+(Content?.GetType().Name??"null")+
+   "; rootMatch="+ReferenceEquals(Content,atlasNativeRoot)+"; host="+(atlasNativePageHost?.Content?.GetType().FullName??"null")+
+   "; page="+atlasNativePage+"; busy="+busy+"; report="+(lifecycleReport!=null);
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
-   "补丁健康页面保留 ATLAS 外壳与安全退役流程");
+   "补丁健康页面保留 ATLAS 外壳与安全退役流程（"+lifecyclePageDebug+"）");
   await Shot("12-ATLAS-补丁健康");
   ShowInstaller();await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
