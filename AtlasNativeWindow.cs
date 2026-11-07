@@ -49,7 +49,7 @@ public partial class MainWindow
  Grid? atlasNativeRoot,atlasNativeBody;
  ContentControl? atlasNativePageHost,atlasNativeResultsHost;
  Border? atlasNativeInspector,atlasNativeBatchBar;
- TextBlock? atlasNativeGamePath,atlasNativeGameState,atlasNativeFooter,atlasNativeBatchText;
+ TextBlock? atlasNativeGamePath,atlasNativeGameState,atlasNativeFooter,atlasNativeBatchText,atlasNativeResultsSummary;
  Button? atlasNativeLaunchButton,atlasNativeRefreshButton;
  readonly Dictionary<string,Button> atlasNativeNavButtons=new(StringComparer.Ordinal);
  string atlasNativePage="总览";
@@ -345,12 +345,12 @@ public partial class MainWindow
   var normal=modInventory?.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m))??0;
   var enabled=modInventory?.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled)??0;
   var patches=modInventory?.Mods.Count(ModPresentation.IsIndependentPatch)??0;
-  var updates=BuildAtlasNativeRows().Count(x=>x.HasUpdate);
+  var updates=atlasNativeRows.Count(x=>x.HasUpdate);
   var stats=new WrapPanel{Margin=new Thickness(0,14,0,14)};
-  stats.Children.Add(AtlasStat(normal.ToString(),"已安装 MOD","本地清单"));
-  stats.Children.Add(AtlasStat(enabled.ToString(),"已启用","普通 MOD"));
-  stats.Children.Add(AtlasStat(updates.ToString(),"缓存更新","不会自动联网"));
-  stats.Children.Add(AtlasStat(patches.ToString(),"独立补丁","与普通 MOD 分离"));
+  stats.Children.Add(AtlasStat(modInventory==null?"—":normal.ToString(),"已安装 MOD","本地清单"));
+  stats.Children.Add(AtlasStat(modInventory==null?"—":enabled.ToString(),"已启用","普通 MOD"));
+  stats.Children.Add(AtlasStat(modInventory==null?"—":updates.ToString(),"缓存更新","不会自动联网"));
+  stats.Children.Add(AtlasStat(modInventory==null?"—":patches.ToString(),"独立补丁","与普通 MOD 分离"));
   root.Children.Add(stats);
 
   var lower=new Grid();
@@ -467,7 +467,7 @@ public partial class MainWindow
   var clear=AtlasButton("清空",ClearAtlasNativeSelection,"quiet");clear.Margin=new Thickness(8,0,0,0);batch.Children.Add(clear);
   atlasNativeBatchBar.Child=batch;root.Children.Add(atlasNativeBatchBar);
 
-  var summary=AtlasText("",11,AtlasMuted);summary.Margin=new Thickness(2,0,0,8);root.Children.Add(summary);
+  atlasNativeResultsSummary=AtlasText("",11,AtlasMuted);atlasNativeResultsSummary.Margin=new Thickness(2,0,0,8);root.Children.Add(atlasNativeResultsSummary);
   atlasNativeResultsHost=new ContentControl();
   root.Children.Add(atlasNativeResultsHost);
   RenderAtlasNativeModResults();
@@ -489,6 +489,7 @@ public partial class MainWindow
  {
   if(atlasNativeResultsHost==null)return;
   var rows=GetFilteredAtlasNativeRows();
+  if(atlasNativeResultsSummary!=null)atlasNativeResultsSummary.Text=$"显示 {rows.Length} / {atlasNativeRows.Count} 项  ·  列表视图适合大量 MOD";
   if(atlasNativeBatchBar!=null)atlasNativeBatchBar.Visibility=atlasNativeSelectedFolders.Count>0?Visibility.Visible:Visibility.Collapsed;
   if(atlasNativeBatchText!=null)atlasNativeBatchText.Text="已选择 "+atlasNativeSelectedFolders.Count+" 项";
   if(modInventory==null){
@@ -714,7 +715,7 @@ public partial class MainWindow
   root.Children.Add(AtlasPageTitle("UPDATE CENTER","更新中心",
    "这里只显示已经缓存的 GitHub / Workshop 检查结果，不会自动联网或触发下载。",
    AtlasButton("打开完整更新工作台",()=>OpenAtlasLegacyPage("更新中心"))));
-  var rows=BuildAtlasNativeRows();
+  var rows=atlasNativeRows;
   var updates=rows.Where(x=>x.UpdateStatus!="尚未检查").OrderByDescending(x=>x.HasUpdate).ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
   if(updates.Length==0){
    root.Children.Add(AtlasEmpty("暂无已缓存的更新结果","进入完整更新工作台后，可以按需检查 GitHub 与创意工坊来源。",AtlasButton("打开更新工作台",()=>OpenAtlasLegacyPage("更新中心"),"primary")));
