@@ -1078,6 +1078,14 @@ public partial class MainWindow
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
   root.Children.Add(AtlasPageTitle("DOWNLOAD WORKSPACE","下载中心",
    "从创意工坊、GitHub 或本地 ZIP 获取 MOD。所有写入仍经过原有校验、预览、快照和回滚流程。"));
+  var activity=new StackPanel();
+  activity.Children.Add(AtlasText("操作状态",13,AtlasInk,true));
+  var activityText=AtlasText(toast.Text,12,AtlasMuted);
+  activityText.Margin=new Thickness(0,4,0,0);
+  BindingOperations.SetBinding(activityText,TextBlock.TextProperty,
+   new Binding(nameof(TextBlock.Text)){Source=toast,Mode=BindingMode.OneWay});
+  activity.Children.Add(activityText);
+  root.Children.Add(AtlasPanel(activity,11));
   var workshop=new StackPanel();
   workshop.Children.Add(AtlasText("Steam Workshop / 尖塔补给站",19,AtlasInk,true));
   workshop.Children.Add(AtlasText("输入 Workshop ID 或分享链接。下载后检查 Manifest / Chunk 与文件完整性，确认后才会写入游戏目录。",13,AtlasMuted));
