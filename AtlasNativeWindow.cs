@@ -153,7 +153,9 @@ public partial class MainWindow
    Background=SpireGlassTheme.GlassPanel(),BorderBrush=SpireGlassTheme.PanelStroke(),
    BorderThickness=new Thickness(0,1,0,0),Padding=new Thickness(20,7,20,7)
   };
-  atlasNativeFooter=AtlasText("ATLAS 原生工作台  ·  本地数据",11,AtlasMuted);
+  atlasNativeFooter=AtlasText("",11,AtlasMuted);
+  BindingOperations.SetBinding(atlasNativeFooter,TextBlock.TextProperty,
+   new Binding(nameof(TextBlock.Text)){Source=toast,Mode=BindingMode.OneWay});
   footer.Child=atlasNativeFooter;Grid.SetRow(footer,2);root.Children.Add(footer);
   atlasNativeRoot=root;
  }
@@ -265,9 +267,9 @@ public partial class MainWindow
   atlasNativeGameState!.Text=selectedInstallRoot==null?"尚未定位游戏":running?"游戏正在运行":busy?"正在处理":"游戏已就绪";
   atlasNativeGameState.Foreground=selectedInstallRoot==null?AtlasMuted:running?AtlasBrass:AtlasGreen;
   if(atlasNativeLaunchButton!=null)atlasNativeLaunchButton.IsEnabled=!busy&&!transactionWriting&&selectedInstallRoot!=null;
-  if(atlasNativeFooter!=null){
+  if(atlasNativeFooter!=null&&toast.Text.Length==0){
    string detail=modInventory==null?"MOD 清单尚未读取":$"{modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m))} 个普通 MOD · {modInventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled)} 个启用";
-   atlasNativeFooter.Text=toast.Text.Length>0?toast.Text:detail+"  ·  "+ManagerUpdates.CurrentVersion;
+   toast.Text=detail+"  ·  "+ManagerUpdates.CurrentVersion;
   }
  }
 
