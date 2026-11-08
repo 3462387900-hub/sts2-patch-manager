@@ -1007,9 +1007,16 @@ public partial class MainWindow
   statusGrid.Children.Add(status);
   bool autoStop=OrphanPatchAutoStop.Enabled(installer.DataRoot);
   var autoButton=AtlasButton("孤立补丁自动停用："+(autoStop?"开启":"关闭"),()=>{
+   if(busy||transactionWriting){
+    toast.Text="正在扫描或执行文件操作，请完成后再修改孤立补丁保护设置。";
+    return;
+   }
    try{
-    OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!autoStop);
-    orphanPatchNotice=autoStop?"已关闭孤立补丁自动停用。":"已开启孤立补丁自动停用；文件仍会保留。";
+    // Read the current persisted preference at click time. A background page
+    // refresh must not toggle a stale snapshot of the previous setting.
+    bool enabled=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+    OrphanPatchAutoStop.SetEnabled(installer.DataRoot,!enabled);
+    orphanPatchNotice=enabled?"已关闭孤立补丁自动停用。":"已开启孤立补丁自动停用；文件仍会保留。";
     toast.Text=orphanPatchNotice;RenderAtlasNative();
    }catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
   },"quiet");
