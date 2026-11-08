@@ -1919,6 +1919,62 @@ public partial class MainWindow
   await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is ScrollViewer,
    "模组库返回后的异步布局稳定");
+
+  // Simulate a large installed list in memory. The real fixture/files are
+  // untouched; the production card builder and view controls are exercised.
+  var actualModRows=atlasNativeRows;
+  var actualSelection=atlasNativeSelectedFolders.ToArray();
+  var template=actualModRows[0];
+  atlasNativeRows=Enumerable.Range(1,121).Select(index=>{
+   var model=template.Mod with{
+    Id="AtlasLoad"+index.ToString("D3"),
+    Name="Atlas Load "+index.ToString("D3"),
+    Folder=Path.Combine(fixture,"synthetic-"+index.ToString("D3"))
+   };
+   return new AtlasNativeModRow(model,template.Source,template.WorkshopId,
+    template.GitHubRepository,template.UpdateStatus,template.LatestVersion,
+    template.GitHubStatus,template.GitHubLatestVersion,
+    template.WorkshopStatus,template.WorkshopLatestVersion);
+  }).ToList();
+  atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
+  atlasNativeUnboundOnly=false;atlasNativeGridPage=0;atlasNativeViewMode="grid";
+  RenderAtlasNativeModResults();await Idle();
+  Check(atlasNativeResultsHost?.Content is WrapPanel firstPage&&
+   firstPage.Children.Count==AtlasNativeGridPageSize&&
+   atlasNativePagingHost?.Content is StackPanel,
+   "121 项模拟 MOD 的库视图只创建单页 24 张原生卡片");
+  var nextPageButton=((StackPanel)atlasNativePagingHost!.Content).Children.OfType<Button>()
+   .Single(button=>button.Content?.ToString()=="下一页");
+  nextPageButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,nextPageButton));await Idle();
+  Check(atlasNativeGridPage==1&&atlasNativeResultsHost?.Content is WrapPanel secondPage&&
+   secondPage.Children.Count==24,
+   "原生卡片翻页仅创建当前页控件");
+  atlasNativeRows[25].IsSelected=true;UpdateAtlasNativeSelection();
+  Check(atlasNativeSelectedFolders.Contains(atlasNativeRows[25].Folder),
+   "不同卡片页的勾选记录仍使用全局 MOD 选择集");
+  SelectAllAtlasVisibleMods();
+  Check(atlasNativeSelectedFolders.Count==121&&atlasNativeResultsHost?.Content is WrapPanel selectedPage&&
+   selectedPage.Children.Count==24,
+   "全选当前筛选结果跨全部分页，不遗漏不可见卡片");
+  ClearAtlasNativeSelection();
+  atlasNativeGridPage=5;atlasNativeQuery="Atlas Load 12";
+  RenderAtlasNativeModResults();await Idle();
+  Check(atlasNativeGridPage==0&&GetFilteredAtlasNativeRows().Length==2&&
+   atlasNativeResultsHost?.Content is WrapPanel narrowedPage&&narrowedPage.Children.Count==2,
+   "筛选缩小结果时自动夹紧页码，不出现越界空页");
+  atlasNativeQuery="";atlasNativeGridPage=0;atlasNativeViewMode="list";
+  RenderAtlasNativeModResults();await Idle();
+  Check(atlasNativeResultsHost?.Content is DataGrid largeGrid&&
+   largeGrid.Items.Count==121&&VirtualizingPanel.GetIsVirtualizing(largeGrid),
+   "大量 MOD 列表仍显示全部结果并保留 DataGrid 虚拟化");
+  atlasNativeRows=actualModRows;
+  atlasNativeSelectedFolders.Clear();
+  foreach(var folder in actualSelection)atlasNativeSelectedFolders.Add(folder);
+  atlasNativeGridPage=0;atlasNativeViewMode="list";
+  RenderAtlasNativeModResults();await Idle();
+  Check(GetFilteredAtlasNativeRows().Length==6&&atlasNativeResultsHost?.Content is DataGrid,
+   "负载测试仅使用内存行数据，测试完成后恢复真实 MOD 列表");
+
   // currentVisit may still name the previously opened legacy MOD detail.
   // A background update completion must respect the active native section.
   RefreshAtlasNativeModSurface();await Idle();
