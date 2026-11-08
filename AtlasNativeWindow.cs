@@ -178,13 +178,24 @@ public partial class MainWindow
    BorderThickness=new Thickness(1),Cursor=Cursors.Hand,
    Background=kind switch{
     "primary"=>AtlasBrass,
+    "active"=>AtlasBrush("#3B3021"),
     "nav"=>Brushes.Transparent,
     "quiet"=>Brushes.Transparent,
     _=>AtlasPanelAltBrush
    },
-   Foreground=kind=="primary"?AtlasBrush("#1A1B1C"):kind=="nav"||kind=="quiet"?AtlasMuted:AtlasInk,
-   BorderBrush=kind=="primary"?AtlasBrush("#D9B77F"):kind=="nav"||kind=="quiet"?Brushes.Transparent:AtlasBrush("#3A4149"),
-   FontWeight=kind=="primary"?FontWeights.SemiBold:FontWeights.Medium
+   Foreground=kind switch{
+    "primary"=>AtlasBrush("#1A1B1C"),
+    "active"=>AtlasBrass,
+    "nav" or "quiet"=>AtlasMuted,
+    _=>AtlasInk
+   },
+   BorderBrush=kind switch{
+    "primary"=>AtlasBrush("#D9B77F"),
+    "active"=>AtlasBrush("#6D5737"),
+    "nav" or "quiet"=>Brushes.Transparent,
+    _=>AtlasBrush("#3A4149")
+   },
+   FontWeight=kind is "primary" or "active"?FontWeights.SemiBold:FontWeights.Medium
   };
   button.Click+=(_,_)=>action();
   return button;
@@ -249,6 +260,29 @@ public partial class MainWindow
    HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
    CanContentScroll=true
   };
+ }
+
+ // Calculate columns from the actual WPF viewport, not the desktop window width:
+ // the inspector can be opened without resizing the window.
+ static int AtlasNativeCardColumns(double availableWidth,double minCardWidth,double gap=13)
+ {
+  if(!double.IsFinite(availableWidth)||availableWidth<=0)return 1;
+  return Math.Max(1,(int)Math.Floor((availableWidth+gap)/(minCardWidth+gap)));
+ }
+
+ void AtlasNativeFitCards(WrapPanel panel,double minCardWidth,double gap=13)
+ {
+  void Fit()
+  {
+   double available=panel.ActualWidth;
+   if(!double.IsFinite(available)||available<=0)return;
+   int columns=AtlasNativeCardColumns(available,minCardWidth,gap);
+   double width=Math.Max(180,Math.Floor((available-columns*gap)/columns));
+   foreach(var card in panel.Children.OfType<Border>())
+    if(Math.Abs(card.Width-width)>0.5)card.Width=width;
+  }
+  panel.Loaded+=(_,_)=>Fit();
+  panel.SizeChanged+=(_,_)=>Fit();
  }
 
  void RenderAtlasNative()
@@ -547,10 +581,33 @@ public partial class MainWindow
   toolbar.Children.Add(sort);
 
   var views=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(10,0,0,0)};
-  views.Children.Add(AtlasButton("列表",()=>{atlasNativeViewMode="list";RenderAtlasNativeModResults();},atlasNativeViewMode=="list"?"active":"quiet"));
-  views.Children.Add(AtlasButton("库视图",()=>{atlasNativeViewMode="grid";RenderAtlasNativeModResults();},atlasNativeViewMode=="grid"?"active":"quiet"));
+  var listButton=AtlasButton("列表",()=>SwitchView("list"),atlasNativeViewMode=="list"?"active":"quiet");
+  var gridButton=AtlasButton("库视图",()=>SwitchView("grid"),atlasNativeViewMode=="grid"?"active":"quiet");
+  views.Children.Add(listButton);views.Children.Add(gridButton);
   toolbar.Children.Add(views);
+  var allVisible=AtlasButton("全选当前结果",SelectAllAtlasVisibleMods,"quiet");
+  allVisible.Margin=new Thickness(8,0,0,0);toolbar.Children.Add(allVisible);
+  var reset=AtlasButton("清除筛选",()=>{
+   atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
+   atlasNativeUnboundOnly=false;atlasNativeSort="名称";
+   RenderAtlasNative();
+  },"quiet");
+  reset.Margin=new Thickness(8,0,0,0);toolbar.Children.Add(reset);
   root.Children.Add(AtlasPanel(toolbar,10,"#20242A"));
+
+  void SwitchView(string mode)
+  {
+   atlasNativeViewMode=mode;
+   SetViewStyle(listButton,mode=="list");SetViewStyle(gridButton,mode=="grid");
+   RenderAtlasNativeModResults();
+  }
+  void SetViewStyle(Button button,bool active)
+  {
+   button.Background=active?AtlasBrush("#3B3021"):Brushes.Transparent;
+   button.Foreground=active?AtlasBrass:AtlasMuted;
+   button.BorderBrush=active?AtlasBrush("#6D5737"):Brushes.Transparent;
+   button.FontWeight=active?FontWeights.SemiBold:FontWeights.Medium;
+  }
 
   atlasNativeBatchBar=new Border{
    Background=AtlasBrush("#30291F"),BorderBrush=AtlasBrush("#695333"),
@@ -594,7 +651,7 @@ public partial class MainWindow
  {
   if(atlasNativeResultsHost==null)return;
   var rows=GetFilteredAtlasNativeRows();
-  if(atlasNativeResultsSummary!=null)atlasNativeResultsSummary.Text=$"显示 {rows.Length} / {atlasNativeRows.Count} 项  ·  列表视图适合大量 MOD";
+  if(atlasNativeResultsSummary!=null)atlasNativeResultsSummary.Text=$"显示 {rows.Length} / {atlasNativeRows.Count} 项  ·  已选择 {atlasNativeSelectedFolders.Count} 项  ·  列表视图适合大量 MOD";
   if(atlasNativeBatchBar!=null)atlasNativeBatchBar.Visibility=atlasNativeSelectedFolders.Count>0?Visibility.Visible:Visibility.Collapsed;
   if(atlasNativeBatchText!=null)atlasNativeBatchText.Text="已选择 "+atlasNativeSelectedFolders.Count+" 项";
   if(modInventory==null){
@@ -602,12 +659,17 @@ public partial class MainWindow
    return;
   }
   if(rows.Length==0){
-   atlasNativeResultsHost.Content=AtlasEmpty("没有符合条件的 MOD","尝试清除筛选条件，或刷新本地清单。");
+   atlasNativeResultsHost.Content=AtlasEmpty("没有符合条件的 MOD","尝试清除筛选条件，或刷新本地清单。",
+    AtlasButton("清除筛选",()=>{
+     atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
+     atlasNativeUnboundOnly=false;atlasNativeSort="名称";RenderAtlasNative();
+    },"quiet"));
    return;
   }
   if(atlasNativeViewMode=="grid"){
    var wrap=new WrapPanel();
    foreach(var row in rows)wrap.Children.Add(BuildAtlasNativeModCard(row));
+   AtlasNativeFitCards(wrap,315);
    atlasNativeResultsHost.Content=wrap;
   }else{
    atlasNativeResultsHost.Content=BuildAtlasNativeDataGrid(rows);
@@ -805,8 +867,13 @@ public partial class MainWindow
   toggleButton.SetValue(Control.PaddingProperty,new Thickness(7,4,7,4));
   toggleButton.SetValue(FrameworkElement.MarginProperty,new Thickness(5,0,0,0));
   toggleButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,_)=>{
-   if(sender is FrameworkElement element&&element.DataContext is AtlasNativeModRow row)
-    AtlasNativeRunWorkflow(()=>PrepareModToggle(row.Mod));
+   if(sender is not FrameworkElement element||element.DataContext is not AtlasNativeModRow row)return;
+   // A virtualized row can outlive the scan that first supplied it. Recheck the
+   // same file/transaction guards used by card actions before opening a preview.
+   if(!AtlasNativeToggleAllowed(row.Mod,out string? blocked)){
+    toast.Text=blocked??"当前无法预览启停，请等待扫描或文件操作结束。";return;
+   }
+   AtlasNativeRunWorkflow(()=>PrepareModToggle(row.Mod));
   }));
   actionPanel.AppendChild(toggleButton);
   grid.Columns.Add(new DataGridTemplateColumn{Header="操作",Width=155,CellTemplate=new DataTemplate{VisualTree=actionPanel}});
@@ -820,6 +887,8 @@ public partial class MainWindow
   foreach(var row in atlasNativeRows.Where(x=>x.IsSelected))atlasNativeSelectedFolders.Add(row.Mod.Folder);
   if(atlasNativeBatchBar!=null)atlasNativeBatchBar.Visibility=atlasNativeSelectedFolders.Count>0?Visibility.Visible:Visibility.Collapsed;
   if(atlasNativeBatchText!=null)atlasNativeBatchText.Text="已选择 "+atlasNativeSelectedFolders.Count+" 项";
+  if(atlasNativeResultsSummary!=null)
+   atlasNativeResultsSummary.Text=$"显示 {GetFilteredAtlasNativeRows().Length} / {atlasNativeRows.Count} 项  ·  已选择 {atlasNativeSelectedFolders.Count} 项  ·  列表视图适合大量 MOD";
  }
 
  void SelectAllAtlasVisibleMods()
@@ -1002,6 +1071,7 @@ public partial class MainWindow
    body.Children.Add(actions);
    card.Child=body;wrap.Children.Add(card);
   }
+  AtlasNativeFitCards(wrap,370,12);
   host.Content=shown.Length==0
    ?AtlasEmpty("没有符合条件的补丁","清除筛选条件，或重新检查补丁健康状态。")
    :wrap;
@@ -1162,6 +1232,7 @@ public partial class MainWindow
     body.Children.Add(actions);
     card.Child=body;cards.Children.Add(card);
    }
+   AtlasNativeFitCards(cards,355,12);
    resultsHost.Content=cards;
   }
  }
@@ -1507,6 +1578,17 @@ public partial class MainWindow
   atlasNativeUnboundOnly=false;atlasNativeViewMode="grid";RenderAtlasNativeModResults();
   Check(atlasNativeResultsHost?.Content is WrapPanel,
    "库视图使用原生 WPF 卡片容器");
+  Check(AtlasNativeCardColumns(620,315)==1&&AtlasNativeCardColumns(650,315)==2&&
+   AtlasNativeCardColumns(990,315)==3,
+   "库视图卡片列数根据可用宽度变化，而非固定 390px");
+  await Idle();
+  if(atlasNativeResultsHost?.Content is WrapPanel modCards&&modCards.ActualWidth>0)
+  {
+   int columns=AtlasNativeCardColumns(modCards.ActualWidth,315);
+   double expected=Math.Max(180,Math.Floor((modCards.ActualWidth-columns*13)/columns));
+   Check(modCards.Children.OfType<Border>().All(card=>Math.Abs(card.Width-expected)<1),
+    "MOD 卡片在实际可用宽度内自动排列");
+  }
   await Shot("02-ATLAS-库视图");
   atlasNativeViewMode="list";RenderAtlasNativeModResults();
   Check(atlasNativeResultsHost?.Content is DataGrid,
