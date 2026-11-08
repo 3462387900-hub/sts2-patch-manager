@@ -62,6 +62,7 @@ public partial class MainWindow
  Button? atlasNativeLaunchButton;
  readonly Dictionary<string,Button> atlasNativeNavButtons=new(StringComparer.Ordinal);
  string atlasNativePage="总览";
+ string? atlasNativeRenderedPage;
  string atlasNativeSubpageReturnPage="总览";
  string atlasNativePatchFilter="全部",atlasNativePatchQuery="";
  string atlasNativeUpdateFilter="全部",atlasNativeUpdateQuery="";
@@ -177,6 +178,9 @@ public partial class MainWindow
   var button=new Button{
    Content=text,FontSize=13,Padding=new Thickness(12,8,12,8),
    BorderThickness=new Thickness(1),Cursor=Cursors.Hand,
+   // In a vertical StackPanel, a default Stretch button looks like an invisible
+   // full-width hit target. Keep standalone actions visibly anchored to the left.
+   HorizontalAlignment=HorizontalAlignment.Left,
    Background=kind switch{
     "primary"=>AtlasBrass,
     "active"=>AtlasBrush("#3B3021"),
@@ -277,8 +281,12 @@ public partial class MainWindow
   {
    double available=panel.ActualWidth;
    if(!double.IsFinite(available)||available<=0)return;
-   int columns=AtlasNativeCardColumns(available,minCardWidth,gap);
+   int cardCount=panel.Children.OfType<Border>().Count();
+   int columns=Math.Min(Math.Max(1,cardCount),AtlasNativeCardColumns(available,minCardWidth,gap));
+   // A lone patch/update result should not occupy half a page. Cap the
+   // expanded width so long text does not turn into an unreadable line.
    double width=Math.Max(180,Math.Floor((available-columns*gap)/columns));
+   if(cardCount==1)width=Math.Min(width,720);
    foreach(var card in panel.Children.OfType<Border>())
     if(Math.Abs(card.Width-width)>0.5)card.Width=width;
   }
@@ -289,6 +297,11 @@ public partial class MainWindow
  void RenderAtlasNative()
  {
   if(atlasNativeRoot==null||atlasNativePageHost==null)return;
+  // A source refresh should not force the user to start reading the same
+  // workspace from the top. Actual section navigation still starts at 0.
+  double savedOffset=atlasNativeRenderedPage==atlasNativePage &&
+   atlasNativePageHost.Content is ScrollViewer previousScroll
+    ?previousScroll.VerticalOffset:0;
   Content=atlasNativeRoot;
   atlasNativeRows=BuildAtlasNativeRows();
   // A folder removed by FileSystemWatcher must not stay in a batch selection.
@@ -310,6 +323,12 @@ public partial class MainWindow
    "设置"=>BuildAtlasNativeSettingsPage(),
    _=>BuildAtlasNativeOverviewPage()
   };
+  atlasNativeRenderedPage=atlasNativePage;
+  if(savedOffset>0&&atlasNativePageHost.Content is ScrollViewer restoredScroll)
+   Dispatcher.BeginInvoke(new Action(()=>{
+    if(ReferenceEquals(atlasNativePageHost.Content,restoredScroll))
+     restoredScroll.ScrollToVerticalOffset(Math.Min(savedOffset,restoredScroll.ScrollableHeight));
+   }),DispatcherPriority.Loaded);
   RenderAtlasNativeInspector();
  }
 
@@ -1747,9 +1766,13 @@ public partial class MainWindow
   atlasNativeQuery="";atlasNativeUnboundOnly=true;RenderAtlasNativeModResults();
   Check(GetFilteredAtlasNativeRows().Length==6,
    "未绑定 Workshop ID 筛选基于真实来源关联数据");
-  atlasNativeUnboundOnly=false;atlasNativeViewMode="grid";RenderAtlasNativeModResults();
-  Check(atlasNativeResultsHost?.Content is WrapPanel,
-   "库视图使用原生 WPF 卡片容器");
+  atlasNativeUnboundOnly=false;
+  var gridModeButton=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="库视图");
+  gridModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,gridModeButton));await Idle();
+  Check(atlasNativeViewMode=="grid"&&atlasNativeResultsHost?.Content is WrapPanel,
+   "库视图按钮通过真实 Click 切换原生卡片容器");
+  Check(gridModeButton.Background.ToString()==AtlasBrush("#3B3021").ToString(),
+   "库视图显示时，库视图按钮正确高亮");
   Check(AtlasNativeCardColumns(620,315)==1&&AtlasNativeCardColumns(650,315)==2&&
    AtlasNativeCardColumns(990,315)==3,
    "库视图卡片列数根据可用宽度变化，而非固定 390px");
@@ -1762,9 +1785,23 @@ public partial class MainWindow
     "MOD 卡片在实际可用宽度内自动排列");
   }
   await Shot("02-ATLAS-库视图");
-  atlasNativeViewMode="list";RenderAtlasNativeModResults();
-  Check(atlasNativeResultsHost?.Content is DataGrid,
+  // A details sidebar changes the actual card viewport; resize cards rather
+  // than leaving clipped fixed-width content behind.
+  ShowAtlasNativeModInspector(atlasNativeRows[0]);await Idle();
+  if(atlasNativeResultsHost?.Content is WrapPanel narrowedCards&&narrowedCards.ActualWidth>0)
+  {
+   int narrowCols=Math.Min(narrowedCards.Children.Count,AtlasNativeCardColumns(narrowedCards.ActualWidth,315));
+   double expectedWidth=Math.Floor((narrowedCards.ActualWidth-narrowCols*13)/narrowCols);
+   Check(narrowedCards.Children.OfType<Border>().All(card=>Math.Abs(card.Width-expectedWidth)<1),
+    "展开 MOD 详情后卡片重新适配剩余宽度");
+  }
+  CloseAtlasNativeInspector();await Idle();
+  var listModeButton=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="列表");
+  listModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,listModeButton));await Idle();
+  Check(atlasNativeViewMode=="list"&&atlasNativeResultsHost?.Content is DataGrid,
    "列表与库视图切换复用同一份模组数据");
+  Check(listModeButton.Background.ToString()==AtlasBrush("#3B3021").ToString(),
+   "返回列表视图后列表按钮正确高亮");
   ShowAtlasNativeModInspector(atlasNativeRows[0]);await Idle();
   Check(atlasNativeInspector?.Visibility==Visibility.Visible&&
    atlasNativeBody!.ColumnDefinitions[1].Width.Value>=300&&atlasNativeBody.ColumnDefinitions[1].Width.Value<=350,
@@ -1921,6 +1958,15 @@ public partial class MainWindow
    Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text.Contains("当前状态：")),
    "原生设置显示已有孤立补丁自动停用配置，未修改真实补丁文件");
   await Shot("08-ATLAS-设置");
+  var settingsScroll=(ScrollViewer)atlasNativePageHost!.Content;
+  settingsScroll.ScrollToVerticalOffset(155);await Idle();
+  double settingsOffset=settingsScroll.VerticalOffset;
+  Check(settingsOffset>0,"原生设置在窄工作区支持正常纵向滚动");
+  RenderAtlasNative();await Idle();
+  var preservedSettingsScroll=(ScrollViewer)atlasNativePageHost!.Content;
+  Check(Math.Abs(preservedSettingsScroll.VerticalOffset-settingsOffset)<3,
+   "相同页面刷新后保留设置滚动位置");
+  preservedSettingsScroll.ScrollToTop();await Idle();
   AtlasNativeNavigate("下载中心");await Idle();
   Check(Descendants<TextBox>(atlasNativePageHost!).Any(x=>x.Text=="3737335127"),
    "离开并重新进入下载中心时保留未提交的 Workshop ID");
@@ -1936,6 +1982,15 @@ public partial class MainWindow
   Check(navFits&&atlasNativeRoot!.ActualWidth<=Width+1,
    "1020×720 最小窗口下顶部导航保持在窗口范围内");
   await Shot("09-ATLAS-窄窗口");
+  Width=1540;Height=890;await Idle();
+  AtlasNativeNavigate("模组库");await Idle();
+  var wideGridButton=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="库视图");
+  wideGridButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,wideGridButton));await Idle();
+  var wideCards=atlasNativeResultsHost?.Content as WrapPanel;
+  Check(wideCards!=null&&wideCards.ActualWidth>1100&&
+   AtlasNativeCardColumns(wideCards.ActualWidth,315)>=3,
+   "1540px 桌面窗口展示至少三列原生 MOD 卡片");
+  await Shot("14-ATLAS-宽窗口模组库");
   Width=oldWidth;Height=oldHeight;await Idle();
 
   ChangeUiTheme(UiThemes.Workspace);
