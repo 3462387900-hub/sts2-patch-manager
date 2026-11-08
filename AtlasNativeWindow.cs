@@ -1899,6 +1899,12 @@ public partial class MainWindow
   await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is ScrollViewer,
    "模组库返回后的异步布局稳定");
+  // currentVisit may still name the previously opened legacy MOD detail.
+  // A background update completion must respect the active native section.
+  RefreshAtlasNativeModSurface();await Idle();
+  Check(!atlasNativeEmbeddedWorkflow&&atlasNativePage=="模组库"&&
+   atlasNativePageHost?.Content is ScrollViewer,
+   "后台 MOD 操作结束不会利用过期详情记录重新打开旧版页面");
 
   AtlasNativeNavigate("修复中心");await WaitForStableInventory();
   // FileSystemWatcher may settle after the page was constructed. Render the
