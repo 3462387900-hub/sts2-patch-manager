@@ -51,7 +51,7 @@ public partial class MainWindow
   async Task OpenReadyPreview(string folder,bool enable)
   {
    string label=enable?"预览启用":"预览停用";
-   string lastPreviewFailure="";
+   string lastPreviewFailure="",lastControlState="";
    for(int attempt=0;attempt<180;attempt++)
    {
     await Idle();
@@ -65,8 +65,19 @@ public partial class MainWindow
       // only inspect the button after the transaction lock is demonstrably free.
       _=await Task.Run(()=>ModManager.Preview(selectedInstallRoot,folder,enable));
       ShowModDetail(folder);await Idle();
-      if(Controls<Button>(shell).Any(button=>button.Content?.ToString()==label&&button.IsEnabled))
-       return;
+      var matching=Controls<Button>(shell).Where(button=>button.Content?.ToString()==label).ToArray();
+      if(matching.Any(button=>button.IsEnabled))return;
+      // When this intermittent WPF regression occurs, report whether the
+      // button is missing, blocked by a parent, or disabled by a dependency.
+      var target=modInventory?.Mods.FirstOrDefault(mod=>mod.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase));
+      string reason=target!=null&&selectedInstallRoot!=null
+       ?ModManager.BlockReason(selectedInstallRoot,target,modInventory!)??"none":"MOD missing";
+      lastControlState="buttons="+matching.Length+"; enabled="+
+       string.Join(",",matching.Select(button=>button.IsEnabled))+
+       "; visible="+string.Join(",",matching.Select(button=>button.IsVisible))+
+       "; blockReason="+reason+"; key="+(currentVisit?.Key??"none")+
+       "; theme="+UiThemes.Active+"; shell="+(content.Content?.GetType().Name??"null")+
+       "; watchTimer="+(modWatchDebounce?.IsEnabled??false);
      }
      catch(Exception error) when(error is InvalidOperationException or IOException or UnauthorizedAccessException)
      {
@@ -77,7 +88,8 @@ public partial class MainWindow
    }
    throw new InvalidOperationException("安全预览按钮在稳定扫描后仍不可用："+label+
     "; busy="+busy+"; writing="+transactionWriting+"; dirty="+modInventoryDirty+
-    "; page="+page+"; preview="+lastPreviewFailure+"; folder="+folder);
+    "; page="+page+"; preview="+lastPreviewFailure+"; controls="+lastControlState+
+    "; folder="+folder);
   }
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
   // Regression: a visually opaque overlay hid the native acrylic throughout v0.12.0.
