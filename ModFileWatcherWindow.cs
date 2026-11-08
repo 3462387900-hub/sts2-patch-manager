@@ -120,7 +120,14 @@ public partial class MainWindow
    InvalidateLifecycle("文件监测发现 MOD 环境变化，请重新扫描补丁健康状态。");
    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;modTogglePreview=null;
   }
-  if(modInventoryDirty&&UiThemes.IsAtlasNative){_ = RefreshAtlasNativeDataAsync();return;}
+  // FileSystemWatcher is only a change signal. Reconcile MOD inventory and
+  // orphan safety, but leave the invalidated patch report invalidated until a
+  // user-requested full scan. Avoid scanning the entire game on each burst.
+  if(modInventoryDirty&&UiThemes.IsAtlasNative)
+  {
+   _=RefreshAtlasNativeInventoryFromWatchAsync();
+   return;
+  }
   // Even when the user is viewing another tab, a known previous inventory
   // must be reconciled so manually removed target MODs can retire their fixes.
   if(modInventoryDirty&&(modInventory!=null||(page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page))
