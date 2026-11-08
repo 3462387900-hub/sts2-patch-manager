@@ -424,11 +424,10 @@ public partial class MainWindow
    return;
   }
   if(selectedInstallRoot==null)return;
-  string root=selectedInstallRoot;
   try{
+   // RefreshModsAsync already updates the native surface in its finally block.
+   // Avoid a second full visual-tree rebuild after every watcher burst.
    await RefreshModsAsync();
-   if(root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
-    RenderAtlasNative();
   }
   catch(Exception ex)
   {
