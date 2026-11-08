@@ -2244,14 +2244,18 @@ public partial class MainWindow
   updateSearch.Text="pending";
   Check(atlasNativeUpdateSearchDebounce?.IsEnabled==true,
    "更新中心页面切换前有尚未触发的搜索计时器");
-  // Use the production filter path to stop the timer before moving the page;
-  // navigation independently stops pending timers as well.
+  // Navigation rebuilds source rows from the real fixture. Preserve the
+  // synthetic cached statuses while testing the timer boundary, then restore.
+  var savedUpdateRowsAcrossNavigation=atlasNativeRows;
   AtlasNativeNavigate("模组库");await Idle();
   Check(atlasNativeUpdateSearchDebounce?.IsEnabled==false&&atlasNativePage=="模组库",
    "离开更新中心取消搜索计时器，不影响目标页面");
   AtlasNativeNavigate("更新中心");await Idle();
+  atlasNativeRows=savedUpdateRowsAcrossNavigation;
   atlasNativeUpdateQuery="";atlasNativeUpdateFilter="全部";atlasNativeUpdatePage=0;
   atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
+  Check(UpdateCardCount()==2,
+   "更新中心返回后测试恢复原有两条缓存来源数据");
 
   var updateFixtureRows=atlasNativeRows;
   var updateTemplate=updateFixtureRows[0];
