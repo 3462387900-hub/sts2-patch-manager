@@ -2248,22 +2248,6 @@ public partial class MainWindow
   var allFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="全部");
   allFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,allFilter));await Idle();
   Check(UpdateCardCount()==2,"清除更新筛选后恢复全部已关联 MOD");
-  updateSearch.Text="pending";
-  Check(atlasNativeUpdateSearchDebounce?.IsEnabled==true,
-   "更新中心页面切换前有尚未触发的搜索计时器");
-  // Navigation rebuilds source rows from the real fixture. Preserve the
-  // synthetic cached statuses while testing the timer boundary, then restore.
-  var savedUpdateRowsAcrossNavigation=atlasNativeRows;
-  AtlasNativeNavigate("模组库");await Idle();
-  Check(atlasNativeUpdateSearchDebounce?.IsEnabled==false&&atlasNativePage=="模组库",
-   "离开更新中心取消搜索计时器，不影响目标页面");
-  AtlasNativeNavigate("更新中心");await Idle();
-  atlasNativeRows=savedUpdateRowsAcrossNavigation;
-  atlasNativeUpdateQuery="";atlasNativeUpdateFilter="全部";atlasNativeUpdatePage=0;
-  atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
-  Check(UpdateCardCount()==2,
-   "更新中心返回后测试恢复原有两条缓存来源数据");
-
   var updateFixtureRows=atlasNativeRows;
   var updateTemplate=updateFixtureRows[0];
   atlasNativeRows=Enumerable.Range(1,73).Select(index=>{
@@ -2289,12 +2273,21 @@ public partial class MainWindow
   updateAll.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,updateAll));await Idle();
   Check(atlasNativeUpdatePage==0&&UpdateCardCount()==24,
    "更新中心筛选变化会重置翻页索引");
+  await WaitForStableInventory();
   atlasNativeRows=updateFixtureRows;atlasNativeUpdateFilter="全部";
   atlasNativeUpdateQuery="";atlasNativeUpdatePage=0;
   atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
-  Check(UpdateCardCount()==2,"更新中心模拟负载结束后恢复原缓存数据");
+  Check(UpdateCardCount()==2,
+   "更新中心模拟负载结束后恢复原缓存数据；cards="+UpdateCardCount()+
+   "; rows="+atlasNativeRows.Count+"; page="+atlasNativePage);
   await Shot("06-ATLAS-更新中心");
+  var exitUpdateSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
+  exitUpdateSearch.Text="pending";
+  Check(atlasNativeUpdateSearchDebounce?.IsEnabled==true,
+   "离开更新中心前存在尚未执行的搜索事件");
   AtlasNativeNavigate("下载中心");await Idle();
+  Check(atlasNativeUpdateSearchDebounce?.IsEnabled==false&&atlasNativePage=="下载中心",
+   "切换到下载中心时停止更新搜索计时器，不影响目标页面");
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
    "下载中心提供 Workshop、GitHub 与本地 ZIP 的真实流程入口");
   var workshopInput=Descendants<TextBox>(atlasNativePageHost!).Single(x=>
