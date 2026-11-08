@@ -84,7 +84,8 @@ public partial class MainWindow
    }
    DownloadWorkshopMod(presetWorkshopId:workshopId);
   },"Primary");
-  get.IsEnabled=!busy&&!transactionWriting;
+  // Keep the input action clickable: its handler validates locally and guards
+  // all network/file work. A temporary scan must not freeze this button forever.
   var field=V(T("粘贴创意工坊链接或 Workshop ID",16,ink,true),input,note);
   Space(field,9);field.Children.Add(get);
   root.Children.Add(Card(field,padding:15));Space(root,13);
