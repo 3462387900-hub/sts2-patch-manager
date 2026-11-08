@@ -56,7 +56,7 @@ public partial class MainWindow
  static readonly Brush AtlasPanelBrush=SpireGlassTheme.GlassPanel();
  static readonly Brush AtlasPanelAltBrush=SpireGlassTheme.GlassPanel("#B5222C37");
  Grid? atlasNativeRoot,atlasNativeBody;
- ContentControl? atlasNativePageHost,atlasNativeResultsHost,atlasNativePagingHost;
+ ContentControl? atlasNativePageHost,atlasNativeResultsHost,atlasNativePagingHost,atlasNativePagingFooterHost;
  Border? atlasNativeInspector,atlasNativeBatchBar;
  TextBlock? atlasNativeGamePath,atlasNativeGameState,atlasNativeFooter,atlasNativeBatchText,atlasNativeResultsSummary;
  Button? atlasNativeLaunchButton;
@@ -705,6 +705,7 @@ public partial class MainWindow
   atlasNativePagingHost=new ContentControl();root.Children.Add(atlasNativePagingHost);
   atlasNativeResultsHost=new ContentControl();
   root.Children.Add(atlasNativeResultsHost);
+  atlasNativePagingFooterHost=new ContentControl();root.Children.Add(atlasNativePagingFooterHost);
   RenderAtlasNativeModResults();
   return AtlasScroll(root);
  }
@@ -727,6 +728,7 @@ public partial class MainWindow
   if(atlasNativeResultsHost==null)return;
   var rows=GetFilteredAtlasNativeRows();
   if(atlasNativePagingHost!=null)atlasNativePagingHost.Content=null;
+  if(atlasNativePagingFooterHost!=null)atlasNativePagingFooterHost.Content=null;
   if(atlasNativeResultsSummary!=null)atlasNativeResultsSummary.Text=$"显示 {rows.Length} / {atlasNativeRows.Count} 项  ·  已选择 {atlasNativeSelectedFolders.Count} 项  ·  列表视图适合大量 MOD";
   if(atlasNativeBatchBar!=null)atlasNativeBatchBar.Visibility=atlasNativeSelectedFolders.Count>0?Visibility.Visible:Visibility.Collapsed;
   if(atlasNativeBatchText!=null)atlasNativeBatchText.Text="已选择 "+atlasNativeSelectedFolders.Count+" 项";
@@ -751,14 +753,29 @@ public partial class MainWindow
    atlasNativeResultsHost.Content=wrap;
    if(pages>1&&atlasNativePagingHost!=null)
    {
-    var controls=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,2,0,10)};
-    var previous=AtlasButton("上一页",()=>{atlasNativeGridPage--;RenderAtlasNativeModResults();},"quiet");
-    previous.IsEnabled=atlasNativeGridPage>0;controls.Children.Add(previous);
-    var counter=AtlasText($"第 {atlasNativeGridPage+1} / {pages} 页  ·  本页 {count} 项",12,AtlasMuted);
-    counter.Margin=new Thickness(13,9,13,0);controls.Children.Add(counter);
-    var next=AtlasButton("下一页",()=>{atlasNativeGridPage++;RenderAtlasNativeModResults();},"quiet");
-    next.IsEnabled=atlasNativeGridPage<pages-1;controls.Children.Add(next);
-    atlasNativePagingHost.Content=controls;
+    void ChangePage(int delta)
+    {
+     atlasNativeGridPage=Math.Clamp(atlasNativeGridPage+delta,0,pages-1);
+     RenderAtlasNativeModResults();
+     // After clicking the bottom pager, start at the first card of the next
+     // page instead of retaining the old page's bottom scroll position.
+     Dispatcher.BeginInvoke(new Action(()=>atlasNativeResultsHost?.BringIntoView()),
+      DispatcherPriority.Loaded);
+    }
+    StackPanel Pager(bool footer)
+    {
+     var controls=new StackPanel{Orientation=Orientation.Horizontal,
+      Margin=footer?new Thickness(0,11,0,14):new Thickness(0,2,0,10)};
+     var previous=AtlasButton("上一页",()=>ChangePage(-1),"quiet");
+     previous.IsEnabled=atlasNativeGridPage>0;controls.Children.Add(previous);
+     var counter=AtlasText($"第 {atlasNativeGridPage+1} / {pages} 页  ·  本页 {count} 项",12,AtlasMuted);
+     counter.Margin=new Thickness(13,9,13,0);controls.Children.Add(counter);
+     var next=AtlasButton("下一页",()=>ChangePage(1),"quiet");
+     next.IsEnabled=atlasNativeGridPage<pages-1;controls.Children.Add(next);
+     return controls;
+    }
+    atlasNativePagingHost.Content=Pager(false);
+    if(atlasNativePagingFooterHost!=null)atlasNativePagingFooterHost.Content=Pager(true);
    }
   }else{
    atlasNativeResultsHost.Content=BuildAtlasNativeDataGrid(rows);
@@ -1941,9 +1958,9 @@ public partial class MainWindow
   RenderAtlasNativeModResults();await Idle();
   Check(atlasNativeResultsHost?.Content is WrapPanel firstPage&&
    firstPage.Children.Count==AtlasNativeGridPageSize&&
-   atlasNativePagingHost?.Content is StackPanel,
-   "121 项模拟 MOD 的库视图只创建单页 24 张原生卡片");
-  var nextPageButton=((StackPanel)atlasNativePagingHost!.Content).Children.OfType<Button>()
+   atlasNativePagingHost?.Content is StackPanel&&atlasNativePagingFooterHost?.Content is StackPanel,
+   "121 项模拟 MOD 的库视图只创建单页 24 张原生卡片，顶部和底部均可翻页");
+  var nextPageButton=((StackPanel)atlasNativePagingFooterHost!.Content).Children.OfType<Button>()
    .Single(button=>button.Content?.ToString()=="下一页");
   nextPageButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,nextPageButton));await Idle();
   Check(atlasNativeGridPage==1&&atlasNativeResultsHost?.Content is WrapPanel secondPage&&
