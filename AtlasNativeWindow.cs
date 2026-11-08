@@ -1794,8 +1794,21 @@ public partial class MainWindow
   Check(AtlasNativePatchNeedsReview("需重新检查")&&AtlasNativePatchNeedsReview("已确认不兼容")&&
    !AtlasNativePatchNeedsReview("已知构建匹配"),
    "补丁健康待复查统计覆盖失效、未检查和已确认不兼容状态");
-  var repairFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="需要复查");
-  repairFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,repairFilter));await Idle();
+  // The ScrollViewer may not have realized its WPF visual descendants yet.
+  // Verify the actual logical controls as a fallback, without inventing test widgets.
+  var repairFilter=Descendants<Button>(atlasNativePageHost!).FirstOrDefault(button=>
+   button.Content?.ToString()=="需要复查");
+  var repairRoot=(atlasNativePageHost?.Content as ScrollViewer)?.Content as StackPanel;
+  repairFilter??=repairRoot?.Children.OfType<WrapPanel>().SelectMany(panel=>panel.Children.OfType<Button>())
+   .FirstOrDefault(button=>button.Content?.ToString()=="需要复查");
+  Check(repairFilter!=null,
+   "修复中心筛选控件已创建；page="+atlasNativePage+
+   "; host="+(atlasNativePageHost?.Content?.GetType().Name??"null")+
+   "; inventory="+modInventory?.Mods.Count+"; root="+selectedInstallRoot+
+   "; logicalChildren="+repairRoot?.Children.Count+
+   "; logicalButtons="+string.Join(",",repairRoot?.Children.OfType<WrapPanel>()
+      .SelectMany(panel=>panel.Children.OfType<Button>()).Select(button=>button.Content?.ToString())??[]));
+  repairFilter!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,repairFilter));await Idle();
   Check(atlasNativePatchFilter=="需要复查"&&atlasNativePageHost?.Content is ScrollViewer,
    "修复中心切换过滤条件时保留原生页面容器");
   var repairSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
