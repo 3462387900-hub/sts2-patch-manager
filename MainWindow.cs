@@ -137,6 +137,10 @@ public partial class MainWindow : Window
     pair.Value.BorderBrush=selected?AtlasBrush("#6D5737"):Brushes.Transparent;
     pair.Value.Foreground=selected?AtlasBrush("#E6C58F"):AtlasMuted;
    }
+   // An embedded WPF workflow owns this entire content area. Any previous
+   // native card selection must not resurrect its detail sidebar on refresh.
+   atlasNativeSelectedFolder=null;
+   atlasNativeSelectedPatchId=null;
    if(atlasNativeInspector!=null)
    {
     atlasNativeInspector.Visibility=Visibility.Collapsed;
