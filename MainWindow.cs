@@ -405,9 +405,45 @@ public partial class MainWindow : Window
  {if(busy)return;var dialog=new OpenFolderDialog{Title="选择包含 SlayTheSpire2.exe 的游戏根目录"};if(dialog.ShowDialog(this)==true)await ScanFolder(dialog.FolderName);}
  async Task ScanFolder(string folder)
  {
-  if(busy)return;busy=true;ClearCoop();toast.Text="正在读取模组清单与文件校验值…";
-  try {UseGameRoot(folder);coopComparison=null;var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;ShowOverview();}
-  catch(Exception ex){MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);toast.Text="扫描未完成，未修改任何文件。";if(report==null)ShowOverview();}
+  if(busy)return;
+  string? previousRoot=selectedInstallRoot;
+  busy=true;ClearCoop();toast.Text="正在读取模组清单与文件校验值…";
+  try
+  {
+   UseGameRoot(folder);
+   coopComparison=null;
+   var catalog=sourceCurrent?onlineCatalog:null;
+   var definitions=catalog?.Patches??Catalog.Bundled;
+   report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));
+   scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;
+   ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;
+   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)
+   {
+    // Common scans are also used by native refreshes. Do not send the user
+    // to legacy ShowOverview while they are in another ATLAS workspace.
+    if(!string.Equals(previousRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+    {
+     // Old game root selections and embedded confirmation workflows are
+     // invalid for the new install; discard them before rendering.
+     atlasNativeSelectedFolders.Clear();
+     atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
+     atlasNativeEmbeddedWorkflow=false;
+     atlasNativePage="总览";
+    }
+    RenderAtlasNative();
+   }
+   else ShowOverview();
+  }
+  catch(Exception ex)
+  {
+   MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);
+   toast.Text="扫描未完成，未修改任何文件。";
+   if(report==null)
+   {
+    if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
+    else ShowOverview();
+   }
+  }
   finally{busy=false;}
  }
  async void Rescan(){if(busy)return;if(!demo&&selectedInstallRoot!=null){await ScanFolder(selectedInstallRoot);return;}toast.Text="正在检查内置演示目录…";busy=true;await Task.Delay(600);busy=false;ShowOverview();toast.Text="演示目录已刷新。真实仓库信息请查看在线补丁页。";}
