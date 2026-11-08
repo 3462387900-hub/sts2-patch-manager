@@ -581,8 +581,10 @@ public partial class MainWindow
   toolbar.Children.Add(sort);
 
   var views=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(10,0,0,0)};
-  var listButton=AtlasButton("列表",()=>SwitchView("list"),atlasNativeViewMode=="list"?"active":"quiet");
-  var gridButton=AtlasButton("库视图",()=>SwitchView("grid"),atlasNativeViewMode=="grid"?"active":"quiet");
+  // Initialize both captured references before wiring the callbacks (CS0165).
+  Button listButton=new(),gridButton=new();
+  listButton=AtlasButton("列表",()=>SwitchView("list"),atlasNativeViewMode=="list"?"active":"quiet");
+  gridButton=AtlasButton("库视图",()=>SwitchView("grid"),atlasNativeViewMode=="grid"?"active":"quiet");
   views.Children.Add(listButton);views.Children.Add(gridButton);
   toolbar.Children.Add(views);
   var allVisible=AtlasButton("全选当前结果",SelectAllAtlasVisibleMods,"quiet");
