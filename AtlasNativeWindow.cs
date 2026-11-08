@@ -63,6 +63,7 @@ public partial class MainWindow
  readonly Dictionary<string,Button> atlasNativeNavButtons=new(StringComparer.Ordinal);
  string atlasNativePage="总览";
  string? atlasNativeRenderedPage;
+ bool atlasNativeEmbeddedWorkflow;
  string atlasNativeSubpageReturnPage="总览";
  string atlasNativePatchFilter="全部",atlasNativePatchQuery="";
  string atlasNativeUpdateFilter="全部",atlasNativeUpdateQuery="";
@@ -80,6 +81,7 @@ public partial class MainWindow
  void ShowAtlasNative()
  {
   if(atlasNativeRoot==null)BuildAtlasNativeShell();
+  atlasNativeEmbeddedWorkflow=false;
   Content=atlasNativeRoot;
   RenderAtlasNative();
   if(selectedInstallRoot!=null&&(modInventory==null||report==null||modInventoryDirty)&&!busy&&!transactionWriting)
@@ -315,6 +317,13 @@ public partial class MainWindow
    pair.Value.BorderBrush=active?AtlasBrush("#6D5737"):Brushes.Transparent;
    pair.Value.Foreground=active?AtlasBrush("#E6C58F"):AtlasMuted;
   }
+  // Scans and update checks may complete while an existing WPF confirmation or
+  // detail page is embedded. Refresh counts/header, not the user's active workflow.
+  if(atlasNativeEmbeddedWorkflow&&atlasNativePageHost.Content is Grid)
+  {
+   RenderAtlasNativeInspector();
+   return;
+  }
   atlasNativePageHost.Content=atlasNativePage switch{
    "模组库"=>BuildAtlasNativeModsPage(),
    "修复中心"=>BuildAtlasNativePatchesPage(),
@@ -349,6 +358,7 @@ public partial class MainWindow
 
  void AtlasNativeNavigate(string page)
  {
+  atlasNativeEmbeddedWorkflow=false;
   atlasNativePage=page;
   atlasNativeSubpageReturnPage=page;
   this.page=page switch{
@@ -1819,6 +1829,10 @@ public partial class MainWindow
   ShowModDetail(solo.Folder);await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
    "现有 MOD 完整详情可嵌入 ATLAS 外壳，不切换到旧版主界面");
+  var activeDetailContent=atlasNativePageHost?.Content;
+  RenderAtlasNative();await Idle();
+  Check(atlasNativeEmbeddedWorkflow&&ReferenceEquals(activeDetailContent,atlasNativePageHost?.Content),
+   "后台扫描刷新不会把嵌入式 MOD 详情替换为模组列表");
   AtlasNativeNavigate("模组库");
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePage=="模组库",
    "从完整 MOD 详情返回原生模组库时同步切换页面状态");
