@@ -366,6 +366,10 @@ public partial class MainWindow
 
  void AtlasNativeNavigate(string page)
  {
+  // A pending search belongs to the old visual tree. Navigating never
+  // permits that timer to re-render hidden controls or an embedded workflow.
+  atlasNativeModSearchDebounce?.Stop();
+  atlasNativeUpdateSearchDebounce?.Stop();
   atlasNativeEmbeddedWorkflow=false;
   atlasNativePage=page;
   atlasNativeSubpageReturnPage=page;
@@ -612,7 +616,8 @@ public partial class MainWindow
   bool resettingFilters=false;
   searchDebounce.Tick+=(_,_)=>{
    searchDebounce.Stop();
-   if(atlasNativePage=="模组库"&&ReferenceEquals(atlasNativeModSearchDebounce,searchDebounce))
+   if(!atlasNativeEmbeddedWorkflow&&atlasNativePage=="模组库"&&
+      ReferenceEquals(atlasNativeModSearchDebounce,searchDebounce))
     RenderAtlasNativeModResults();
   };
   var toolbar=new WrapPanel{Margin=new Thickness(0,0,0,10),VerticalAlignment=VerticalAlignment.Center};
@@ -1313,7 +1318,8 @@ public partial class MainWindow
   atlasNativeUpdateSearchDebounce=updateDebounce;
   updateDebounce.Tick+=(_,_)=>{
    updateDebounce.Stop();
-   if(atlasNativePage=="更新中心"&&ReferenceEquals(atlasNativeUpdateSearchDebounce,updateDebounce))
+   if(!atlasNativeEmbeddedWorkflow&&atlasNativePage=="更新中心"&&
+      ReferenceEquals(atlasNativeUpdateSearchDebounce,updateDebounce))
     RenderResults();
   };
   var filters=new WrapPanel{Margin=new Thickness(0,10,0,7)};
@@ -2118,8 +2124,15 @@ public partial class MainWindow
   Check(!atlasNativeEmbeddedWorkflow&&atlasNativePage=="模组库"&&
    atlasNativePageHost?.Content is ScrollViewer,
    "后台 MOD 操作结束不会利用过期详情记录重新打开旧版页面");
-
-  AtlasNativeNavigate("修复中心");await WaitForStableInventory();
+  var exitLibrarySearch=Descendants<TextBox>(atlasNativePageHost!).Single();
+  exitLibrarySearch.Text="TestSolo";
+  Check(atlasNativeModSearchDebounce?.IsEnabled==true,
+   "离开模组库前存在未触发的搜索计时器");
+  AtlasNativeNavigate("修复中心");await Idle();
+  Check(atlasNativeModSearchDebounce?.IsEnabled==false&&atlasNativePage=="修复中心"&&
+   atlasNativePageHost?.Content is ScrollViewer,
+   "离开模组库时取消待处理搜索，不改变新的修复中心页面");
+  await WaitForStableInventory();
   // FileSystemWatcher may settle after the page was constructed. Render the
   // settled inventory through the real production path before inspecting controls.
   RenderAtlasNative();await Idle();
@@ -2228,6 +2241,17 @@ public partial class MainWindow
   var allFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="全部");
   allFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,allFilter));await Idle();
   Check(UpdateCardCount()==2,"清除更新筛选后恢复全部已关联 MOD");
+  updateSearch.Text="pending";
+  Check(atlasNativeUpdateSearchDebounce?.IsEnabled==true,
+   "更新中心页面切换前有尚未触发的搜索计时器");
+  // Use the production filter path to stop the timer before moving the page;
+  // navigation independently stops pending timers as well.
+  AtlasNativeNavigate("模组库");await Idle();
+  Check(atlasNativeUpdateSearchDebounce?.IsEnabled==false&&atlasNativePage=="模组库",
+   "离开更新中心取消搜索计时器，不影响目标页面");
+  AtlasNativeNavigate("更新中心");await Idle();
+  atlasNativeUpdateQuery="";atlasNativeUpdateFilter="全部";atlasNativeUpdatePage=0;
+  atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
 
   var updateFixtureRows=atlasNativeRows;
   var updateTemplate=updateFixtureRows[0];
