@@ -2350,6 +2350,11 @@ public partial class MainWindow
   await Shot("09-ATLAS-窄窗口");
   Width=1540;Height=890;await Idle();
   AtlasNativeNavigate("模组库");await Idle();
+  // Earlier navigation tests intentionally leave an active query. Explicitly
+  // restore the complete fixture before checking the six-card desktop layout.
+  atlasNativeResetModFilters?.Invoke();await Idle();
+  Check(atlasNativeQuery==""&&GetFilteredAtlasNativeRows().Length==6,
+   "宽窗口尺寸检查使用完整 MOD 库，不继承上一页的搜索条件");
   var wideGridButton=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="库视图");
   wideGridButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,wideGridButton));await Idle();
   var wideCards=atlasNativeResultsHost?.Content as WrapPanel;
