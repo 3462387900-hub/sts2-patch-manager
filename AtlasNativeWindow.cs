@@ -67,6 +67,9 @@ public partial class MainWindow
  string atlasNativeSubpageReturnPage="总览";
  string atlasNativePatchFilter="全部",atlasNativePatchQuery="";
  string atlasNativeUpdateFilter="全部",atlasNativeUpdateQuery="";
+ const int AtlasNativeUpdatePageSize=24;
+ int atlasNativeUpdatePage;
+ DispatcherTimer? atlasNativeUpdateSearchDebounce;
  string atlasNativeWorkshopInput="";
  string atlasNativeViewMode="grid";
  const int AtlasNativeGridPageSize=24;
@@ -1273,7 +1276,19 @@ public partial class MainWindow
    return AtlasScroll(root);
   }
 
+  atlasNativeUpdateSearchDebounce?.Stop();
+  var updateDebounce=new DispatcherTimer(DispatcherPriority.Background){
+   Interval=TimeSpan.FromMilliseconds(180)
+  };
+  atlasNativeUpdateSearchDebounce=updateDebounce;
+  updateDebounce.Tick+=(_,_)=>{
+   updateDebounce.Stop();
+   if(atlasNativePage=="更新中心"&&ReferenceEquals(atlasNativeUpdateSearchDebounce,updateDebounce))
+    RenderResults();
+  };
   var resultsHost=new ContentControl();
+  var topPager=new ContentControl();
+  var bottomPager=new ContentControl();
   var resultSummary=AtlasText("",11,AtlasMuted);
   var filters=new WrapPanel{Margin=new Thickness(0,10,0,7)};
   var filterButtons=new Dictionary<string,Button>(StringComparer.Ordinal);
@@ -1299,19 +1314,22 @@ public partial class MainWindow
   searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
   searchHost.Children.Add(searchHint);
   search.TextChanged+=(_,_)=>{
-   atlasNativeUpdateQuery=search.Text;
+   atlasNativeUpdateQuery=search.Text;atlasNativeUpdatePage=0;
    searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
-   RenderResults();
+   updateDebounce.Stop();updateDebounce.Start();
   };
   root.Children.Add(searchHost);
   resultSummary.Margin=new Thickness(2,2,0,5);root.Children.Add(resultSummary);
+  root.Children.Add(topPager);
   root.Children.Add(resultsHost);
+  root.Children.Add(bottomPager);
   RenderResults();
   return AtlasScroll(root);
 
   void SetFilter(string selected)
   {
-   atlasNativeUpdateFilter=selected;
+   updateDebounce.Stop();
+   atlasNativeUpdateFilter=selected;atlasNativeUpdatePage=0;
    foreach(var pair in filterButtons)
    {
     bool active=pair.Key==selected;
@@ -1325,6 +1343,7 @@ public partial class MainWindow
 
   void RenderResults()
   {
+   topPager.Content=null;bottomPager.Content=null;
    IEnumerable<AtlasNativeModRow> filtered=rows;
    if(atlasNativeUpdateFilter=="有更新")filtered=filtered.Where(x=>x.HasUpdate);
    else if(atlasNativeUpdateFilter=="GitHub")filtered=filtered.Where(x=>x.GitHubRepository.Length>0);
@@ -1340,8 +1359,35 @@ public partial class MainWindow
     resultsHost.Content=AtlasEmpty("没有符合条件的 MOD","尝试切换来源筛选，或清空搜索条件。");
     return;
    }
+   int pages=(visible.Length+AtlasNativeUpdatePageSize-1)/AtlasNativeUpdatePageSize;
+   atlasNativeUpdatePage=Math.Clamp(atlasNativeUpdatePage,0,pages-1);
+   int start=atlasNativeUpdatePage*AtlasNativeUpdatePageSize;
+   var pageRows=visible.Skip(start).Take(AtlasNativeUpdatePageSize).ToArray();
+   if(pages>1)
+   {
+    void ChangePage(int delta)
+    {
+     atlasNativeUpdatePage=Math.Clamp(atlasNativeUpdatePage+delta,0,pages-1);
+     RenderResults();
+     Dispatcher.BeginInvoke(new Action(()=>resultsHost.BringIntoView()),DispatcherPriority.Loaded);
+    }
+    StackPanel Pager(bool footer)
+    {
+     var controls=new StackPanel{Orientation=Orientation.Horizontal,
+      Margin=footer?new Thickness(0,9,0,14):new Thickness(0,9,0,3)};
+     var previous=AtlasButton("上一页",()=>ChangePage(-1),"quiet");
+     previous.IsEnabled=atlasNativeUpdatePage>0;controls.Children.Add(previous);
+     var label=AtlasText($"第 {atlasNativeUpdatePage+1} / {pages} 页  ·  已筛选 {visible.Length} 项",12,AtlasMuted);
+     label.Margin=new Thickness(13,9,13,0);controls.Children.Add(label);
+     var next=AtlasButton("下一页",()=>ChangePage(1),"quiet");
+     next.IsEnabled=atlasNativeUpdatePage<pages-1;controls.Children.Add(next);
+     return controls;
+    }
+    topPager.Content=Pager(false);
+    bottomPager.Content=Pager(true);
+   }
    var cards=new WrapPanel{Margin=new Thickness(0,10,0,0)};
-   foreach(var row in visible)
+   foreach(var row in pageRows)
    {
     var card=new Border{
      Tag="AtlasUpdateCard",Width=430,MinHeight=185,Margin=new Thickness(0,0,12,12),
@@ -2113,7 +2159,7 @@ public partial class MainWindow
    new AtlasNativeModRow(githubMod,"GitHub","","example/atlas-test","GitHub 有更新","1.1.0","有更新","1.1.0","未绑定",""),
    new AtlasNativeModRow(workshopMod,"Workshop","1234567890","","Workshop 已是最新","1.0.0","未关联","","已是最新","1.0.0")
   ];
-  atlasNativeUpdateFilter="全部";atlasNativeUpdateQuery="";
+  atlasNativeUpdateFilter="全部";atlasNativeUpdateQuery="";atlasNativeUpdatePage=0;
   atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
   int UpdateCardCount()=>Descendants<Border>(atlasNativePageHost!).Count(border=>
    Equals(border.Tag,"AtlasUpdateCard"));
@@ -2129,12 +2175,45 @@ public partial class MainWindow
   Check(atlasNativeUpdateFilter=="有更新"&&UpdateCardCount()==1,
    "更新中心有更新筛选基于来源检查状态");
   var updateSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
-  updateSearch.Text="TestBase";await Idle();
+  updateSearch.Text="TestBase";
+  Check(atlasNativeUpdateQuery=="TestBase"&&atlasNativeUpdateSearchDebounce?.IsEnabled==true,
+   "更新中心立即记住搜索内容，延迟重建卡片");
+  await Task.Delay(240);await Idle();
   Check(UpdateCardCount()==0,"更新中心搜索与来源筛选可以组合使用");
-  updateSearch.Text="";await Idle();
+  updateSearch.Text="";await Task.Delay(240);await Idle();
   var allFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="全部");
   allFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,allFilter));await Idle();
   Check(UpdateCardCount()==2,"清除更新筛选后恢复全部已关联 MOD");
+
+  var updateFixtureRows=atlasNativeRows;
+  var updateTemplate=updateFixtureRows[0];
+  atlasNativeRows=Enumerable.Range(1,73).Select(index=>{
+   var model=updateTemplate.Mod with{
+    Id="UpdateLoad"+index.ToString("D3"),
+    Name="Update Load "+index.ToString("D3"),
+    Folder=Path.Combine(fixture,"update-synthetic-"+index.ToString("D3"))
+   };
+   return new AtlasNativeModRow(model,"GitHub","","example/atlas-stress",
+    "GitHub 有更新","2.0.0","有更新","2.0.0","未绑定","");
+  }).ToList();
+  atlasNativeUpdateFilter="全部";atlasNativeUpdateQuery="";atlasNativeUpdatePage=0;
+  atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
+  Check(UpdateCardCount()==24&&
+   Descendants<Button>(atlasNativePageHost!).Count(x=>x.Content?.ToString()=="下一页")==2,
+   "更新中心 73 条缓存记录只创建 24 张卡片，提供上下两处翻页");
+  var lowerNext=Descendants<Button>(atlasNativePageHost!).Last(x=>x.Content?.ToString()=="下一页");
+  lowerNext.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,lowerNext));await Idle();
+  Check(atlasNativeUpdatePage==1&&UpdateCardCount()==24,
+   "更新中心从底部翻页后只实例化第二页卡片");
+  atlasNativeUpdatePage=3;
+  var updateAll=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="有更新");
+  updateAll.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,updateAll));await Idle();
+  Check(atlasNativeUpdatePage==0&&UpdateCardCount()==24,
+   "更新中心筛选变化会重置翻页索引");
+  atlasNativeRows=updateFixtureRows;atlasNativeUpdateFilter="全部";
+  atlasNativeUpdateQuery="";atlasNativeUpdatePage=0;
+  atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
+  Check(UpdateCardCount()==2,"更新中心模拟负载结束后恢复原缓存数据");
   await Shot("06-ATLAS-更新中心");
   AtlasNativeNavigate("下载中心");await Idle();
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
