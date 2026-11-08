@@ -1427,7 +1427,7 @@ public partial class MainWindow
 
   var theme=new StackPanel{Margin=new Thickness(0,13,0,0)};
   theme.Children.Add(AtlasText("界面风格",17,AtlasInk,true));
-  theme.Children.Add(AtlasText("主题与布局偏好会保存；切换不会修改 MOD、来源绑定或补丁文件。",12,AtlasMuted));
+  theme.Children.Add(AtlasText("启用环境记忆后会保存主题偏好；切换不会修改 MOD、来源绑定或补丁文件。",12,AtlasMuted));
   var themes=new WrapPanel{Margin=new Thickness(0,10,0,0)};
   themes.Children.Add(AtlasButton("ATLAS 原生 · 当前",()=>ChangeUiTheme(UiThemes.AtlasNative),"active"));
   themes.Children.Add(AtlasButton("新版工作台",()=>ChangeUiTheme(UiThemes.Workspace),"quiet"));
@@ -1441,7 +1441,9 @@ public partial class MainWindow
   bool autoStop=OrphanPatchAutoStop.Enabled(installer.DataRoot);
   var autoStatus=AtlasText("当前状态："+(autoStop?"已开启":"已关闭"),12,autoStop?AtlasGreen:AtlasMuted,true);
   autoStatus.Margin=new Thickness(0,7,0,7);patch.Children.Add(autoStatus);
-  var autoToggle=AtlasButton(autoStop?"关闭自动停用":"开启自动停用",()=>{
+  // Initialize the captured button before assigning its callback (C# definite assignment).
+  Button autoToggle=new();
+  autoToggle=AtlasButton(autoStop?"关闭自动停用":"开启自动停用",()=>{
    if(busy||transactionWriting)
    {
     toast.Text="文件操作期间不能修改补丁自动停用设置。";return;
@@ -1712,7 +1714,7 @@ public partial class MainWindow
   states=report.Patches;demo=false;modInventoryDirty=false;
   modStatus=$"共 {modInventory.Mods.Count} 项 · ATLAS 隔离界面验证";
   atlasNativeSelectedFolders.Clear();atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
-  atlasNativePage="总览";atlasNativeViewMode="list";atlasNativeQuery="";
+  atlasNativePage="总览";atlasNativeViewMode="list";atlasNativeQuery="";atlasNativeWorkshopInput="";
   atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";atlasNativeUnboundOnly=false;
   ChangeUiTheme(UiThemes.AtlasNative);
   ShowAtlasNative();await Idle();
@@ -1876,11 +1878,37 @@ public partial class MainWindow
   AtlasNativeNavigate("下载中心");await Idle();
   Check(atlasNativePage=="下载中心"&&atlasNativePageHost?.Content is ScrollViewer,
    "下载中心提供 Workshop、GitHub 与本地 ZIP 的真实流程入口");
+  var workshopInput=Descendants<TextBox>(atlasNativePageHost!).Single(x=>
+   System.Windows.Automation.AutomationProperties.GetName(x)=="ATLAS 创意工坊链接或 ID");
+  workshopInput.Text="invalid-test-link";await Idle();
+  Check(Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text.Contains("链接或 ID 无效")),
+   "下载中心输入非法 Workshop 链接时显示本地校验提示");
+  var getWorkshop=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="获取并预览");
+  getWorkshop.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,getWorkshop));await Idle();
+  Check(Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text.Contains("未发起网络请求"))&&
+   !busy&&!transactionWriting,
+   "非法 Workshop 链接不会启动下载或进入文件事务");
+  workshopInput.Text="3737335127";await Idle();
+  Check(atlasNativeWorkshopInput=="3737335127"&&
+   Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text.Contains("已识别 Workshop ID：3737335127")),
+   "有效 Workshop ID 仅作本地格式识别，不自动联网");
   await Shot("07-ATLAS-下载中心");
   AtlasNativeNavigate("设置");await Idle();
   Check(atlasNativePage=="设置"&&atlasNativePageHost?.Content is ScrollViewer,
    "设置页面保留游戏目录、界面主题和诊断工具入口");
+  Check(Descendants<Button>(atlasNativePageHost!).Any(x=>x.Content?.ToString()=="配置 GitHub 网络")&&
+   Descendants<Button>(atlasNativePageHost!).Any(x=>x.Content?.ToString()=="诊断 GitHub 连接")&&
+   Descendants<Button>(atlasNativePageHost!).Any(x=>x.Content?.ToString()=="复制目录路径"),
+   "原生设置提供直接 GitHub 网络配置、诊断及目录复制入口");
+  Check(Descendants<Button>(atlasNativePageHost!).Any(x=>
+   x.Content?.ToString() is "关闭自动停用" or "开启自动停用")&&
+   Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text.Contains("当前状态：")),
+   "原生设置显示已有孤立补丁自动停用配置，未修改真实补丁文件");
   await Shot("08-ATLAS-设置");
+  AtlasNativeNavigate("下载中心");await Idle();
+  Check(Descendants<TextBox>(atlasNativePageHost!).Any(x=>x.Text=="3737335127"),
+   "离开并重新进入下载中心时保留未提交的 Workshop ID");
+  AtlasNativeNavigate("设置");await Idle();
 
   double oldWidth=Width,oldHeight=Height;
   Width=1020;Height=720;await Idle();RenderAtlasNative();await Idle();
