@@ -126,6 +126,9 @@ public partial class MainWindow : Window
   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null&&atlasNativePageHost!=null)
   {
    string atlasSection=AtlasNativeSectionForPage(active,key);
+   // Prevent asynchronous ATLAS data refreshes from replacing an active
+   // preflight, details or confirmation page with the top-level dashboard.
+   atlasNativeEmbeddedWorkflow=true;
    atlasNativePage=atlasSection;
    foreach(var pair in atlasNativeNavButtons)
    {
