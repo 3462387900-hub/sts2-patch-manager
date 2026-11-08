@@ -1838,10 +1838,17 @@ public partial class MainWindow
     "展开 MOD 详情后卡片重新适配剩余宽度");
   }
   CloseAtlasNativeInspector();await Idle();
+  // Background watcher scans may replace an in-flight result surface.
+  // Wait for a settled inventory, then interact with the current native view.
+  await WaitForStableInventory();
+  RenderAtlasNative();await Idle();
   var listModeButton=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="列表");
   listModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,listModeButton));await Idle();
   Check(atlasNativeViewMode=="list"&&atlasNativeResultsHost?.Content is DataGrid,
-   "列表与库视图切换复用同一份模组数据");
+   "列表与库视图切换复用同一份模组数据；mode="+atlasNativeViewMode+
+   "; host="+(atlasNativeResultsHost?.Content?.GetType().Name??"null")+
+   "; page="+atlasNativePage+"; busy="+busy+"; dirty="+modInventoryDirty+
+   "; inventory="+(modInventory!=null)+"; key="+(currentVisit?.Key??"null"));
   Check(listModeButton.Background.ToString()==AtlasBrush("#3B3021").ToString(),
    "返回列表视图后列表按钮正确高亮");
   ShowAtlasNativeModInspector(atlasNativeRows[0]);await Idle();
