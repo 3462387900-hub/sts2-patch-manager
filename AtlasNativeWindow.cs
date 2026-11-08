@@ -77,6 +77,7 @@ public partial class MainWindow
  string? atlasNativeSelectedFolder,atlasNativeSelectedPatchId;
  readonly HashSet<string> atlasNativeSelectedFolders=new(StringComparer.OrdinalIgnoreCase);
  List<AtlasNativeModRow> atlasNativeRows=[];
+ Action? atlasNativeResetModFilters;
 
  void ShowAtlasNative()
  {
@@ -624,11 +625,19 @@ public partial class MainWindow
   toolbar.Children.Add(views);
   var allVisible=AtlasButton("全选当前结果",SelectAllAtlasVisibleMods,"quiet");
   allVisible.Margin=new Thickness(8,0,0,0);toolbar.Children.Add(allVisible);
-  var reset=AtlasButton("清除筛选",()=>{
+  // Reset the live native controls in-place: rebuilding the page on reset
+  // discards keyboard focus and the current ScrollViewer position.
+  atlasNativeResetModFilters=()=>{
    atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
    atlasNativeUnboundOnly=false;atlasNativeSort="名称";
-   RenderAtlasNative();
-  },"quiet");
+   if(search.Text.Length>0)search.Text="";
+   stateCombo.SelectedItem="全部";
+   sourceCombo.SelectedItem="全部来源";
+   unbound.IsChecked=false;
+   sort.SelectedItem="名称";
+   RenderAtlasNativeModResults();
+  };
+  var reset=AtlasButton("清除筛选",()=>atlasNativeResetModFilters?.Invoke(),"quiet");
   reset.Margin=new Thickness(8,0,0,0);toolbar.Children.Add(reset);
   root.Children.Add(AtlasPanel(toolbar,10,"#20242A"));
 
@@ -697,10 +706,7 @@ public partial class MainWindow
   }
   if(rows.Length==0){
    atlasNativeResultsHost.Content=AtlasEmpty("没有符合条件的 MOD","尝试清除筛选条件，或刷新本地清单。",
-    AtlasButton("清除筛选",()=>{
-     atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
-     atlasNativeUnboundOnly=false;atlasNativeSort="名称";RenderAtlasNative();
-    },"quiet"));
+    AtlasButton("清除筛选",()=>atlasNativeResetModFilters?.Invoke(),"quiet"));
    return;
   }
   if(atlasNativeViewMode=="grid"){
@@ -1773,6 +1779,19 @@ public partial class MainWindow
    "模组库读取真实扫描模型并将独立补丁从普通 MOD 中分离");
   Check(atlasNativeResultsHost?.Content is DataGrid,
    "默认专业列表使用原生 DataGrid");
+  Check(!ShouldRenderLegacyModAfterWatch(),
+   "原生模组库不会被 MOD 目录监控的旧版 ShowMods 回调替换");
+  var currentLibraryPage=atlasNativePageHost?.Content;
+  var nativeModSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
+  nativeModSearch.Text="not-a-mod-123";await Idle();
+  Check(GetFilteredAtlasNativeRows().Length==0&&
+   ReferenceEquals(atlasNativePageHost?.Content,currentLibraryPage),
+   "原生搜索在同一页面内更新无结果提示");
+  var clearMod=Descendants<Button>(atlasNativePageHost!).First(x=>x.Content?.ToString()=="清除筛选");
+  clearMod.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,clearMod));await Idle();
+  Check(atlasNativeQuery==""&&nativeModSearch.Text==""&&GetFilteredAtlasNativeRows().Length==6&&
+   ReferenceEquals(atlasNativePageHost?.Content,currentLibraryPage),
+   "原生清除筛选恢复全部 MOD，不重建页面或丢失输入组件");
   atlasNativeQuery="TestSolo";RenderAtlasNativeModResults();
   Check(GetFilteredAtlasNativeRows().Length==1&&GetFilteredAtlasNativeRows()[0].Id=="TestSolo",
    "搜索可以按本地 MOD ID 精确筛选");
