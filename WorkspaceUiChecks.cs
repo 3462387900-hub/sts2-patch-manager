@@ -52,6 +52,7 @@ public partial class MainWindow
   {
    string label=enable?"预览启用":"预览停用";
    string lastPreviewFailure="",lastControlState="";
+   int inventoryRetries=0;
    for(int attempt=0;attempt<180;attempt++)
    {
     await Idle();
@@ -64,6 +65,15 @@ public partial class MainWindow
       // refreshing the same fixture. Probe the real read-only preview first;
       // only inspect the button after the transaction lock is demonstrably free.
       _=await Task.Run(()=>ModManager.Preview(selectedInstallRoot,folder,enable));
+      // A fresh lock-protected preview can succeed while the previously
+      // cached inventory still contains a transient manifest-read issue.
+      // Rebuild the inventory via the real production scan, never by
+      // clearing Issues or forcibly enabling the blocked button.
+      if(modInventory?.Issues.Count>0&&inventoryRetries<3)
+      {
+       inventoryRetries++;
+       await RefreshModsAsync();await Idle();
+      }
       ShowModDetail(folder);await Idle();
       var matching=Controls<Button>(shell).Where(button=>button.Content?.ToString()==label).ToArray();
       if(matching.Any(button=>button.IsEnabled))return;
@@ -75,7 +85,9 @@ public partial class MainWindow
       lastControlState="buttons="+matching.Length+"; enabled="+
        string.Join(",",matching.Select(button=>button.IsEnabled))+
        "; visible="+string.Join(",",matching.Select(button=>button.IsVisible))+
-       "; blockReason="+reason+"; key="+(currentVisit?.Key??"none")+
+       "; blockReason="+reason+"; inventoryIssues="+
+       string.Join(" / ",modInventory?.Issues.Take(3)??[])+
+       "; retry="+inventoryRetries+"; key="+(currentVisit?.Key??"none")+
        "; theme="+UiThemes.Active+"; shell="+(content.Content?.GetType().Name??"null")+
        "; watchTimer="+(modWatchDebounce?.IsEnabled??false);
      }
