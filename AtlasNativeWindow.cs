@@ -1978,10 +1978,21 @@ public partial class MainWindow
   Check(atlasNativeSelectedFolders.Count==0&&atlasNativeQuery==""&&
    atlasNativeModSearchDebounce?.IsEnabled==false,
    "取消全选并重置搜索后没有延迟重选或额外渲染");
+  // The watcher may recreate a native page while the preceding controls are
+  // inspected. Use the currently loaded search box for the debounce test.
+  await WaitForStableInventory();
+  RenderAtlasNative();await Idle();
+  nativeModSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
+  clearMod=Descendants<Button>(atlasNativePageHost!).First(x=>x.Content?.ToString()=="清除筛选");
+  Check(atlasNativeQuery==""&&atlasNativeResultsSummary?.Text.StartsWith("显示 6 / ",StringComparison.Ordinal)==true,
+   "快速输入测试开始前已恢复六项真实清单");
   nativeModSearch.Text="T";nativeModSearch.Text="Te";nativeModSearch.Text="TestSolo";
   Check(atlasNativeModSearchDebounce?.IsEnabled==true&&atlasNativeQuery=="TestSolo"&&
    atlasNativeResultsSummary?.Text.StartsWith("显示 6 / ",StringComparison.Ordinal)==true,
-   "快速输入仅安排一次筛选，输入期间不逐字创建 WPF 卡片");
+   "快速输入仅安排一次筛选，输入期间不逐字创建 WPF 卡片；query="+atlasNativeQuery+
+   "; summary="+atlasNativeResultsSummary?.Text+"; currentSearch="+
+   Descendants<TextBox>(atlasNativePageHost!).Single().Text+
+   "; timer="+atlasNativeModSearchDebounce?.IsEnabled);
   await Task.Delay(240);await Idle();
   Check(atlasNativeResultsSummary?.Text.StartsWith("显示 1 / ",StringComparison.Ordinal)==true&&
    GetFilteredAtlasNativeRows().Single().Id=="TestSolo",
