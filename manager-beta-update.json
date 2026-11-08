@@ -1,18 +1,18 @@
 {
-  "tag_name": "v0.14.5-beta.1",
+  "tag_name": "v0.14.6-beta.1",
   "draft": false,
   "prerelease": true,
-  "body": "# 尖塔修补站 v0.14.5 Beta 1 · 中文启动入口与未绑定 Workshop ID 筛选\r\n\r\n本版继续作为独立 **Beta 预发布**，用于改进解压后的首次使用体验、加快建立公共 MOD 来源索引的人工绑定流程。稳定版自动更新通道保持不变。\r\n\r\n## 更新内容\r\n\r\n### 1. 中文启动入口\r\n\r\n- 解压后在文件夹内可以直接双击 **`00-启动尖塔修补站.exe`**。这是完整的 Windows GUI 启动入口，不是失效风险较高的绝对路径快捷方式。\r\n- 原始 `SpirePatch.exe` 仍然保留；两者运行相同的主程序，兼容现有更新器与脚本。\r\n- 使用说明、更新日志、发布指南、鸣谢和第三方许可等文档现在集中放在 `使用说明/` 子目录。\r\n- 暂时**不移动 .NET/WPF DLL 与运行时组件**：当前安全更新器依赖原目录布局。将所有运行库隐藏或随意搬动，反而可能造成启动或自动更新失败。此版先保证启动入口醒目且实际可用。\r\n\r\n### 2. 「未绑定 Workshop ID」筛选\r\n\r\n- 新版工作台在已安装 MOD 的状态下拉菜单里新增 **未绑定 Workshop ID**。\r\n- 经典布局新增同名筛选按钮。\r\n- 仅筛选尚未在当前游戏目录建立 Steam 创意工坊 ID 关联的**普通 MOD**，不会把独立修复补丁混入列表。\r\n- 支持与搜索和启用/停用状态组合；筛选只读取本地来源缓存，不触发网络请求。\r\n- 在 MOD 详情完成手动绑定后，筛选列表立即刷新；已经绑定的 MOD 不再显示在“未绑定”结果中。\r\n- 与此前 v0.14.4 Beta 1 的手动 Workshop 绑定、公共 JSON 导出功能共同使用。\r\n\r\n### 3. 继承更新来源改进\r\n\r\n- 包含已通过隔离测试的 Beta 静态更新索引优先读取逻辑，避免每次检查都请求容易限流的 GitHub Releases API。\r\n- 仍会验证 GitHub 官方附件地址、更新包大小和 SHA-256；不得绕过现有安装与回滚保护。\r\n\r\n## 测试方法\r\n\r\n1. 下载 `SpirePatch-v0.14.5-beta.1-win-x64.zip`，解压至单独的文件夹，双击最显眼的 `00-启动尖塔修补站.exe`。\r\n2. 进入「模组管理 → 已安装」，新版布局打开状态下拉框并选择「未绑定 Workshop ID」；经典布局直接点击同名筛选。\r\n3. 选择任一未绑定的普通 MOD，打开详情并手动关联 Workshop ID。\r\n4. 返回列表观察该 MOD 是否自动消失。最后到「工具与设置」导出 `workshop-source-index.json`。\r\n\r\n## 说明\r\n\r\n- 本 Beta 不自动上传任何本地关联文件；导出的 JSON 需要人工审核后才能进入公共索引。\r\n- 默认不会把内部 MOD ID 自动当作 Workshop 数字 ID，也不会将普通来源绑定当作远端版本校验通过。\r\n- 建议独立保留以前的 v0.14.3 稳定版管理器，避免直接覆盖已在使用的目录。\r\n\r\n项目第三方来源与鸣谢见 `使用说明/鸣谢与来源.md`。\r\n",
-  "published_at": "2026-11-06T19:39:46Z",
-  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.5-beta.1",
+  "body": "# 尖塔修补站 v0.14.6 Beta 1 · ATLAS 原生 WPF 测试版\r\n\r\n**这是 GitHub Pre-release 测试版，不是正式稳定版。** 本版用于在实际 Windows 电脑上验收 PR39 的 ATLAS 原生界面。稳定版 `manager-update.json` 不变；仅选择「测试版 Beta」更新通道的用户会看到此版本。\r\n\r\n## 主要内容\r\n\r\n- 将「ATLAS」作为可切换的 **原生 WPF 工作台**：总览、模组库、修复中心、更新中心、下载中心与设置。无需 WebView2。\r\n- 模组库提供可筛选、排序、勾选的卡片/虚拟化列表；卡片每页最多 24 张，输入停止约 180ms 后执行搜索重绘，支持跨页全选筛选结果。\r\n- 更新中心每页最多 24 张卡片，支持来源筛选与上次缓存状态。打开更新中心不会强制启动联网检查。\r\n- 下载中心支持输入 Workshop 数字 ID/Steam 或尖塔补给站链接，预览前先验证输入；GitHub 和 ZIP 下载继续复用现有安全预检。\r\n- 修复补丁与普通 MOD 分区，显示健康状态、孤立补丁自动停用设置；保留旧版工作台、修复来源/详情/回滚等原有业务流程。\r\n- 改善 Windows 大窗口列表高度、窗口伸缩与卡片换列，减少后台扫描的重复刷新和旧页面抢占导航。\r\n- MOD 启停按钮在点击时重新核对最新清单、目录及启停状态；不允许旧卡片和缓存行绕过原来的文件安全预检。\r\n\r\n## 如何通过管理器更新\r\n\r\n1. 在现有管理器进入 **检查更新**（或「设置 → 管理器更新」）。\r\n2. 更新通道切换为 **测试版 Beta**，主动点击「检查更新」。\r\n3. 选择 **v0.14.6 Beta 1**，先查看更新内容，然后选择下载并更新。\r\n4. 更新完成后选择 **ATLAS 原生**主题测试。保留经典和新版工作台作为回退入口。\r\n\r\n建议测试前备份自己的管理器数据和 `mods` 目录；不在未经备份的真实目录上尝试批量更改/回滚。若旧管理器还不支持 Beta 通道，可从本 Release 下载 ZIP 解压到新文件夹，运行 `00-启动尖塔修补站.exe` 或 `SpirePatch.exe`。\r\n\r\n## 已验证范围与限制\r\n\r\n- GitHub Windows CI 使用隔离游戏样本构建与自动化检查；该结果不等于真正 1440p/4K、多显示器或百/千 MOD 的硬件性能数据。\r\n- 下载、安装、更新、启停和补丁回滚保留现有确认与安全检查；**真实下载/回滚操作仍需要玩家手工验收**。\r\n- 本 Beta 以 **v0.14.3 稳定主线 + PR39 ATLAS 分支**为基础，未合入独立 v0.14.4/v0.14.5 Beta 分支的部分旧布局附加功能（例如旧工作台人工 Workshop 来源导出）；如依赖这些 Beta 功能，请先保留旧版安装文件。ATLAS 模组库仍提供未绑定 Workshop ID 筛选。\r\n- 仅用于反馈 ATLAS 的界面、响应、功能安全与兼容性问题；不会替换稳定版自动更新索引，不表示 PR39 已合并或可以正式发布。\r\n\r\n问题反馈：请提供当前版本、Windows 分辨率/DPI、MOD 数量、复现步骤及脱敏截图。验收清单见 `docs/ATLAS-PR39-实机验收与回退.md`。\r\n\r\n第三方项目及授权见 `使用说明/鸣谢与来源.md`。\r\n",
+  "published_at": "2026-11-08T05:31:14Z",
+  "html_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.6-beta.1",
   "assets": [
     {
-      "name": "SpirePatch-v0.14.5-beta.1-win-x64.zip",
+      "name": "SpirePatch-v0.14.6-beta.1-win-x64.zip",
       "state": "uploaded",
-      "size": 65009179,
-      "digest": "sha256:5a89b155819b2a64283f782dc1c60f9422517db745573a631e8f6e3fcccc5720",
-      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.14.5-beta.1/SpirePatch-v0.14.5-beta.1-win-x64.zip",
-      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/718328783"
+      "size": 65045414,
+      "digest": "sha256:6ba25e019a8dfeae52856447e22382cb3dbc31bae5d64a7f9f83df26a9be5b1d",
+      "browser_download_url": "https://github.com/3462387900-hub/sts2-patch-manager/releases/download/v0.14.6-beta.1/SpirePatch-v0.14.6-beta.1-win-x64.zip",
+      "url": "https://api.github.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/723002328"
     }
   ]
 }
