@@ -785,6 +785,7 @@ public partial class MainWindow
   top.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
   var title=AtlasText(row.Name,16,AtlasInk,true);
   title.TextTrimming=TextTrimming.CharacterEllipsis;title.MaxWidth=300;
+  title.HorizontalAlignment=HorizontalAlignment.Left;
   title.ToolTip=row.Name;top.Children.Add(title);
   var check=new CheckBox{
    Style=(Style)FindResource("ModCardCheckBox"),IsChecked=row.IsSelected,
@@ -1099,6 +1100,7 @@ public partial class MainWindow
    heading.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
    heading.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
    var name=AtlasText(mod.Name,16,AtlasInk,true);name.MaxWidth=280;name.TextTrimming=TextTrimming.CharacterEllipsis;
+   name.HorizontalAlignment=HorizontalAlignment.Left;
    name.ToolTip=mod.Name;heading.Children.Add(name);
    var enabled=AtlasBadge(mod.Enabled?"已启用":"已停用",mod.Enabled?"ok":"neutral");
    Grid.SetColumn(enabled,1);heading.Children.Add(enabled);body.Children.Add(heading);
@@ -1773,6 +1775,9 @@ public partial class MainWindow
    "库视图按钮通过真实 Click 切换原生卡片容器");
   Check(gridModeButton.Background.ToString()==AtlasBrush("#3B3021").ToString(),
    "库视图显示时，库视图按钮正确高亮");
+  Check(Descendants<TextBlock>(atlasNativeResultsHost!).Where(t=>atlasNativeRows.Any(r=>r.Name==t.Text))
+   .All(t=>t.HorizontalAlignment==HorizontalAlignment.Left),
+   "MOD 卡片标题与下方信息左对齐，而非居中漂移");
   Check(AtlasNativeCardColumns(620,315)==1&&AtlasNativeCardColumns(650,315)==2&&
    AtlasNativeCardColumns(990,315)==3,
    "库视图卡片列数根据可用宽度变化，而非固定 390px");
