@@ -2060,6 +2060,19 @@ public partial class MainWindow
   Check(Application.Current.Resources["AccentPrimary"] is SolidColorBrush restoredAccent&&
    restoredAccent.Color.R==198&&restoredAccent.Color.G==163&&restoredAccent.Color.B==107,
    "切回 ATLAS 后重新应用黄铜强调色");
+
+  // Exercise the actual common scan entry, not a mocked navigation callback:
+  // the old implementation unexpectedly called ShowOverview() here.
+  AtlasNativeNavigate("修复中心");await WaitForStableInventory();
+  await ScanFolder(fixture);await Idle();
+  Check(atlasNativePage=="修复中心"&&!atlasNativeEmbeddedWorkflow&&
+   atlasNativePageHost?.Content is ScrollViewer&&ReferenceEquals(Content,atlasNativeRoot),
+   "通用游戏扫描完成后仍停留在当前原生修复中心，不跳到旧版总览");
+  await RefreshModsAsync();await WaitForStableInventory();
+  RenderAtlasNative();await Idle();
+  Check(modInventory?.Mods.Count(ModPresentation.IsIndependentPatch)==1&&
+   atlasNativePageHost?.Content is ScrollViewer,
+   "通用扫描后重新读取独立补丁，原生修复页面可继续使用");
   CloseModWatch();
  }
 
