@@ -290,6 +290,10 @@ public partial class MainWindow
   if(atlasNativeRoot==null||atlasNativePageHost==null)return;
   Content=atlasNativeRoot;
   atlasNativeRows=BuildAtlasNativeRows();
+  // A folder removed by FileSystemWatcher must not stay in a batch selection.
+  // Do not prune while the inventory is still loading.
+  if(modInventory!=null)
+   atlasNativeSelectedFolders.IntersectWith(atlasNativeRows.Select(x=>x.Mod.Folder));
   UpdateAtlasNativeHeader();
   foreach(var pair in atlasNativeNavButtons){
    bool active=pair.Key==atlasNativePage;
@@ -941,7 +945,9 @@ public partial class MainWindow
    .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
   var active=patches.Count(x=>x.Enabled);
   var needsReview=patches.Count(x=>AtlasNativePatchNeedsReview(LifecycleTag(x.Id)));
-  var retireable=lifecycleReport?.Patches.Count(x=>x.CanRetire)??0;
+  var retireable=HasValidLifecycleReport&&!lifecycleScanning
+   ?patches.Count(mod=>lifecycleReport!.Patches.Any(item=>
+     item.CanRetire&&item.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase))):0;
   var stats=new WrapPanel{Margin=new Thickness(0,0,0,9)};
   stats.Children.Add(AtlasCompactStat(patches.Length.ToString(),"本地独立补丁","不含普通 MOD"));
   stats.Children.Add(AtlasCompactStat(active.ToString(),"当前启用","文件完整保留"));
@@ -980,40 +986,64 @@ public partial class MainWindow
    return AtlasScroll(root);
   }
 
-  var filters=new WrapPanel{Margin=new Thickness(0,10,0,6)};
-  foreach(string filter in new[]{"全部","已启用","已停用","需要复查","可安全退役"})
-  {
-   string selected=filter;
-   var button=AtlasButton(filter,()=>{
-    atlasNativePatchFilter=selected;RenderAtlasNative();
-   },atlasNativePatchFilter==filter?"primary":"quiet");
-   button.Margin=new Thickness(0,0,7,4);filters.Children.Add(button);
-  }
-  root.Children.Add(filters);
+  // Filter only the result host so the page scroll offset and search focus stay intact.
+  var resultsHost=new ContentControl();
+  var resultSummary=AtlasText("",11,AtlasMuted);
   var search=new TextBox{
    Text=atlasNativePatchQuery,Height=38,FontSize=14,Padding=new Thickness(12,7,12,7),
    Background=AtlasBrush("#20252B"),Foreground=AtlasInk,BorderBrush=AtlasBrush("#59636E"),
    BorderThickness=new Thickness(1),ToolTip="搜索补丁名称、ID 或关联 MOD"
   };
+  var filterButtons=new Dictionary<string,Button>(StringComparer.Ordinal);
+  void SetPatchFilter(string selected)
+  {
+   atlasNativePatchFilter=selected;
+   foreach(var pair in filterButtons)
+   {
+    bool active=pair.Key==selected;
+    pair.Value.Background=active?AtlasBrush("#3B3021"):Brushes.Transparent;
+    pair.Value.BorderBrush=active?AtlasBrush("#6D5737"):Brushes.Transparent;
+    pair.Value.Foreground=active?AtlasBrass:AtlasMuted;
+    pair.Value.FontWeight=active?FontWeights.SemiBold:FontWeights.Medium;
+   }
+   RenderAtlasNativePatchResults(resultsHost,patches,resultSummary);
+  }
+  var filters=new WrapPanel{Margin=new Thickness(0,10,0,6)};
+  foreach(string filter in new[]{"全部","已启用","已停用","需要复查","可安全退役"})
+  {
+   string selected=filter;
+   var button=AtlasButton(filter,()=>SetPatchFilter(selected),
+    atlasNativePatchFilter==filter?"active":"quiet");
+   button.Margin=new Thickness(0,0,7,4);
+   filterButtons[selected]=button;filters.Children.Add(button);
+  }
+  var reset=AtlasButton("清除筛选",()=>{
+   atlasNativePatchQuery="";search.Text="";
+   SetPatchFilter("全部");
+  },"quiet");
+  reset.Margin=new Thickness(0,0,7,4);filters.Children.Add(reset);
+  root.Children.Add(filters);
+
   var searchHost=new Grid{Height=38,Margin=new Thickness(0,0,0,2)};
   searchHost.Children.Add(search);
   var searchHint=AtlasText("⌕  搜索补丁名称、ID 或关联 MOD",12,AtlasMuted);
   searchHint.Margin=new Thickness(12,0,0,0);searchHint.VerticalAlignment=VerticalAlignment.Center;
   searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
   searchHost.Children.Add(searchHint);
-  var resultsHost=new ContentControl();
   search.TextChanged+=(_,_)=>{
    atlasNativePatchQuery=search.Text;
    searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
-   RenderAtlasNativePatchResults(resultsHost,patches);
+   RenderAtlasNativePatchResults(resultsHost,patches,resultSummary);
   };
   root.Children.Add(searchHost);
+  resultSummary.Margin=new Thickness(2,5,0,0);
+  root.Children.Add(resultSummary);
   root.Children.Add(resultsHost);
-  RenderAtlasNativePatchResults(resultsHost,patches);
+  RenderAtlasNativePatchResults(resultsHost,patches,resultSummary);
   return AtlasScroll(root);
  }
 
- void RenderAtlasNativePatchResults(ContentControl host,ManagedMod[] patches)
+ void RenderAtlasNativePatchResults(ContentControl host,ManagedMod[] patches,TextBlock? summary=null)
  {
   bool Matches(ManagedMod mod)
   {
@@ -1022,7 +1052,7 @@ public partial class MainWindow
    bool review=AtlasNativePatchNeedsReview(tag);
    bool filter=atlasNativePatchFilter switch{
     "已启用"=>mod.Enabled,"已停用"=>!mod.Enabled,"需要复查"=>review,
-    "可安全退役"=>life?.CanRetire==true,_=>true
+    "可安全退役"=>HasValidLifecycleReport&&!lifecycleScanning&&life?.CanRetire==true,_=>true
    };
    string query=atlasNativePatchQuery.Trim();
    var state=report?.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase));
@@ -1030,6 +1060,7 @@ public partial class MainWindow
    return filter&&(query.Length==0||(mod.Name+" "+mod.Id+" "+targets).Contains(query,StringComparison.OrdinalIgnoreCase));
   }
   var shown=patches.Where(Matches).ToArray();
+  if(summary!=null)summary.Text=$"显示 {shown.Length} / {patches.Length} 项独立补丁";
   var wrap=new WrapPanel{Margin=new Thickness(0,9,0,10)};
   foreach(var mod in shown)
   {
@@ -1068,14 +1099,17 @@ public partial class MainWindow
    var toggle=AtlasButton(mod.Enabled?"预览停用":"预览启用",
     ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
    toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);actions.Children.Add(toggle);
-   if(lifecycle?.CanRetire==true)
+   if(HasValidLifecycleReport&&!lifecycleScanning&&lifecycle?.CanRetire==true)
     actions.Children.Add(AtlasButton("预览安全退役",()=>AtlasNativeRunWorkflow(()=>PrepareRetirement(lifecycle)),"quiet"));
    body.Children.Add(actions);
    card.Child=body;wrap.Children.Add(card);
   }
   AtlasNativeFitCards(wrap,370,12);
   host.Content=shown.Length==0
-   ?AtlasEmpty("没有符合条件的补丁","清除筛选条件，或重新检查补丁健康状态。")
+   ?AtlasEmpty("没有符合条件的补丁","清除筛选条件，或重新检查补丁健康状态。",
+    AtlasButton("清除筛选",()=>{
+     atlasNativePatchFilter="全部";atlasNativePatchQuery="";RenderAtlasNative();
+    },"quiet"))
    :wrap;
  }
 
@@ -1412,7 +1446,7 @@ public partial class MainWindow
     ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
    toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);
    toggle.Margin=new Thickness(0,7,0,0);content.Children.Add(toggle);
-   if(lifecycle?.CanRetire==true)
+   if(HasValidLifecycleReport&&!lifecycleScanning&&lifecycle?.CanRetire==true)
    {
     var retire=AtlasButton("预览安全退役",()=>AtlasNativeRunWorkflow(()=>PrepareRetirement(lifecycle)),"primary");
     retire.Margin=new Thickness(0,7,0,0);content.Children.Add(retire);
@@ -1621,6 +1655,21 @@ public partial class MainWindow
   Check(AtlasNativePatchNeedsReview("需重新检查")&&AtlasNativePatchNeedsReview("已确认不兼容")&&
    !AtlasNativePatchNeedsReview("已知构建匹配"),
    "补丁健康待复查统计覆盖失效、未检查和已确认不兼容状态");
+  var repairFilter=Descendants<Button>(atlasNativePageHost!).Single(button=>button.Content?.ToString()=="需要复查");
+  repairFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,repairFilter));await Idle();
+  Check(atlasNativePatchFilter=="需要复查"&&atlasNativePageHost?.Content is ScrollViewer,
+   "修复中心切换过滤条件时保留原生页面容器");
+  var repairSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
+  repairSearch.Text="not-a-patch-id-123";await Idle();
+  Check(atlasNativePatchQuery=="not-a-patch-id-123"&&
+   Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text.StartsWith("显示 0 / ",StringComparison.Ordinal)),
+   "补丁搜索实时更新结果计数");
+  var clearRepairFilter=Descendants<Button>(atlasNativePageHost!).First(button=>
+   button.Content?.ToString()=="清除筛选");
+  clearRepairFilter.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,clearRepairFilter));await Idle();
+  Check(atlasNativePatchFilter=="全部"&&atlasNativePatchQuery==""&&repairSearch.Text==""&&
+   Descendants<TextBlock>(atlasNativePageHost!).Any(x=>x.Text=="显示 1 / 1 项独立补丁"),
+   "清除条件恢复修复中心结果，不重建整个页面");
   var patchState=report!.Patches.FirstOrDefault(x=>x.Patch.Id.Equals(localPatches[0].Id,StringComparison.OrdinalIgnoreCase));
   await Shot("03-ATLAS-修复中心");
   ShowAtlasNativePatchInspector(localPatches[0],patchState);await Idle();
