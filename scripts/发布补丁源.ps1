@@ -66,7 +66,18 @@ $managerRelease=Api ('repos/'+$managerRepo+'/releases/tags/'+$ManagerTag)
 Require (!$managerRelease.draft -and !$managerRelease.prerelease -and $managerRelease.body) '必须先正式发布支持该载荷的管理器，并填写更新说明。'
 $managerAssets=@($managerRelease.assets | Where-Object name -CEQ ('SpirePatch-'+$ManagerTag+'-win-x64.zip'))
 Require ($managerAssets.Count -eq 1 -and $managerAssets[0].state -ceq 'uploaded' -and $managerAssets[0].digest -match '^sha256:[a-f0-9]{64}$') '管理器正式附件尚未就绪。'
-$source=ReadRepo $managerRepo 'BundleInstaller.cs' $ManagerTag
+# Stable manager tags before the source-layout refactor use the root file.
+# New tags use src/Domain/Patches. Inspect the pinned released tree first;
+# do not silently fall back after API/network failures.
+$managerTree=Api ('repos/'+$managerRepo+'/git/trees/'+$ManagerTag+'?recursive=1')
+Require (!$managerTree.truncated) '已发布管理器文件清单不完整，拒绝校验。'
+$allPaths=@($managerTree.tree | ForEach-Object { $_.path })
+if ($allPaths -ccontains 'src/Domain/Patches/BundleInstaller.cs') {
+    $bundleSourcePath='src/Domain/Patches/BundleInstaller.cs'
+} elseif ($allPaths -ccontains 'BundleInstaller.cs') {
+    $bundleSourcePath='BundleInstaller.cs'
+} else { throw '已发布管理器缺少可核对的 BundleInstaller 源文件。' }
+$source=ReadRepo $managerRepo $bundleSourcePath $ManagerTag
 Require ($source -cmatch ('SupportedHash\s*=\s*"'+$bundle.sha256.ToUpperInvariant()+'"') -and $source -match ('SupportedSize\s*=\s*'+$bundle.size+'\s*;')) '已发布管理器没有审核该载荷的哈希和大小；请先接入并发布管理器。'
 $snapshot=(ReadRepo $managerRepo 'patch-catalog.json' $ManagerTag) | ConvertFrom-Json -Depth 100
 $plan=(ReadRepo $managerRepo 'catalog-plan.json' $ManagerTag) | ConvertFrom-Json -Depth 100

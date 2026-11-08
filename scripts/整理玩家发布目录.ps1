@@ -19,7 +19,7 @@ if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne
 
 # Documentation is safe to relocate: it is not a runtime or updater dependency.
 $documents = @(
-    '使用说明.md', '更新日志.md', '发布指南.md',
+    '使用说明.md', '发布指南.md',
     '补丁发布指南.md', '本版更新内容.md',
     '鸣谢与来源.md', 'THIRD-PARTY-NOTICES.md'
 )
