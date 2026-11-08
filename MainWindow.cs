@@ -126,6 +126,10 @@ public partial class MainWindow : Window
   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null&&atlasNativePageHost!=null)
   {
    string atlasSection=AtlasNativeSectionForPage(active,key);
+   // Embedded dialogs and details no longer own the native search visuals.
+   // Cancel any pending page work before the legacy WPF workflow takes over.
+   atlasNativeModSearchDebounce?.Stop();
+   atlasNativeUpdateSearchDebounce?.Stop();
    // Prevent asynchronous ATLAS data refreshes from replacing an active
    // preflight, details or confirmation page with the top-level dashboard.
    atlasNativeEmbeddedWorkflow=true;
