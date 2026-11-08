@@ -596,7 +596,11 @@ public partial class MainWindow
   if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)
   {
    string? key=currentVisit?.Key;
-   if(key?.StartsWith("mod:",StringComparison.Ordinal)==true)
+   // A native top-level navigation does not rewrite the legacy visit key.
+   // Only restore a MOD details page if that embedded workflow is still active;
+   // a completed update must not hijack the user's current native workspace.
+   if(atlasNativeEmbeddedWorkflow&&atlasNativePageHost?.Content is Grid&&
+      page=="模组管理"&&key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
     string folder=key["mod:".Length..];
     if(modInventory?.Mods.Any(m=>m.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
