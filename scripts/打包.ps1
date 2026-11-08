@@ -41,7 +41,6 @@ $integrationResult = Join-Path $testRoot 'integration-check.txt'
 $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--integration-check', ('"' + [IO.Path]::GetFullPath($Bundle) + '"'), ('"' + [IO.Path]::GetFullPath($Fixture) + '"'), ('"' + $integrationResult + '"')) -WindowStyle Hidden -Wait -PassThru
 if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $integrationResult)) { throw '完整隔离集成测试失败，不生成发布 ZIP。' }
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'README.md') -Destination (Join-Path $appFolder '使用说明.md')
-Copy-Item -LiteralPath (Join-Path $sourceRoot '更新日志.md') -Destination $appFolder
 Copy-Item -LiteralPath (Join-Path $sourceRoot '发布指南.md') -Destination $appFolder
 Copy-Item -LiteralPath (Join-Path $sourceRoot '补丁发布指南.md') -Destination $appFolder
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'THIRD-PARTY-NOTICES.md') -Destination $appFolder
