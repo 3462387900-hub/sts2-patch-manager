@@ -403,12 +403,39 @@ public partial class MainWindow
   if(selectedInstallRoot==null){RenderAtlasNative();return;}
   string root=selectedInstallRoot;
   try{
+   // Explicit refreshes include patch catalog and file hashes. The watcher
+   // uses the lightweight inventory-only path below instead.
    await ScanFolder(root);
    if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
    if(modInventory==null)await RefreshModsAsync();
   }
   catch(Exception ex){toast.Text="ATLAS 刷新失败："+ex.Message;}
   finally{RenderAtlasNative();}
+ }
+
+ // A watcher has already invalidated patch health/file scan conclusions.
+ // Refresh the MOD inventory (including safe orphan-patch reconciliation)
+ // without silently recreating a patch health report or navigating away.
+ async Task RefreshAtlasNativeInventoryFromWatchAsync()
+ {
+  if(busy||transactionWriting){
+   modWatchDebounce?.Stop();
+   modWatchDebounce?.Start();
+   return;
+  }
+  if(selectedInstallRoot==null)return;
+  string root=selectedInstallRoot;
+  try{
+   await RefreshModsAsync();
+   if(root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+    RenderAtlasNative();
+  }
+  catch(Exception ex)
+  {
+   modInventoryDirty=true;
+   toast.Text="ATLAS MOD 清单自动刷新失败："+ex.Message+"。请手动刷新。";
+   RenderAtlasNative();
+  }
  }
 
  async void ChooseAtlasNativeFolder()
