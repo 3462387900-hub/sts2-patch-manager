@@ -1,6 +1,11 @@
 # Only reviewed source and documentation belong in the public repository.
 /*
 !/*.cs
+!/src/
+!/src/**/
+!/src/**/*.cs
+**/bin/
+**/obj/
 !/*.xaml
 !/*.csproj
 !/*.manifest
