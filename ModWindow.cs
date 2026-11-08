@@ -1926,6 +1926,20 @@ public partial class MainWindow
    Space(root,18);
   }
   string? blocked=ModManager.BlockReason(selectedInstallRoot!,mod,modInventory!);var toggle=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Primary");toggle.IsEnabled=!busy&&blocked==null;root.Children.Add(H(toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost")));Space(root,10);if(blocked!=null)root.Children.Add(T(blocked,13,gold));
+  if(modInventory!.Issues.Count>0)
+  {
+   // A temporary manifest read error can make the cached inventory stale.
+   // Keep the unsafe toggle disabled; offer the real scanner instead of
+   // clearing Issues or bypassing BlockReason.
+   root.Children.Add(T("模组清单有 "+modInventory.Issues.Count+
+    " 项读取或 ID 问题。可重新扫描核对；问题未解决前不能启停。",12,gold));
+   Space(root,8);
+   var recheck=Btn("重新扫描 MOD 清单",()=>{
+    if(!busy&&!transactionWriting)_=RefreshModsAsync();
+   },"Ghost");
+   recheck.IsEnabled=!busy&&!transactionWriting;
+   root.Children.Add(H(recheck));Space(root,10);
+  }
   SetPage("模组管理",root,"mod:"+folder,()=>ShowModDetail(folder));toast.Text="启用或停用前会重新核对文件及声明的前置模组。";
  }
  async void ChooseWorkshopZip()
