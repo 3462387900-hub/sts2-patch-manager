@@ -1219,7 +1219,7 @@ public partial class MainWindow
    foreach(var row in visible)
    {
     var card=new Border{
-     Width=430,MinHeight=185,Margin=new Thickness(0,0,12,12),
+     Tag="AtlasUpdateCard",Width=430,MinHeight=185,Margin=new Thickness(0,0,12,12),
      Background=AtlasPanelBrush,BorderBrush=AtlasBrush("#46515D"),
      BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(15)
     };
@@ -1718,7 +1718,8 @@ public partial class MainWindow
   ];
   atlasNativeUpdateFilter="全部";atlasNativeUpdateQuery="";
   atlasNativePageHost!.Content=BuildAtlasNativeUpdatesPage();await Idle();
-  int UpdateCardCount()=>Descendants<Border>(atlasNativePageHost!).Count(border=>Math.Abs(border.Width-430)<1);
+  int UpdateCardCount()=>Descendants<Border>(atlasNativePageHost!).Count(border=>
+   Equals(border.Tag,"AtlasUpdateCard"));
   Check(UpdateCardCount()==2&&Descendants<Button>(atlasNativePageHost!).Any(button=>button.Content?.ToString()=="GitHub")&&
    Descendants<Button>(atlasNativePageHost!).Any(button=>button.Content?.ToString()=="Workshop"),
    "更新中心按来源显示 GitHub 与 Workshop 卡片及筛选入口");
