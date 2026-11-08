@@ -56,7 +56,7 @@ public partial class MainWindow
  static readonly Brush AtlasPanelBrush=SpireGlassTheme.GlassPanel();
  static readonly Brush AtlasPanelAltBrush=SpireGlassTheme.GlassPanel("#B5222C37");
  Grid? atlasNativeRoot,atlasNativeBody;
- ContentControl? atlasNativePageHost,atlasNativeResultsHost;
+ ContentControl? atlasNativePageHost,atlasNativeResultsHost,atlasNativePagingHost;
  Border? atlasNativeInspector,atlasNativeBatchBar;
  TextBlock? atlasNativeGamePath,atlasNativeGameState,atlasNativeFooter,atlasNativeBatchText,atlasNativeResultsSummary;
  Button? atlasNativeLaunchButton;
@@ -69,6 +69,8 @@ public partial class MainWindow
  string atlasNativeUpdateFilter="全部",atlasNativeUpdateQuery="";
  string atlasNativeWorkshopInput="";
  string atlasNativeViewMode="grid";
+ const int AtlasNativeGridPageSize=24;
+ int atlasNativeGridPage;
  string atlasNativeQuery="";
  string atlasNativeStateFilter="全部";
  string atlasNativeSourceFilter="全部";
@@ -611,7 +613,7 @@ public partial class MainWindow
   searchHint.IsHitTestVisible=false;searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
   searchHost.Children.Add(searchHint);
   search.TextChanged+=(_,_)=>{
-   atlasNativeQuery=search.Text;
+   atlasNativeQuery=search.Text;atlasNativeGridPage=0;
    searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
    RenderAtlasNativeModResults();
   };
@@ -619,12 +621,12 @@ public partial class MainWindow
 
   var stateCombo=AtlasCombo(["全部","已启用","已停用","有更新"],atlasNativeStateFilter);
   stateCombo.Width=112;stateCombo.Margin=new Thickness(8,0,0,0);
-  stateCombo.SelectionChanged+=(_,_)=>{atlasNativeStateFilter=stateCombo.SelectedItem?.ToString()??"全部";RenderAtlasNativeModResults();};
+  stateCombo.SelectionChanged+=(_,_)=>{atlasNativeStateFilter=stateCombo.SelectedItem?.ToString()??"全部";atlasNativeGridPage=0;RenderAtlasNativeModResults();};
   toolbar.Children.Add(stateCombo);
 
   var sourceCombo=AtlasCombo(["全部来源","Workshop","GitHub","本地"],atlasNativeSourceFilter=="全部"?"全部来源":atlasNativeSourceFilter);
   sourceCombo.Width=120;sourceCombo.Margin=new Thickness(8,0,0,0);
-  sourceCombo.SelectionChanged+=(_,_)=>{atlasNativeSourceFilter=sourceCombo.SelectedItem?.ToString() switch{"全部来源"=>"全部",var x=>x??"全部"};RenderAtlasNativeModResults();};
+  sourceCombo.SelectionChanged+=(_,_)=>{atlasNativeSourceFilter=sourceCombo.SelectedItem?.ToString() switch{"全部来源"=>"全部",var x=>x??"全部"};atlasNativeGridPage=0;RenderAtlasNativeModResults();};
   toolbar.Children.Add(sourceCombo);
 
   var unbound=new CheckBox{
@@ -633,13 +635,13 @@ public partial class MainWindow
    Foreground=AtlasMuted,FontSize=12,VerticalAlignment=VerticalAlignment.Center,
    Margin=new Thickness(12,0,8,0),Cursor=Cursors.Hand
   };
-  unbound.Checked+=(_,_)=>{atlasNativeUnboundOnly=true;RenderAtlasNativeModResults();};
-  unbound.Unchecked+=(_,_)=>{atlasNativeUnboundOnly=false;RenderAtlasNativeModResults();};
+  unbound.Checked+=(_,_)=>{atlasNativeUnboundOnly=true;atlasNativeGridPage=0;RenderAtlasNativeModResults();};
+  unbound.Unchecked+=(_,_)=>{atlasNativeUnboundOnly=false;atlasNativeGridPage=0;RenderAtlasNativeModResults();};
   toolbar.Children.Add(unbound);
 
   var sort=AtlasCombo(["名称","有更新优先"],atlasNativeSort);
   sort.Width=118;sort.Margin=new Thickness(8,0,0,0);
-  sort.SelectionChanged+=(_,_)=>{atlasNativeSort=sort.SelectedItem?.ToString()??"名称";RenderAtlasNativeModResults();};
+  sort.SelectionChanged+=(_,_)=>{atlasNativeSort=sort.SelectedItem?.ToString()??"名称";atlasNativeGridPage=0;RenderAtlasNativeModResults();};
   toolbar.Children.Add(sort);
 
   var views=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(10,0,0,0)};
@@ -655,7 +657,7 @@ public partial class MainWindow
   // discards keyboard focus and the current ScrollViewer position.
   atlasNativeResetModFilters=()=>{
    atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
-   atlasNativeUnboundOnly=false;atlasNativeSort="名称";
+   atlasNativeUnboundOnly=false;atlasNativeSort="名称";atlasNativeGridPage=0;
    if(search.Text.Length>0)search.Text="";
    stateCombo.SelectedItem="全部";
    sourceCombo.SelectedItem="全部来源";
@@ -700,6 +702,7 @@ public partial class MainWindow
   atlasNativeBatchBar.Child=batch;root.Children.Add(atlasNativeBatchBar);
 
   atlasNativeResultsSummary=AtlasText("",11,AtlasMuted);atlasNativeResultsSummary.Margin=new Thickness(2,0,0,8);root.Children.Add(atlasNativeResultsSummary);
+  atlasNativePagingHost=new ContentControl();root.Children.Add(atlasNativePagingHost);
   atlasNativeResultsHost=new ContentControl();
   root.Children.Add(atlasNativeResultsHost);
   RenderAtlasNativeModResults();
@@ -723,6 +726,7 @@ public partial class MainWindow
  {
   if(atlasNativeResultsHost==null)return;
   var rows=GetFilteredAtlasNativeRows();
+  if(atlasNativePagingHost!=null)atlasNativePagingHost.Content=null;
   if(atlasNativeResultsSummary!=null)atlasNativeResultsSummary.Text=$"显示 {rows.Length} / {atlasNativeRows.Count} 项  ·  已选择 {atlasNativeSelectedFolders.Count} 项  ·  列表视图适合大量 MOD";
   if(atlasNativeBatchBar!=null)atlasNativeBatchBar.Visibility=atlasNativeSelectedFolders.Count>0?Visibility.Visible:Visibility.Collapsed;
   if(atlasNativeBatchText!=null)atlasNativeBatchText.Text="已选择 "+atlasNativeSelectedFolders.Count+" 项";
@@ -736,10 +740,26 @@ public partial class MainWindow
    return;
   }
   if(atlasNativeViewMode=="grid"){
+   int pages=Math.Max(1,(rows.Length+AtlasNativeGridPageSize-1)/AtlasNativeGridPageSize);
+   atlasNativeGridPage=Math.Clamp(atlasNativeGridPage,0,pages-1);
+   int start=atlasNativeGridPage*AtlasNativeGridPageSize;
+   int count=Math.Min(AtlasNativeGridPageSize,rows.Length-start);
    var wrap=new WrapPanel();
-   foreach(var row in rows)wrap.Children.Add(BuildAtlasNativeModCard(row));
+   // Keep heavy buttons, tooltips and card layout bounded even for 1,000+ MODs.
+   foreach(var row in rows.Skip(start).Take(count))wrap.Children.Add(BuildAtlasNativeModCard(row));
    AtlasNativeFitCards(wrap,315);
    atlasNativeResultsHost.Content=wrap;
+   if(pages>1&&atlasNativePagingHost!=null)
+   {
+    var controls=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,2,0,10)};
+    var previous=AtlasButton("上一页",()=>{atlasNativeGridPage--;RenderAtlasNativeModResults();},"quiet");
+    previous.IsEnabled=atlasNativeGridPage>0;controls.Children.Add(previous);
+    var counter=AtlasText($"第 {atlasNativeGridPage+1} / {pages} 页  ·  本页 {count} 项",12,AtlasMuted);
+    counter.Margin=new Thickness(13,9,13,0);controls.Children.Add(counter);
+    var next=AtlasButton("下一页",()=>{atlasNativeGridPage++;RenderAtlasNativeModResults();},"quiet");
+    next.IsEnabled=atlasNativeGridPage<pages-1;controls.Children.Add(next);
+    atlasNativePagingHost.Content=controls;
+   }
   }else{
    atlasNativeResultsHost.Content=BuildAtlasNativeDataGrid(rows);
   }
@@ -1785,7 +1805,7 @@ public partial class MainWindow
   states=report.Patches;demo=false;modInventoryDirty=false;
   modStatus=$"共 {modInventory.Mods.Count} 项 · ATLAS 隔离界面验证";
   atlasNativeSelectedFolders.Clear();atlasNativeSelectedFolder=null;atlasNativeSelectedPatchId=null;
-  atlasNativePage="总览";atlasNativeViewMode="list";atlasNativeQuery="";atlasNativeWorkshopInput="";
+  atlasNativePage="总览";atlasNativeViewMode="list";atlasNativeGridPage=0;atlasNativeQuery="";atlasNativeWorkshopInput="";
   atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";atlasNativeUnboundOnly=false;
   ChangeUiTheme(UiThemes.AtlasNative);
   ShowAtlasNative();await Idle();
