@@ -65,6 +65,7 @@ public partial class MainWindow
  string atlasNativeSubpageReturnPage="总览";
  string atlasNativePatchFilter="全部",atlasNativePatchQuery="";
  string atlasNativeUpdateFilter="全部",atlasNativeUpdateQuery="";
+ string atlasNativeWorkshopInput="";
  string atlasNativeViewMode="grid";
  string atlasNativeQuery="";
  string atlasNativeStateFilter="全部";
@@ -1277,7 +1278,8 @@ public partial class MainWindow
  {
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
   root.Children.Add(AtlasPageTitle("DOWNLOAD WORKSPACE","下载中心",
-   "从创意工坊、GitHub 或本地 ZIP 获取 MOD。所有写入仍经过原有校验、预览、快照和回滚流程。"));
+   "输入创意工坊链接、检查 GitHub 更新或导入本地 ZIP。下载安装继续复用原有安全预检与确认流程。"));
+
   var activity=new StackPanel();
   activity.Children.Add(AtlasText("操作状态",13,AtlasInk,true));
   var activityText=AtlasText(toast.Text,12,AtlasMuted);
@@ -1285,34 +1287,113 @@ public partial class MainWindow
   BindingOperations.SetBinding(activityText,TextBlock.TextProperty,
    new Binding(nameof(TextBlock.Text)){Source=toast,Mode=BindingMode.OneWay});
   activity.Children.Add(activityText);
-  root.Children.Add(AtlasPanel(activity,11));
+  var activityPanel=AtlasPanel(activity,11);
+  activityPanel.Margin=new Thickness(0,0,0,13);
+  root.Children.Add(activityPanel);
+
   var workshop=new StackPanel();
   workshop.Children.Add(AtlasText("Steam Workshop / 尖塔补给站",19,AtlasInk,true));
-  workshop.Children.Add(AtlasText("输入 Workshop ID 或分享链接。下载后检查 Manifest / Chunk 与文件完整性，确认后才会写入游戏目录。",13,AtlasMuted));
-  var workshopActions=new WrapPanel{Margin=new Thickness(0,12,0,0)};
-  workshopActions.Children.Add(AtlasButton("输入 ID 并获取 MOD",()=>AtlasNativeRunWorkflow(()=>DownloadWorkshopMod()),"primary"));
-  workshopActions.Children.Add(AtlasButton("查看已关联 MOD",()=>AtlasNativeNavigate("模组库"),"quiet"));
+  var workshopNote=AtlasText("支持纯数字 Workshop ID、Steam 分享链接及尖塔补给站链接。输入仅解析 ID，不会自动联网下载。",12,AtlasMuted);
+  workshopNote.Margin=new Thickness(0,5,0,10);workshop.Children.Add(workshopNote);
+  var workshopInput=new TextBox{
+   Text=atlasNativeWorkshopInput,Height=40,FontSize=14,
+   Padding=new Thickness(12,8,12,8),
+   Background=AtlasBrush("#20252B"),Foreground=AtlasInk,
+   BorderBrush=AtlasBrush("#59636E"),BorderThickness=new Thickness(1),
+   ToolTip="输入 Workshop ID 或分享链接，按获取并预览后才会请求内容"
+  };
+  System.Windows.Automation.AutomationProperties.SetName(workshopInput,"ATLAS 创意工坊链接或 ID");
+  var inputGrid=new Grid{Height=40};
+  inputGrid.Children.Add(workshopInput);
+  var hint=AtlasText("⌕  粘贴 Workshop ID / Steam 链接",12,AtlasMuted);
+  hint.Margin=new Thickness(12,0,0,0);hint.VerticalAlignment=VerticalAlignment.Center;
+  hint.IsHitTestVisible=false;inputGrid.Children.Add(hint);
+  workshop.Children.Add(inputGrid);
+  var validation=AtlasText("",12,AtlasMuted);
+  validation.Margin=new Thickness(0,8,0,7);workshop.Children.Add(validation);
+  void ValidateInput()
+  {
+   atlasNativeWorkshopInput=workshopInput.Text;
+   hint.Visibility=workshopInput.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+   if(string.IsNullOrWhiteSpace(workshopInput.Text))
+   {
+    validation.Foreground=AtlasMuted;
+    validation.Text="尚未输入来源；不会自动请求创意工坊。";
+   }
+   else if(WorkshopModInstaller.TryParseWorkshopId(workshopInput.Text,out ulong id))
+   {
+    validation.Foreground=AtlasGreen;
+    validation.Text="已识别 Workshop ID："+id+"。仅完成链接格式验证，内容仍需下载后核对。";
+   }
+   else
+   {
+    validation.Foreground=AtlasBrass;
+    validation.Text="链接或 ID 无效。请使用数字 ID、Steam 分享链接或尖塔补给站链接。";
+   }
+  }
+  workshopInput.TextChanged+=(_,_)=>ValidateInput();
+  ValidateInput();
+  var workshopActions=new WrapPanel{Margin=new Thickness(0,5,0,0)};
+  var get=AtlasButton("获取并预览",()=>{
+   if(!WorkshopModInstaller.TryParseWorkshopId(workshopInput.Text,out ulong id))
+   {
+    validation.Foreground=AtlasRed;
+    validation.Text="链接或 ID 无效，未发起网络请求。";
+    return;
+   }
+   if(selectedInstallRoot==null)
+   {
+    validation.Foreground=AtlasBrass;
+    validation.Text="请先选择游戏目录，再获取 Workshop MOD。";
+    return;
+   }
+   if(busy||transactionWriting||modInventoryDirty)
+   {
+    validation.Foreground=AtlasBrass;
+    validation.Text=modInventoryDirty
+     ?"MOD 文件已变化，请刷新本地清单后再下载。"
+     :"其他文件操作正在进行，请完成后重试。";
+    return;
+   }
+   AtlasNativeRunWorkflow(()=>DownloadWorkshopMod(presetWorkshopId:id));
+  },"primary");
+  get.Margin=new Thickness(0,0,9,5);workshopActions.Children.Add(get);
+  var refresh=AtlasButton("刷新本地清单",()=>_=RefreshAtlasNativeDataAsync(),"quiet");
+  refresh.Margin=new Thickness(0,0,9,5);workshopActions.Children.Add(refresh);
   workshop.Children.Add(workshopActions);
-  root.Children.Add(AtlasPanel(workshop,19,"#20242A"));
+  workshop.Children.Add(AtlasText("完整流程：准备内容 → 校验 Manifest / Chunk、MOD ID 与版本 → 预览 → 确认写入；不自动安装。",11,AtlasMuted));
+  var workshopPanel=AtlasPanel(workshop,19,"#20242A");
+  root.Children.Add(workshopPanel);
 
   var github=new StackPanel{Margin=new Thickness(0,13,0,0)};
   github.Children.Add(AtlasText("GitHub Releases",19,AtlasInk,true));
-  github.Children.Add(AtlasText("对已确认的公开仓库检查正式 Release。安装包必须提供 SHA-256，并通过 MOD ID、版本和 ZIP 结构校验。",13,AtlasMuted));
-  var githubActions=new WrapPanel{Margin=new Thickness(0,12,0,0)};
-  githubActions.Children.Add(AtlasButton("查看更新结果",()=>AtlasNativeNavigate("更新中心"),"primary"));
-  githubActions.Children.Add(AtlasButton("在模组详情绑定来源",()=>AtlasNativeNavigate("模组库"),"quiet"));
+  int githubLinked=atlasNativeRows.Count(row=>row.GitHubRepository.Length>0);
+  github.Children.Add(AtlasText(modInventory==null
+   ?"尚未读取本地来源。先定位游戏目录并刷新模组清单。"
+   :$"已关联 GitHub 来源：{githubLinked} 项 · 有更新：{atlasNativeRows.Count(row=>row.GitHubRepository.Length>0&&row.GitHubStatus=="有更新")} 项（仅已缓存结果）。",
+   12,AtlasMuted));
+  github.Children.Add(AtlasText("仅检查公开仓库的正式 Release；更新安装仍由现有下载、SHA-256 和回滚流程处理。",12,AtlasMuted));
+  var githubActions=new WrapPanel{Margin=new Thickness(0,10,0,0)};
+  var updates=AtlasButton("查看 GitHub 更新",()=>{
+   atlasNativeUpdateFilter="GitHub";AtlasNativeNavigate("更新中心");
+  },"primary");
+  updates.Margin=new Thickness(0,0,9,5);githubActions.Children.Add(updates);
+  var bind=AtlasButton("管理来源关联",()=>AtlasNativeNavigate("模组库"),"quiet");
+  githubActions.Children.Add(bind);
   github.Children.Add(githubActions);
   root.Children.Add(AtlasPanel(github,19));
 
   var local=new StackPanel{Margin=new Thickness(0,13,0,0)};
   local.Children.Add(AtlasText("本地 ZIP 导入",19,AtlasInk,true));
-  local.Children.Add(AtlasText("导入已下载的单个 MOD ZIP。会检查压缩包路径、文件类型、大小、清单和目标冲突；不会覆盖现有 MOD。",13,AtlasMuted));
-  local.Children.Add(AtlasButton("选择 ZIP 并预检",()=>AtlasNativeRunWorkflow(ChooseWorkshopZip),"primary"));
+  local.Children.Add(AtlasText("导入已下载的 MOD ZIP。会检查路径、文件类型、大小、清单和目标冲突；不直接覆盖已安装 MOD。",12,AtlasMuted));
+  var zip=AtlasButton("选择 ZIP 并预检",()=>AtlasNativeRunWorkflow(ChooseWorkshopZip),"primary");
+  zip.Margin=new Thickness(0,10,0,0);
+  local.Children.Add(zip);
   root.Children.Add(AtlasPanel(local,19));
 
   var patches=new StackPanel{Margin=new Thickness(0,13,0,0)};
   patches.Children.Add(AtlasText("在线修复补丁库",19,AtlasInk,true));
-  patches.Children.Add(AtlasText("查看公开补丁说明、适用范围和验证状态。下载整合包不会自动安装；安装与回滚仍需明确确认。",13,AtlasMuted));
+  patches.Children.Add(AtlasText("查看公开补丁的适用范围与验证依据。整合包不会自动安装，安装与回滚仍需明确确认。",12,AtlasMuted));
   patches.Children.Add(AtlasButton("浏览在线补丁库",()=>AtlasNativeRunWorkflow(()=>Navigate("在线补丁")),"quiet"));
   root.Children.Add(AtlasPanel(patches,19));
   return AtlasScroll(root);
@@ -1321,36 +1402,89 @@ public partial class MainWindow
  UIElement BuildAtlasNativeSettingsPage()
  {
   var root=new StackPanel{Margin=new Thickness(5,5,5,20)};
-  root.Children.Add(AtlasPageTitle("PREFERENCES","设置","游戏目录、界面风格、网络和诊断工具。"));
+  root.Children.Add(AtlasPageTitle("PREFERENCES","设置",
+   "游戏目录、界面样式、孤立补丁保护与 GitHub 网络连接。设置仅调用已有持久化及安全流程。"));
+
   var game=new StackPanel();
   game.Children.Add(AtlasText("游戏目录",17,AtlasInk,true));
-  var pathLabel=AtlasText(selectedInstallRoot==null?"尚未选择游戏目录":Path.GetFileName(selectedInstallRoot.TrimEnd(Path.DirectorySeparatorChar)),13,AtlasMuted);
-  pathLabel.ToolTip=selectedInstallRoot??"尚未选择游戏目录";pathLabel.TextTrimming=TextTrimming.CharacterEllipsis;
+  var selectedPath=selectedInstallRoot??"尚未选择游戏目录";
+  var pathLabel=AtlasText(selectedPath,13,AtlasMuted);
+  pathLabel.TextWrapping=TextWrapping.Wrap;pathLabel.ToolTip=selectedPath;
+  pathLabel.Margin=new Thickness(0,5,0,0);
   game.Children.Add(pathLabel);
+  game.Children.Add(AtlasText("切换游戏目录将使旧 MOD 扫描与补丁健康结论失效；不会自动迁移或删除文件。",11,AtlasMuted));
   var gameActions=new WrapPanel{Margin=new Thickness(0,10,0,0)};
   gameActions.Children.Add(AtlasButton("选择游戏目录",ChooseAtlasNativeFolder,"primary"));
   gameActions.Children.Add(AtlasButton("重新定位游戏",()=>AtlasNativeRunWorkflow(LocateGame),"quiet"));
+  var copy=AtlasButton("复制目录路径",()=>{
+   if(selectedInstallRoot==null){toast.Text="尚未选择游戏目录。";return;}
+   try{Clipboard.SetText(selectedInstallRoot);toast.Text="已复制当前游戏目录。";}
+   catch(Exception ex){toast.Text="复制目录失败："+ex.Message;}
+  },"quiet");
+  copy.IsEnabled=selectedInstallRoot!=null;gameActions.Children.Add(copy);
   game.Children.Add(gameActions);
   root.Children.Add(AtlasPanel(game,17));
 
   var theme=new StackPanel{Margin=new Thickness(0,13,0,0)};
   theme.Children.Add(AtlasText("界面风格",17,AtlasInk,true));
-  theme.Children.Add(AtlasText("切换只影响界面布局，不会修改 MOD、来源绑定或补丁文件。",13,AtlasMuted));
+  theme.Children.Add(AtlasText("主题与布局偏好会保存；切换不会修改 MOD、来源绑定或补丁文件。",12,AtlasMuted));
   var themes=new WrapPanel{Margin=new Thickness(0,10,0,0)};
-  themes.Children.Add(AtlasButton("ATLAS 原生",()=>ChangeUiTheme(UiThemes.AtlasNative),uiTheme==UiThemes.AtlasNative?"primary":"quiet"));
+  themes.Children.Add(AtlasButton("ATLAS 原生 · 当前",()=>ChangeUiTheme(UiThemes.AtlasNative),"active"));
   themes.Children.Add(AtlasButton("新版工作台",()=>ChangeUiTheme(UiThemes.Workspace),"quiet"));
   themes.Children.Add(AtlasButton("经典 Beta",()=>ChangeUiTheme(UiThemes.Classic),"quiet"));
   theme.Children.Add(themes);
   root.Children.Add(AtlasPanel(theme,17));
 
+  var patch=new StackPanel{Margin=new Thickness(0,13,0,0)};
+  patch.Children.Add(AtlasText("孤立补丁自动停用",17,AtlasInk,true));
+  patch.Children.Add(AtlasText("关联 MOD 被删除时，可按原有保护逻辑自动停用孤立补丁并显示提示；不会删除补丁文件。",12,AtlasMuted));
+  bool autoStop=OrphanPatchAutoStop.Enabled(installer.DataRoot);
+  var autoStatus=AtlasText("当前状态："+(autoStop?"已开启":"已关闭"),12,autoStop?AtlasGreen:AtlasMuted,true);
+  autoStatus.Margin=new Thickness(0,7,0,7);patch.Children.Add(autoStatus);
+  var autoToggle=AtlasButton(autoStop?"关闭自动停用":"开启自动停用",()=>{
+   if(busy||transactionWriting)
+   {
+    toast.Text="文件操作期间不能修改补丁自动停用设置。";return;
+   }
+   try
+   {
+    bool next=!OrphanPatchAutoStop.Enabled(installer.DataRoot);
+    OrphanPatchAutoStop.SetEnabled(installer.DataRoot,next);
+    autoStatus.Text="当前状态："+(next?"已开启":"已关闭");
+    autoStatus.Foreground=next?AtlasGreen:AtlasMuted;
+    autoToggle.Content=next?"关闭自动停用":"开启自动停用";
+    toast.Text=next?"孤立补丁自动停用已开启；不会删除补丁文件。":"孤立补丁自动停用已关闭。";
+   }
+   catch(Exception ex){toast.Text="设置保存失败："+ex.Message;}
+  },"quiet");
+  autoToggle.Margin=new Thickness(0,0,9,0);patch.Children.Add(autoToggle);
+  root.Children.Add(AtlasPanel(patch,17));
+
+  var network=new StackPanel{Margin=new Thickness(0,13,0,0)};
+  network.Children.Add(AtlasText("GitHub 网络",17,AtlasInk,true));
+  var config=GitHubNetwork.Load(installer.DataRoot);
+  string networkMode=config.Mode=="local"
+   ?"本机 HTTP 代理："+config.ProxyUrl:"跟随 Windows 系统代理";
+  network.Children.Add(AtlasText("当前："+networkMode,12,AtlasMuted));
+  network.Children.Add(AtlasText("网络设置保存后需重启管理器才能应用到所有连接；诊断只测试连通性，不代表下载速度。",11,AtlasMuted));
+  var networkActions=new WrapPanel{Margin=new Thickness(0,10,0,0)};
+  var proxy=AtlasButton("配置 GitHub 网络",()=>{
+   AtlasNativeRunWorkflow(ConfigureGitHubNetwork);
+   // This dialog performs the actual persistence; refresh the displayed mode.
+   if(UiThemes.IsAtlasNative&&atlasNativePage=="设置")RenderAtlasNative();
+  },"primary");
+  proxy.Margin=new Thickness(0,0,9,5);networkActions.Children.Add(proxy);
+  networkActions.Children.Add(AtlasButton("诊断 GitHub 连接",()=>AtlasNativeRunWorkflow(DiagnoseGitHubNetwork),"quiet"));
+  network.Children.Add(networkActions);
+  root.Children.Add(AtlasPanel(network,17));
+
   var diagnostics=new StackPanel{Margin=new Thickness(0,13,0,0)};
   diagnostics.Children.Add(AtlasText("维护与诊断",17,AtlasInk,true));
-  diagnostics.Children.Add(AtlasText("这些工具仍使用原有 WPF 业务页面，但会保留 ATLAS 顶部导航和窗口外框。",12,AtlasMuted));
+  diagnostics.Children.Add(AtlasText("这些操作复用现有 WPF 业务页及校验逻辑，并保留 ATLAS 工作台外框。",12,AtlasMuted));
   var tools=new WrapPanel{Margin=new Thickness(0,10,0,0)};
   tools.Children.Add(AtlasButton("联机检查",()=>AtlasNativeRunWorkflow(()=>Navigate("联机检查")),"quiet"));
   tools.Children.Add(AtlasButton("诊断与日志",()=>AtlasNativeRunWorkflow(()=>Navigate("诊断与日志")),"quiet"));
   tools.Children.Add(AtlasButton("管理器更新",()=>AtlasNativeRunWorkflow(()=>Navigate("检查更新")),"quiet"));
-  tools.Children.Add(AtlasButton("GitHub 网络设置",()=>AtlasNativeRunWorkflow(()=>Navigate("工具与设置")),"quiet"));
   tools.Children.Add(AtlasButton("补丁健康报告",()=>AtlasNativeRunWorkflow(()=>Navigate("补丁健康")),"quiet"));
   diagnostics.Children.Add(tools);
   root.Children.Add(AtlasPanel(diagnostics,17));
