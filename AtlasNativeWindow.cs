@@ -424,9 +424,21 @@ public partial class MainWindow
 
  void AtlasNativeRunBatch(Action action)
  {
+  if(selectedInstallRoot==null||modInventory==null||modInventoryDirty||busy||transactionWriting)
+  {
+   toast.Text="MOD 清单不可用或正在进行文件操作，请完成扫描后重新批量预览。";
+   return;
+  }
   var folders=atlasNativeRows.Where(x=>x.IsSelected&&!ModPresentation.IsIndependentPatch(x.Mod))
    .Select(x=>x.Mod.Folder).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
   if(folders.Length==0){toast.Text="请先选择至少一个普通 MOD。";return;}
+  var currentFolders=modInventory.Mods.Where(x=>!ModPresentation.IsIndependentPatch(x))
+   .Select(x=>x.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  if(folders.Any(folder=>!currentFolders.Contains(folder)))
+  {
+   toast.Text="勾选的 MOD 已不在最新清单中，请重新选择后批量预览。";
+   return;
+  }
   chosenModFolders.Clear();
   foreach(string folder in folders)chosenModFolders.Add(folder);
   modSection="普通 MOD";
@@ -913,12 +925,40 @@ public partial class MainWindow
   if(selectedInstallRoot==null){reason="尚未选择游戏目录。";return false;}
   if(modInventory==null){reason="MOD 清单尚未读取。";return false;}
   if(modInventoryDirty){reason="MOD 文件发生变化，请刷新后再操作。";return false;}
+  if(busy||transactionWriting){reason="正在扫描或执行文件操作，请完成后再预览。";return false;}
+  // Controls can outlive the inventory that built them (watcher/virtualized rows).
+  // Only the current inventory entry may decide the direction of a toggle.
+  var current=modInventory.Mods.FirstOrDefault(x=>x.Folder.Equals(mod.Folder,StringComparison.OrdinalIgnoreCase));
+  if(current==null||
+     !current.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)||
+     current.Enabled!=mod.Enabled||
+     !current.Manifest.Equals(mod.Manifest,StringComparison.OrdinalIgnoreCase)||
+     !current.Version.Equals(mod.Version,StringComparison.Ordinal)||
+     !string.Equals(current.Storage,mod.Storage,StringComparison.OrdinalIgnoreCase)||
+     !string.Equals(current.Original,mod.Original,StringComparison.OrdinalIgnoreCase))
+  {
+   reason="MOD 清单已刷新，旧按钮状态可能过期，请重新打开当前模组。";
+   return false;
+  }
   try
   {
-   reason=ModManager.BlockReason(selectedInstallRoot,mod,modInventory);
-   return reason==null&&!busy&&!transactionWriting;
+   reason=ModManager.BlockReason(selectedInstallRoot,current,modInventory);
+   return reason==null;
   }
   catch(Exception ex){reason=ex.Message;return false;}
+ }
+
+ void AtlasNativePreviewToggle(ManagedMod snapshot)
+ {
+  if(!AtlasNativeToggleAllowed(snapshot,out string? reason))
+  {
+   toast.Text=reason??"当前无法预览启停，请刷新 MOD 清单后重试。";
+   return;
+  }
+  // On the UI dispatcher, the guard and lookup are contiguous. The existing
+  // PrepareModToggle -> ModManager.Preview performs its own file safety check.
+  var current=modInventory!.Mods.First(x=>x.Folder.Equals(snapshot.Folder,StringComparison.OrdinalIgnoreCase));
+  AtlasNativeRunWorkflow(()=>PrepareModToggle(current));
  }
 
  Border BuildAtlasNativeModCard(AtlasNativeModRow row)
@@ -969,7 +1009,7 @@ public partial class MainWindow
 
   var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};
   var toggle=AtlasButton(row.Mod.Enabled?"预览停用":"预览启用",
-   ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(row.Mod)),row.Mod.Enabled?"quiet":"primary");
+   ()=>AtlasNativePreviewToggle(row.Mod),row.Mod.Enabled?"quiet":"primary");
   toggle.IsEnabled=canToggle;toggle.Margin=new Thickness(0,0,7,0);
   actions.Children.Add(toggle);
   var open=AtlasButton("查看详情",()=>ShowAtlasNativeModInspector(row),"quiet");
@@ -1050,12 +1090,9 @@ public partial class MainWindow
   toggleButton.SetValue(FrameworkElement.MarginProperty,new Thickness(5,0,0,0));
   toggleButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,_)=>{
    if(sender is not FrameworkElement element||element.DataContext is not AtlasNativeModRow row)return;
-   // A virtualized row can outlive the scan that first supplied it. Recheck the
-   // same file/transaction guards used by card actions before opening a preview.
-   if(!AtlasNativeToggleAllowed(row.Mod,out string? blocked)){
-    toast.Text=blocked??"当前无法预览启停，请等待扫描或文件操作结束。";return;
-   }
-   AtlasNativeRunWorkflow(()=>PrepareModToggle(row.Mod));
+   // Virtualized row contents can survive scans: the shared preview helper
+   // rechecks identity and current enable state before invoking the real preflight.
+   AtlasNativePreviewToggle(row.Mod);
   }));
   actionPanel.AppendChild(toggleButton);
   grid.Columns.Add(new DataGridTemplateColumn{Header="操作",Width=155,CellTemplate=new DataTemplate{VisualTree=actionPanel}});
@@ -1286,7 +1323,7 @@ public partial class MainWindow
    var actions=new WrapPanel();
    actions.Children.Add(AtlasButton("查看依据",()=>ShowAtlasNativePatchInspector(mod,state),"quiet"));
    var toggle=AtlasButton(mod.Enabled?"预览停用":"预览启用",
-    ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
+    ()=>AtlasNativePreviewToggle(mod),mod.Enabled?"quiet":"primary");
    toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);actions.Children.Add(toggle);
    if(HasValidLifecycleReport&&!lifecycleScanning&&lifecycle?.CanRetire==true)
     actions.Children.Add(AtlasButton("预览安全退役",()=>AtlasNativeRunWorkflow(()=>PrepareRetirement(lifecycle)),"quiet"));
@@ -1813,7 +1850,7 @@ public partial class MainWindow
    AddInspectorField(content,"关联 MOD",state?.Patch.Requirements.Length>0?string.Join("、",state.Patch.Requirements):"补丁清单未声明关联 MOD");
    content.Children.Add(AtlasButton("查看完整健康依据",()=>AtlasNativeRunWorkflow(()=>ShowPatchEvidence(mod.Id)),"quiet"));
    var toggle=AtlasButton(mod.Enabled?"预览停用补丁":"预览启用补丁",
-    ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
+    ()=>AtlasNativePreviewToggle(mod),mod.Enabled?"quiet":"primary");
    toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);
    toggle.Margin=new Thickness(0,7,0,0);content.Children.Add(toggle);
    if(HasValidLifecycleReport&&!lifecycleScanning&&lifecycle?.CanRetire==true)
@@ -1836,7 +1873,7 @@ public partial class MainWindow
    }
    var actionHeader=AtlasText("常用操作",13,AtlasInk,true);actionHeader.Margin=new Thickness(0,4,0,8);content.Children.Add(actionHeader);
    var toggle=AtlasButton(mod.Enabled?"预览停用":"预览启用",
-    ()=>AtlasNativeRunWorkflow(()=>PrepareModToggle(mod)),mod.Enabled?"quiet":"primary");
+    ()=>AtlasNativePreviewToggle(mod),mod.Enabled?"quiet":"primary");
    toggle.IsEnabled=AtlasNativeToggleAllowed(mod,out _);toggle.Margin=new Thickness(0,0,6,6);
    var actions=new WrapPanel();actions.Children.Add(toggle);
    if(row!=null)
@@ -2101,6 +2138,21 @@ public partial class MainWindow
    "详情检查器可以关闭并恢复列表宽度");
 
   var solo=modInventory.Mods.First(x=>x.Id=="TestSolo");
+  // No disk modifications: a fabricated stale row must fail before reaching
+  // the existing read-only preview, regardless of the displayed button state.
+  await WaitForStableInventory();
+  var staleDirection=solo with{Enabled=!solo.Enabled};
+  Check(!AtlasNativeToggleAllowed(staleDirection,out string? staleReason)&&
+   staleReason?.Contains("旧按钮状态",StringComparison.Ordinal)==true,
+   "扫描后旧卡片的启停方向不得按过期 MOD 状态进入预览");
+  var staleFolder=solo with{Folder=Path.Combine(fixture,"removed-mod")};
+  Check(!AtlasNativeToggleAllowed(staleFolder,out string? removedReason)&&
+   removedReason?.Contains("旧按钮状态",StringComparison.Ordinal)==true,
+   "已删除或搬离目录的旧虚拟化行不能继续预览启停");
+  AtlasNativePreviewToggle(staleDirection);
+  Check(toast.Text.Contains("旧按钮状态",StringComparison.Ordinal)&&
+   !busy&&!transactionWriting&&atlasNativePage=="模组库",
+   "点击过期启停按钮只显示刷新提示，不产生文件操作或错误跳页");
   var beforeDetailSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
   beforeDetailSearch.Text="TestSolo";
   Check(atlasNativeModSearchDebounce?.IsEnabled==true,
