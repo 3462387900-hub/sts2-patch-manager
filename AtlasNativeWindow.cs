@@ -2107,6 +2107,21 @@ public partial class MainWindow
   Check(modInventory?.Mods.Count(ModPresentation.IsIndependentPatch)==1&&
    atlasNativePageHost?.Content is ScrollViewer,
    "通用扫描后重新读取独立补丁，原生修复页面可继续使用");
+
+  // A watcher notification invalidates patch conclusions. Scanning the MOD
+  // inventory must not silently recreate those conclusions or replace the
+  // user's active native page. Selection of an unchanged MOD is preserved.
+  string keptFolder=atlasNativeRows.First().Folder;
+  atlasNativeSelectedFolders.Add(keptFolder);
+  report=null;states=[];modInventoryDirty=true;
+  await RefreshAtlasNativeInventoryFromWatchAsync();await WaitForStableInventory();
+  Check(!modInventoryDirty&&modInventory?.Mods.Count==7&&report==null&&states.Count==0,
+   "MOD 自动监控只刷新清单，不触发全局文件扫描或恢复已失效补丁报告");
+  Check(atlasNativePage=="修复中心"&&atlasNativePageHost?.Content is ScrollViewer&&
+   atlasNativeSelectedFolders.Contains(keptFolder)&&atlasNativeRows.Any(row=>
+    row.Folder==keptFolder&&row.IsSelected),
+   "自动刷新保留原生工作区及仍存在的 MOD 选择");
+  atlasNativeSelectedFolders.Clear();
   CloseModWatch();
  }
 
