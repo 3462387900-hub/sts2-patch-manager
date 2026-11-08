@@ -2049,7 +2049,13 @@ public partial class MainWindow
    "详情检查器可以关闭并恢复列表宽度");
 
   var solo=modInventory.Mods.First(x=>x.Id=="TestSolo");
+  var beforeDetailSearch=Descendants<TextBox>(atlasNativePageHost!).Single();
+  beforeDetailSearch.Text="TestSolo";
+  Check(atlasNativeModSearchDebounce?.IsEnabled==true,
+   "进入嵌入式 MOD 详情前有尚未执行的搜索");
   ShowModDetail(solo.Folder);await Idle();
+  Check(atlasNativeModSearchDebounce?.IsEnabled==false,
+   "打开原有 WPF 详情时停止原生搜索计时器");
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is Grid,
    "现有 MOD 完整详情可嵌入 ATLAS 外壳，不切换到旧版主界面");
   var activeDetailContent=atlasNativePageHost?.Content;
@@ -2062,6 +2068,7 @@ public partial class MainWindow
   await Idle();
   Check(ReferenceEquals(Content,atlasNativeRoot)&&atlasNativePageHost?.Content is ScrollViewer,
    "模组库返回后的异步布局稳定");
+  atlasNativeResetModFilters?.Invoke();await Idle();
 
   // Simulate a large installed list in memory. The real fixture/files are
   // untouched; the production card builder and view controls are exercised.
