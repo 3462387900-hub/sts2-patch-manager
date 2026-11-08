@@ -8,11 +8,11 @@
     <Version>0.12.4</Version>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../SpireSupplyStationClient.cs" Link="SpireSupplyStationClient.cs" />
-    <Compile Include="../../SteamDepotManifest.cs" Link="SteamDepotManifest.cs" />
-    <Compile Include="../../SupplyStationContentChecks.cs" Link="SupplyStationContentChecks.cs" />
-    <Compile Include="../../SteamDepotChunkProcessor.cs" Link="SteamDepotChunkProcessor.cs" />
-    <Compile Include="../../SupplyStationModAssembler.cs" Link="SupplyStationModAssembler.cs" />
+    <Compile Include="../../src/Infrastructure/Workshop/SpireSupplyStationClient.cs" Link="SpireSupplyStationClient.cs" />
+    <Compile Include="../../src/Infrastructure/Workshop/SteamDepotManifest.cs" Link="SteamDepotManifest.cs" />
+    <Compile Include="../../src/Tests/SupplyStationContentChecks.cs" Link="SupplyStationContentChecks.cs" />
+    <Compile Include="../../src/Infrastructure/Workshop/SteamDepotChunkProcessor.cs" Link="SteamDepotChunkProcessor.cs" />
+    <Compile Include="../../src/Infrastructure/Workshop/SupplyStationModAssembler.cs" Link="SupplyStationModAssembler.cs" />
     <PackageReference Include="SharpCompress" Version="0.50.7" />
   </ItemGroup>
 </Project>
