@@ -490,7 +490,10 @@ public partial class MainWindow
   int watchVersion=modChangeVersion;
   string? recoveryNotice=null;
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
-  if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
+  // Native dashboards own their navigation; a background scan must never
+  // render a legacy MOD page over the user's ATLAS destination.
+  if((!UiThemes.IsAtlasNative||atlasNativeRoot==null||atlasNativeEmbeddedWorkflow)&&
+     (page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
    var inventory=await Task.Run(()=>ModManager.Scan(root));
@@ -563,22 +566,25 @@ public partial class MainWindow
    busy=false;
    if(recoveryNotice!=null&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
     toast.Text=recoveryNotice;
-   if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
-   else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
+   if(!UiThemes.IsAtlasNative||atlasNativeRoot==null||atlasNativeEmbeddedWorkflow)
    {
-    string folder=currentVisit.Key["mod:".Length..];
-    if(modInventory?.Mods.Any(m=>m.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
+    if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
+    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
     {
-     string detailToast=toast.Text;
-     ShowModDetail(folder);
-     toast.Text=detailToast;
+     string folder=currentVisit.Key["mod:".Length..];
+     if(modInventory?.Mods.Any(m=>m.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
+     {
+      string detailToast=toast.Text;
+      ShowModDetail(folder);
+      toast.Text=detailToast;
+     }
+     else ShowMods();
     }
-    else ShowMods();
+    else if(page=="模组管理"&&currentVisit?.Key=="mod-dependencies")ShowDependencyGraph();
+    else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
+    else if(page=="更新中心")ShowModUpdatesCenter();
+    else if(page=="总览")ShowOverview();
    }
-   else if(page=="模组管理"&&currentVisit?.Key=="mod-dependencies")ShowDependencyGraph();
-   else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
-   else if(page=="更新中心")ShowModUpdatesCenter();
-   else if(page=="总览")ShowOverview();
    if(UiThemes.IsAtlasNative&&atlasNativeRoot!=null)RenderAtlasNative();
   }
  }
