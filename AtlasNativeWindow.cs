@@ -321,7 +321,8 @@ public partial class MainWindow
   // detail page is embedded. Refresh counts/header, not the user's active workflow.
   if(atlasNativeEmbeddedWorkflow&&atlasNativePageHost.Content is Grid)
   {
-   RenderAtlasNativeInspector();
+   // SetPage already closes its inspector; do not reopen a stale sidebar over
+   // the user's active confirmation or detailed workflow.
    return;
   }
   atlasNativePageHost.Content=atlasNativePage switch{
