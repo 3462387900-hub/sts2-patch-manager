@@ -1276,6 +1276,12 @@ public partial class MainWindow
    return AtlasScroll(root);
   }
 
+  // Initialize captured controls before wiring a timer that invokes
+  // RenderResults(); otherwise C# definite assignment rejects the callback.
+  var resultsHost=new ContentControl();
+  var topPager=new ContentControl();
+  var bottomPager=new ContentControl();
+  var resultSummary=AtlasText("",11,AtlasMuted);
   atlasNativeUpdateSearchDebounce?.Stop();
   var updateDebounce=new DispatcherTimer(DispatcherPriority.Background){
    Interval=TimeSpan.FromMilliseconds(180)
@@ -1286,10 +1292,6 @@ public partial class MainWindow
    if(atlasNativePage=="更新中心"&&ReferenceEquals(atlasNativeUpdateSearchDebounce,updateDebounce))
     RenderResults();
   };
-  var resultsHost=new ContentControl();
-  var topPager=new ContentControl();
-  var bottomPager=new ContentControl();
-  var resultSummary=AtlasText("",11,AtlasMuted);
   var filters=new WrapPanel{Margin=new Thickness(0,10,0,7)};
   var filterButtons=new Dictionary<string,Button>(StringComparer.Ordinal);
   foreach(string filter in new[]{"全部","有更新","GitHub","Workshop"})
