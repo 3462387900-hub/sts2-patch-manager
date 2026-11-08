@@ -1785,6 +1785,9 @@ public partial class MainWindow
    "模组库返回后的异步布局稳定");
 
   AtlasNativeNavigate("修复中心");await WaitForStableInventory();
+  // FileSystemWatcher may settle after the page was constructed. Render the
+  // settled inventory through the real production path before inspecting controls.
+  RenderAtlasNative();await Idle();
   var localPatches=modInventory!.Mods.Where(ModPresentation.IsIndependentPatch).ToArray();
   Check(localPatches.Length==1&&atlasNativePageHost?.Content is ScrollViewer,
    "修复中心只展示独立补丁，不混入普通 MOD");
