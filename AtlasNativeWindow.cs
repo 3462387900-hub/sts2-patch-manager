@@ -2007,9 +2007,18 @@ public partial class MainWindow
   var wideGridButton=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="库视图");
   wideGridButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,wideGridButton));await Idle();
   var wideCards=atlasNativeResultsHost?.Content as WrapPanel;
-  Check(wideCards!=null&&wideCards.ActualWidth>1100&&
-   AtlasNativeCardColumns(wideCards.ActualWidth,315)>=3,
-   "1540px 桌面窗口展示至少三列原生 MOD 卡片");
+  // Hosted CI desktops may clamp a 1540px window to their virtual screen.
+  // Assert real measured layout separately from the 1540px column algorithm.
+  Check(AtlasNativeCardColumns(1450,315)>=4,
+   "宽桌面视口计算至少四列 MOD 卡片");
+  double wideAvailable=wideCards?.ActualWidth??0;
+  int wideCount=wideCards?.Children.OfType<Border>().Count()??0;
+  int wideColumns=Math.Min(wideCount,AtlasNativeCardColumns(wideAvailable,315));
+  double cardWidth=wideColumns>0?Math.Floor((wideAvailable-wideColumns*13)/wideColumns):0;
+  Check(wideCards!=null&&wideAvailable>500&&wideCount==6&&
+   wideCards.Children.OfType<Border>().All(card=>Math.Abs(card.Width-cardWidth)<1),
+   "请求 1540px 时卡片跟随实际视口宽度适配（虚拟屏幕可能限制窗口）；actual="+
+   wideAvailable+"; root="+atlasNativeRoot?.ActualWidth);
   await Shot("14-ATLAS-宽窗口模组库");
   Width=oldWidth;Height=oldHeight;await Idle();
 
