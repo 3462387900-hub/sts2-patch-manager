@@ -609,6 +609,7 @@ public partial class MainWindow
    Interval=TimeSpan.FromMilliseconds(180)
   };
   atlasNativeModSearchDebounce=searchDebounce;
+  bool resettingFilters=false;
   searchDebounce.Tick+=(_,_)=>{
    searchDebounce.Stop();
    if(atlasNativePage=="模组库"&&ReferenceEquals(atlasNativeModSearchDebounce,searchDebounce))
@@ -631,18 +632,24 @@ public partial class MainWindow
    // Keep the logical filter current immediately; defer expensive WPF cards.
    atlasNativeQuery=search.Text;atlasNativeGridPage=0;
    searchHint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
-   searchDebounce.Stop();searchDebounce.Start();
+   if(!resettingFilters){searchDebounce.Stop();searchDebounce.Start();}
   };
   toolbar.Children.Add(searchHost);
 
   var stateCombo=AtlasCombo(["全部","已启用","已停用","有更新"],atlasNativeStateFilter);
   stateCombo.Width=112;stateCombo.Margin=new Thickness(8,0,0,0);
-  stateCombo.SelectionChanged+=(_,_)=>{atlasNativeStateFilter=stateCombo.SelectedItem?.ToString()??"全部";atlasNativeGridPage=0;RenderAtlasNativeModResults();};
+  stateCombo.SelectionChanged+=(_,_)=>{
+   atlasNativeStateFilter=stateCombo.SelectedItem?.ToString()??"全部";atlasNativeGridPage=0;
+   if(!resettingFilters){searchDebounce.Stop();RenderAtlasNativeModResults();}
+  };
   toolbar.Children.Add(stateCombo);
 
   var sourceCombo=AtlasCombo(["全部来源","Workshop","GitHub","本地"],atlasNativeSourceFilter=="全部"?"全部来源":atlasNativeSourceFilter);
   sourceCombo.Width=120;sourceCombo.Margin=new Thickness(8,0,0,0);
-  sourceCombo.SelectionChanged+=(_,_)=>{atlasNativeSourceFilter=sourceCombo.SelectedItem?.ToString() switch{"全部来源"=>"全部",var x=>x??"全部"};atlasNativeGridPage=0;RenderAtlasNativeModResults();};
+  sourceCombo.SelectionChanged+=(_,_)=>{
+   atlasNativeSourceFilter=sourceCombo.SelectedItem?.ToString() switch{"全部来源"=>"全部",var x=>x??"全部"};atlasNativeGridPage=0;
+   if(!resettingFilters){searchDebounce.Stop();RenderAtlasNativeModResults();}
+  };
   toolbar.Children.Add(sourceCombo);
 
   var unbound=new CheckBox{
@@ -651,13 +658,22 @@ public partial class MainWindow
    Foreground=AtlasMuted,FontSize=12,VerticalAlignment=VerticalAlignment.Center,
    Margin=new Thickness(12,0,8,0),Cursor=Cursors.Hand
   };
-  unbound.Checked+=(_,_)=>{atlasNativeUnboundOnly=true;atlasNativeGridPage=0;RenderAtlasNativeModResults();};
-  unbound.Unchecked+=(_,_)=>{atlasNativeUnboundOnly=false;atlasNativeGridPage=0;RenderAtlasNativeModResults();};
+  unbound.Checked+=(_,_)=>{
+   atlasNativeUnboundOnly=true;atlasNativeGridPage=0;
+   if(!resettingFilters){searchDebounce.Stop();RenderAtlasNativeModResults();}
+  };
+  unbound.Unchecked+=(_,_)=>{
+   atlasNativeUnboundOnly=false;atlasNativeGridPage=0;
+   if(!resettingFilters){searchDebounce.Stop();RenderAtlasNativeModResults();}
+  };
   toolbar.Children.Add(unbound);
 
   var sort=AtlasCombo(["名称","有更新优先"],atlasNativeSort);
   sort.Width=118;sort.Margin=new Thickness(8,0,0,0);
-  sort.SelectionChanged+=(_,_)=>{atlasNativeSort=sort.SelectedItem?.ToString()??"名称";atlasNativeGridPage=0;RenderAtlasNativeModResults();};
+  sort.SelectionChanged+=(_,_)=>{
+   atlasNativeSort=sort.SelectedItem?.ToString()??"名称";atlasNativeGridPage=0;
+   if(!resettingFilters){searchDebounce.Stop();RenderAtlasNativeModResults();}
+  };
   toolbar.Children.Add(sort);
 
   var views=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(10,0,0,0)};
@@ -673,13 +689,17 @@ public partial class MainWindow
   // discards keyboard focus and the current ScrollViewer position.
   atlasNativeResetModFilters=()=>{
    searchDebounce.Stop();
-   atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
-   atlasNativeUnboundOnly=false;atlasNativeSort="名称";atlasNativeGridPage=0;
-   if(search.Text.Length>0)search.Text="";
-   stateCombo.SelectedItem="全部";
-   sourceCombo.SelectedItem="全部来源";
-   unbound.IsChecked=false;
-   sort.SelectedItem="名称";
+   resettingFilters=true;
+   try{
+    atlasNativeQuery="";atlasNativeStateFilter="全部";atlasNativeSourceFilter="全部";
+    atlasNativeUnboundOnly=false;atlasNativeSort="名称";atlasNativeGridPage=0;
+    if(search.Text.Length>0)search.Text="";
+    stateCombo.SelectedItem="全部";
+    sourceCombo.SelectedItem="全部来源";
+    unbound.IsChecked=false;
+    sort.SelectedItem="名称";
+   }
+   finally{resettingFilters=false;searchDebounce.Stop();}
    RenderAtlasNativeModResults();
   };
   var reset=AtlasButton("清除筛选",()=>atlasNativeResetModFilters?.Invoke(),"quiet");
@@ -1019,12 +1039,16 @@ public partial class MainWindow
 
  void SelectAllAtlasVisibleMods()
  {
+  // Resolve a pending search before selecting: otherwise the visible result
+  // set and the selected set can disagree for the debounce interval.
+  atlasNativeModSearchDebounce?.Stop();
   foreach(var row in GetFilteredAtlasNativeRows())row.IsSelected=true;
   UpdateAtlasNativeSelection();RenderAtlasNativeModResults();
  }
 
  void ClearAtlasNativeSelection()
  {
+  atlasNativeModSearchDebounce?.Stop();
   foreach(var row in atlasNativeRows)row.IsSelected=false;
   atlasNativeSelectedFolders.Clear();UpdateAtlasNativeSelection();RenderAtlasNativeModResults();
  }
@@ -1928,8 +1952,26 @@ public partial class MainWindow
   var clearMod=Descendants<Button>(atlasNativePageHost!).First(x=>x.Content?.ToString()=="清除筛选");
   clearMod.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,clearMod));await Idle();
   Check(atlasNativeQuery==""&&nativeModSearch.Text==""&&GetFilteredAtlasNativeRows().Length==6&&
-   ReferenceEquals(atlasNativePageHost?.Content,currentLibraryPage),
-   "原生清除筛选恢复全部 MOD，不重建页面或丢失输入组件");
+   ReferenceEquals(atlasNativePageHost?.Content,currentLibraryPage)&&
+   atlasNativeModSearchDebounce?.IsEnabled==false,
+   "原生清除筛选只应用最终结果，不保留延迟重绘或丢失输入组件");
+  // Clicking select-all before debounce fires must select the newly typed
+  // query, not the old six visible rows.
+  nativeModSearch.Text="TestSolo";
+  Check(atlasNativeModSearchDebounce?.IsEnabled==true,
+   "快速批量操作测试具有一个未处理的搜索事件");
+  var selectNow=Descendants<Button>(atlasNativePageHost!).First(button=>
+   button.Content?.ToString()=="全选当前结果");
+  selectNow.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,selectNow));await Idle();
+  Check(atlasNativeVisibleRowsCount==1&&atlasNativeSelectedFolders.Count==1&&
+   atlasNativeSelectedFolders.Contains(GetFilteredAtlasNativeRows().Single().Folder)&&
+   atlasNativeModSearchDebounce?.IsEnabled==false,
+   "搜索未结束时立即全选，会先应用当前输入再选择对应的唯一 MOD");
+  ClearAtlasNativeSelection();
+  clearMod.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,clearMod));await Idle();
+  Check(atlasNativeSelectedFolders.Count==0&&atlasNativeQuery==""&&
+   atlasNativeModSearchDebounce?.IsEnabled==false,
+   "取消全选并重置搜索后没有延迟重选或额外渲染");
   nativeModSearch.Text="T";nativeModSearch.Text="Te";nativeModSearch.Text="TestSolo";
   Check(atlasNativeModSearchDebounce?.IsEnabled==true&&atlasNativeQuery=="TestSolo"&&
    atlasNativeResultsSummary?.Text.StartsWith("显示 6 / ",StringComparison.Ordinal)==true,
