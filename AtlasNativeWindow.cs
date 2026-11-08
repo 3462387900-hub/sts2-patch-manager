@@ -303,6 +303,36 @@ public partial class MainWindow
   panel.SizeChanged+=(_,_)=>Fit();
  }
 
+ // Use WPF device-independent viewport units rather than a hard 640px cap.
+ // The outer page scrolls in small windows; taller displays show more virtual
+ // DataGrid rows without allocating the full unfiltered MOD list as controls.
+ static double AtlasNativeListViewportHeight(double pageHeight)
+ {
+  if(!double.IsFinite(pageHeight)||pageHeight<=0)return 500;
+  return Math.Max(340,Math.Floor(pageHeight-235));
+ }
+
+ void AtlasNativeFitListToViewport(DataGrid grid)
+ {
+  var host=atlasNativePageHost;
+  void Fit()
+  {
+   double pageHeight=host?.ActualHeight??0;
+   if(pageHeight<=0)pageHeight=ActualHeight;
+   double expected=AtlasNativeListViewportHeight(pageHeight);
+   if(Math.Abs(grid.Height-expected)>0.5)grid.Height=expected;
+  }
+  SizeChangedEventHandler onSizeChanged=(_,_)=>Fit();
+  grid.Loaded+=(_,_)=>{
+   if(host!=null)host.SizeChanged+=onSizeChanged;
+   Fit();
+  };
+  grid.Unloaded+=(_,_)=>{
+   if(host!=null)host.SizeChanged-=onSizeChanged;
+  };
+  Fit();
+ }
+
  void RenderAtlasNative()
  {
   if(atlasNativeRoot==null||atlasNativePageHost==null)return;
@@ -954,7 +984,8 @@ public partial class MainWindow
  DataGrid BuildAtlasNativeDataGrid(AtlasNativeModRow[] rows)
  {
   var grid=new DataGrid{
-   ItemsSource=rows,Height=Math.Max(340,Math.Min(640,ActualHeight>0?ActualHeight-285:500)),
+   ItemsSource=rows,Height=AtlasNativeListViewportHeight(
+    atlasNativePageHost?.ActualHeight>0?atlasNativePageHost.ActualHeight:ActualHeight),
    AutoGenerateColumns=false,CanUserAddRows=false,CanUserDeleteRows=false,
    IsReadOnly=true,SelectionMode=DataGridSelectionMode.Single,SelectionUnit=DataGridSelectionUnit.FullRow,
    HeadersVisibility=DataGridHeadersVisibility.Column,GridLinesVisibility=DataGridGridLinesVisibility.None,
@@ -1029,6 +1060,7 @@ public partial class MainWindow
   actionPanel.AppendChild(toggleButton);
   grid.Columns.Add(new DataGridTemplateColumn{Header="操作",Width=155,CellTemplate=new DataTemplate{VisualTree=actionPanel}});
   grid.SelectionChanged+=(_,_)=>{if(grid.SelectedItem is AtlasNativeModRow row)ShowAtlasNativeModInspector(row);};
+  AtlasNativeFitListToViewport(grid);
   return grid;
  }
 
@@ -1943,6 +1975,15 @@ public partial class MainWindow
    "模组库读取真实扫描模型并将独立补丁从普通 MOD 中分离");
   Check(atlasNativeResultsHost?.Content is DataGrid,
    "默认专业列表使用原生 DataGrid");
+  Check(AtlasNativeListViewportHeight(720)>=340&&
+   AtlasNativeListViewportHeight(1200)>640&&
+   AtlasNativeListViewportHeight(1800)>1300&&
+   AtlasNativeListViewportHeight(double.NaN)==500,
+   "列表高度随可用视口扩展，宽屏不再卡在 640，异常尺寸使用安全回退");
+  if(atlasNativeResultsHost?.Content is DataGrid firstList&&
+     atlasNativePageHost!.ActualHeight>0)
+   Check(Math.Abs(firstList.Height-AtlasNativeListViewportHeight(atlasNativePageHost.ActualHeight))<2,
+    "初始原生列表高度与实际内容视口一致");
   Check(!ShouldRenderLegacyModAfterWatch(),
    "原生模组库不会被 MOD 目录监控的旧版 ShowMods 回调替换");
   var currentLibraryPage=atlasNativePageHost?.Content;
@@ -2375,7 +2416,15 @@ public partial class MainWindow
    "请求 1540px 时卡片跟随实际视口宽度适配（虚拟屏幕可能限制窗口）；actual="+
    wideAvailable+"; root="+atlasNativeRoot?.ActualWidth);
   await Shot("14-ATLAS-宽窗口模组库");
+  var desktopListMode=Descendants<Button>(atlasNativePageHost!).Single(x=>x.Content?.ToString()=="列表");
+  desktopListMode.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,desktopListMode));await Idle();
+  Check(atlasNativeResultsHost?.Content is DataGrid desktopGrid&&
+   Math.Abs(desktopGrid.Height-AtlasNativeListViewportHeight(atlasNativePageHost!.ActualHeight))<2,
+   "宽窗口列表随当前页面可用高度重算，不使用固定 640px 上限");
   Width=oldWidth;Height=oldHeight;await Idle();
+  Check(atlasNativeResultsHost?.Content is DataGrid resizedGrid&&
+   Math.Abs(resizedGrid.Height-AtlasNativeListViewportHeight(atlasNativePageHost!.ActualHeight))<2,
+   "窗口恢复后同一 DataGrid 自适应更新高度，无需重建列表");
 
   ChangeUiTheme(UiThemes.Workspace);
   Check(ReferenceEquals(Content,shell)&&UiThemes.IsWorkspace,
