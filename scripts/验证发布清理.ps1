@@ -32,6 +32,25 @@ try {
  $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $app 'manager-files.json') -Encoding UTF8
  try { & (Join-Path $PSScriptRoot '创建干净发布包.ps1') -ApplicationDirectory $app -ArchivePath (Join-Path $work 'bad.zip') -Version '9.9.9'; throw 'Unsafe manifest path accepted.' }
  catch { if ($_.Exception.Message -eq 'Unsafe manifest path accepted.') { throw } }
+ $layoutScript = Join-Path $PSScriptRoot '整理玩家发布目录.ps1'
+ if (Test-Path -LiteralPath $layoutScript -PathType Leaf) {
+  $layout = Join-Path $work 'portable-layout'
+  [IO.Directory]::CreateDirectory($layout) | Out-Null
+  [IO.File]::WriteAllText((Join-Path $layout 'SpirePatch.exe'),'apphost fixture')
+  $documentNames = @('使用说明.md','发布指南.md','补丁发布指南.md','本版更新内容.md','鸣谢与来源.md','THIRD-PARTY-NOTICES.md')
+  foreach ($name in $documentNames) {
+   [IO.File]::WriteAllText((Join-Path $layout $name),('fixture '+$name))
+  }
+  & $layoutScript -ApplicationDirectory $layout
+  $originalHash = (Get-FileHash -LiteralPath (Join-Path $layout 'SpirePatch.exe') -Algorithm SHA256).Hash
+  $launcherHash = (Get-FileHash -LiteralPath (Join-Path $layout '00-启动尖塔修补站.exe') -Algorithm SHA256).Hash
+  if ($originalHash -ne $launcherHash) { throw 'Chinese launcher does not match the original apphost.' }
+  foreach ($name in $documentNames) {
+   if (Test-Path -LiteralPath (Join-Path $layout $name)) { throw ('Document remained in the application root: '+$name) }
+   if (!(Test-Path -LiteralPath (Join-Path $layout ('使用说明/'+$name)) -PathType Leaf)) { throw ('Grouped document is missing: '+$name) }
+  }
+  Write-Output 'PASS portable release layout preserves both launch paths and groups documentation.'
+ }
  Write-Output 'PASS clean release packaging excludes data, unlisted files and rejects unsafe manifests.'
 }finally{
  if ([IO.Directory]::Exists($work)) { [IO.Directory]::Delete($work,$true) }
