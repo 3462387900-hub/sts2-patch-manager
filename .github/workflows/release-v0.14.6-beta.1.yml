@@ -51,20 +51,8 @@ jobs:
           if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) {
             throw 'Portable Chinese shortcut is missing.'
           }
-          $shell = New-Object -ComObject WScript.Shell
-          try {
-            $link = $shell.CreateShortcut($shortcut)
-            try {
-              if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath((Join-Path $app 'SpirePatch.exe')) -or
-                  [IO.Path]::GetFullPath($link.WorkingDirectory) -ne [IO.Path]::GetFullPath($app)) {
-                throw 'Portable Chinese shortcut target or working directory is invalid.'
-              }
-            } finally {
-              if ([Runtime.InteropServices.Marshal]::IsComObject($link)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) }
-            }
-          } finally {
-            if ([Runtime.InteropServices.Marshal]::IsComObject($shell)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) }
-          }
+          # The organizer verifies the shortcut through an ASCII temporary path,
+          # then moves it to the Unicode filename with .NET file APIs.
           ./scripts/生成程序清单.ps1 -Directory $app
           $manifest = Get-Content -LiteralPath (Join-Path $app 'manager-files.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $managedPaths = @($manifest.Files.PSObject.Properties.Name)
