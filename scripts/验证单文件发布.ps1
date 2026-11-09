@@ -32,7 +32,7 @@ $publishProperties = @(
     '-p:PublishSingleFile=true',
     '-p:IncludeNativeLibrariesForSelfExtract=true',
     '-p:EnableCompressionInSingleFile=false',
-    '-p:SatelliteResourceLanguages=zh-Hans;zh-Hant',
+    '-p:SatelliteResourceLanguages=zh-Hans%3Bzh-Hant',
     '-p:DebugType=None'
 )
 & dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64 --self-contained true @publishProperties -o $app
