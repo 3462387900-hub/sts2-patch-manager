@@ -34,7 +34,7 @@ try {
  catch { if ($_.Exception.Message -eq 'Unsafe manifest path accepted.') { throw } }
  $layoutScript = Join-Path $PSScriptRoot '整理玩家发布目录.ps1'
  if (Test-Path -LiteralPath $layoutScript -PathType Leaf) {
-  $layout = Join-Path $work 'portable-layout'
+  $layout = Join-Path $work '尖塔修补站测试目录'
   [IO.Directory]::CreateDirectory($layout) | Out-Null
   [IO.File]::WriteAllText((Join-Path $layout 'SpirePatch.exe'),'apphost fixture')
   [IO.Directory]::CreateDirectory((Join-Path $layout 'third_party')) | Out-Null
@@ -75,7 +75,7 @@ try {
   # Running the organizer twice must be safe and must not duplicate or damage the shortcut.
   & $layoutScript -ApplicationDirectory $layout
 
-  $conflict = Join-Path $work 'portable-layout-conflict'
+  $conflict = Join-Path $work '快捷方式冲突测试目录'
   [IO.Directory]::CreateDirectory($conflict) | Out-Null
   [IO.File]::WriteAllText((Join-Path $conflict 'SpirePatch.exe'),'apphost fixture')
   $wrongTarget = Join-Path $work 'wrong-target.exe'
