@@ -1,9 +1,12 @@
 name: Publish v0.14.7 Beta 1 (tidy portable layout)
 on:
+  # Publish only when this dedicated release workflow is deliberately changed,
+  # or when manually dispatched for a later retry.
   push:
     branches: [feature/atlas-wpf-native-ui]
     paths:
       - '.github/workflows/release-v0.14.7-beta.1.yml'
+  workflow_dispatch:
 permissions:
   contents: write
 concurrency:
