@@ -49,9 +49,11 @@ try {
   $shortcut = Join-Path $layout '00-启动尖塔修补站.lnk'
   if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) { throw 'Chinese Windows shortcut was not created.' }
   if (Test-Path -LiteralPath (Join-Path $layout '00-启动尖塔修补站.exe')) { throw 'A duplicate executable launcher must not be created.' }
+  $shortcutProbe = Join-Path $work 'portable-layout-shortcut-inspect.lnk'
+  [IO.File]::Copy($shortcut, $shortcutProbe, $false)
   $shell = New-Object -ComObject WScript.Shell
   try {
-   $link = $shell.CreateShortcut($shortcut)
+   $link = $shell.CreateShortcut($shortcutProbe)
    try {
     if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath((Join-Path $layout 'SpirePatch.exe'))) { throw 'Chinese shortcut target is incorrect.' }
     if ([IO.Path]::GetFullPath($link.WorkingDirectory) -ne [IO.Path]::GetFullPath($layout)) { throw 'Chinese shortcut working directory is incorrect.' }
@@ -61,6 +63,7 @@ try {
   } finally {
    if ([Runtime.InteropServices.Marshal]::IsComObject($shell)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) }
   }
+  [IO.File]::Delete($shortcutProbe)
   foreach ($name in $documentNames) {
    if (Test-Path -LiteralPath (Join-Path $layout $name)) { throw ('Document remained in the application root: '+$name) }
    if (!(Test-Path -LiteralPath (Join-Path $layout ('使用说明/'+$name)) -PathType Leaf)) { throw ('Grouped document is missing: '+$name) }
@@ -78,20 +81,24 @@ try {
   $wrongTarget = Join-Path $work 'wrong-target.exe'
   [IO.File]::WriteAllText($wrongTarget,'do not overwrite shortcut')
   $conflictShortcut = Join-Path $conflict '00-启动尖塔修补站.lnk'
+  $conflictSource = Join-Path $work 'conflict-source.lnk'
   $shell = New-Object -ComObject WScript.Shell
   try {
-   $link = $shell.CreateShortcut($conflictShortcut)
+   $link = $shell.CreateShortcut($conflictSource)
    try { $link.TargetPath = $wrongTarget; $link.WorkingDirectory = $work; $link.Save() }
    finally { if ([Runtime.InteropServices.Marshal]::IsComObject($link)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) } }
   } finally {
    if ([Runtime.InteropServices.Marshal]::IsComObject($shell)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) }
   }
+  [IO.File]::Move($conflictSource, $conflictShortcut)
   $rejected = $false
   try { & $layoutScript -ApplicationDirectory $conflict } catch { $rejected = $true }
   if (!$rejected) { throw 'Organizer overwrote a pre-existing shortcut with a different target.' }
+  $conflictInspect = Join-Path $work 'conflict-inspect.lnk'
+  [IO.File]::Copy($conflictShortcut, $conflictInspect, $false)
   $shell = New-Object -ComObject WScript.Shell
   try {
-   $link = $shell.CreateShortcut($conflictShortcut)
+   $link = $shell.CreateShortcut($conflictInspect)
    try {
     if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath($wrongTarget)) { throw 'Conflicting shortcut was modified.' }
    } finally {
