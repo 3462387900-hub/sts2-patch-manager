@@ -17,6 +17,29 @@ public static class AutoUpdateChecks
   string archive=folder+".zip";using(var zip=ZipFile.Open(archive,ZipArchiveMode.Create)){foreach(var file in Directory.EnumerateFiles(folder))zip.CreateEntryFromFile(file,"尖塔修补站-v1.1.0/"+Path.GetFileName(file));}
   return(Release(archive),archive);
  }
+ static (ManagerRelease Release,string Zip) TidyPackage(string parent)
+ {
+  string folder=Path.Combine(parent,"整洁目录版本 "+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+  foreach(var file in RuntimeFiles)File.WriteAllText(Path.Combine(folder,file),"new:"+file);
+  var names=RuntimeFiles.ToList();
+  var docs=new[]{"00-启动尖塔修补站.lnk","使用说明/使用说明.md","使用说明/本版更新内容.md","使用说明/发布指南.md","使用说明/补丁发布指南.md","使用说明/鸣谢与来源.md","使用说明/THIRD-PARTY-NOTICES.md"};
+  foreach(var relative in docs)
+  {
+   string path=Path.Combine(folder,relative.Replace('/',Path.DirectorySeparatorChar));
+   Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+   File.WriteAllText(path,"tidy release fixture: "+relative);
+   names.Add(relative);
+  }
+  Manifest(folder,"1.1.0",names);
+  string archive=folder+".zip";
+  using(var zip=ZipFile.Open(archive,ZipArchiveMode.Create))
+   foreach(var file in Directory.EnumerateFiles(folder,"*",SearchOption.AllDirectories))
+   {
+    string relative=Path.GetRelativePath(folder,file).Replace('\\','/');
+    zip.CreateEntryFromFile(file,"尖塔修补站-v1.1.0/"+relative);
+   }
+  return(Release(archive),archive);
+ }
  static ManagerRelease Release(string zip)=>new("1.1.0","isolated automatic updater fixture",DateTimeOffset.UtcNow,"SpirePatch-v1.1.0-win-x64.zip",new FileInfo(zip).Length,Catalog.Hash(zip),ManagerUpdates.RepositoryUrl+"/releases/download/v1.1.0/SpirePatch-v1.1.0-win-x64.zip",ManagerUpdates.Api+"/releases/assets/1",ManagerUpdates.RepositoryUrl+"/releases/tag/v1.1.0");
  static Dictionary<string,string> Snapshot(string root)=>Directory.EnumerateFiles(root).ToDictionary(f=>Path.GetFileName(f)!,f=>Catalog.Hash(f));
  static bool Same(string root,Dictionary<string,string> before){var now=Snapshot(root);return before.Count==now.Count&&before.All(x=>now.GetValueOrDefault(x.Key)==x.Value);}
@@ -68,6 +91,32 @@ public static class AutoUpdateChecks
   catch(InvalidDataException){}
   Check(Same(betaRoot,betaOriginal),
    "same-core Beta cannot overwrite installed application");
+
+  // Verify the real player-facing directory transition: old root-level documents
+  // are removed, nested documentation and the Chinese shortcut are installed, and rollback restores the old layout.
+  root=Fixture(parent);
+  File.WriteAllText(Path.Combine(root,"使用说明.md"),"old root readme");
+  File.WriteAllText(Path.Combine(root,"发布指南.md"),"old root guide");
+  Manifest(root,"1.0.0",RuntimeFiles.Append("retired.dll").Append("使用说明.md").Append("发布指南.md"));
+  var tidyOriginal=Snapshot(root);
+  var tidyPackage=TidyPackage(parent);
+  var tidyPlan=await ManagerAutoUpdate.PrepareAsync(tidyPackage.Release,tidyPackage.Zip,root,fixture:true);
+  var tidyRun=await Run(tidyPlan);
+  Check(tidyRun.Code==0&&tidyRun.Status=="complete"&&
+   !File.Exists(Path.Combine(root,"使用说明.md"))&&
+   File.Exists(Path.Combine(root,"使用说明","使用说明.md"))&&
+   File.Exists(Path.Combine(root,"使用说明","本版更新内容.md"))&&
+   File.Exists(Path.Combine(root,"00-启动尖塔修补站.lnk")),
+   "automatic update migrates the old player directory to grouped documentation and installs the Chinese shortcut");
+  Check(File.ReadAllText(Path.Combine(root,"数据","偏好.json"))=="user preference"&&
+   File.ReadAllText(Path.Combine(root,"个人备注.txt"))=="keep me",
+   "tidy directory migration preserves user data and unrelated root files");
+  var tidyRestored=await Run(tidyPlan,recover:true);
+  Check(tidyRestored.Code==0&&tidyRestored.Status=="restored"&&Same(root,tidyOriginal)&&
+   !Directory.Exists(Path.Combine(root,"使用说明"))&&
+   File.ReadAllText(Path.Combine(root,"使用说明.md"))=="old root readme"&&
+   File.ReadAllText(Path.Combine(root,"发布指南.md"))=="old root guide",
+   "rollback restores the pre-tidy player directory byte-for-byte and removes newly added grouped files");
 
   var recovered=await Run(plan,recover:true);Check(recovered.Code==0&&recovered.Status=="restored"&&Same(root,original),"recovery restores byte-exact previous application including retired files");
   root=Fixture(parent);original=Snapshot(root);plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);run=await Run(plan,failAfter:2);Check(run.Code!=0&&run.Status=="restored"&&Same(root,original),"interrupted file replacement automatically restores previous application");
