@@ -82,8 +82,15 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot 'README.md') -Destination (Join-Pa
 foreach ($name in @('发布指南.md', '补丁发布指南.md', 'THIRD-PARTY-NOTICES.md', '鸣谢与来源.md')) {
     Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination $app
 }
-$notes = Join-Path $sourceRoot ('releases/v' + $version + '.md')
-if (!(Test-Path -LiteralPath $notes)) { throw 'Release notes are missing.' }
+$releaseVersion = [string]$project.Project.PropertyGroup.InformationalVersion
+if ([string]::IsNullOrWhiteSpace($releaseVersion)) { $releaseVersion = $version }
+$releaseVersion = $releaseVersion.Split('+')[0]
+$notesCandidates = @(
+    (Join-Path $sourceRoot ('releases/v' + $releaseVersion + '.md')),
+    (Join-Path $sourceRoot ('releases/v' + $version + '.md'))
+)
+$notes = $notesCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if ($null -eq $notes) { throw ('Release notes are missing for ' + $releaseVersion + '.') }
 Copy-Item -LiteralPath $notes -Destination (Join-Path $app '本版更新内容.md')
 $thirdParty = Join-Path $app 'third_party'
 New-Item -ItemType Directory -Path $thirdParty -Force | Out-Null
