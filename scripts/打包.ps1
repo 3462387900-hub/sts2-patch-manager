@@ -64,7 +64,15 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot 'third_party/SharpCompress-LICENSE
 $notes = Join-Path $sourceRoot ('releases/v' + $version + '.md')
 if (!(Test-Path -LiteralPath $notes)) { throw '缺少本版本发布说明。' }
 Copy-Item -LiteralPath $notes -Destination (Join-Path $appFolder '本版更新内容.md')
+# Apply the same tidy player-facing layout to every normal release package.
+& (Join-Path $PSScriptRoot '整理玩家发布目录.ps1') -ApplicationDirectory $appFolder
 & (Join-Path $PSScriptRoot '生成程序清单.ps1') -Directory $appFolder
+$manifest = Get-Content -LiteralPath (Join-Path $appFolder 'manager-files.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$managedPaths = @($manifest.Files.PSObject.Properties.Name)
+foreach ($required in @('SpirePatch.exe', '00-启动尖塔修补站.lnk', '使用说明/使用说明.md')) {
+    if ($managedPaths -notcontains $required) { throw ('发布清单缺少整理后的必要文件：' + $required) }
+}
+if ($managedPaths -contains '使用说明.md') { throw '发布根目录仍包含未整理的使用说明文件。' }
 $archive = Join-Path $runRoot ('SpirePatch-v' + $version + '-win-x64.zip')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($appFolder, $archive, [IO.Compression.CompressionLevel]::Optimal, $true)
