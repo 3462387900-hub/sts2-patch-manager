@@ -98,6 +98,14 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot 'third_party/WorkshopAndroidDownlo
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'third_party/SharpCompress-LICENSE.txt') -Destination $thirdParty
 & (Join-Path $PSScriptRoot '整理玩家发布目录.ps1') -ApplicationDirectory $app
 & (Join-Path $PSScriptRoot '生成程序清单.ps1') -Directory $app
+$layoutReport = Join-Path $testRoot 'single-file-layout-self-test.json'
+$layoutProcess = Start-Process -FilePath (Join-Path $app 'SpirePatch.exe') -ArgumentList @('--single-file-layout-self-test', ('"' + $layoutReport + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($layoutProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $layoutReport)) {
+    if (Test-Path -LiteralPath $layoutReport) { Get-Content -LiteralPath $layoutReport | Write-Output }
+    $errorFile = Join-Path $app 'startup-error.txt'
+    if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
+    throw 'Single-file updater manifest and canonical launcher validation failed.'
+}
 
 $baselineItems = @(Get-ChildItem -LiteralPath $baselineApp -Force -Recurse).Count
 $singleItems = @(Get-ChildItem -LiteralPath $app -Force -Recurse).Count
