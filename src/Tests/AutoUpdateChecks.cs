@@ -92,6 +92,10 @@ public static class AutoUpdateChecks
   Check(Same(betaRoot,betaOriginal),
    "same-core Beta cannot overwrite installed application");
 
+  // Preserve the original updater scenario; this additional migration fixture uses separate state.
+  var baselineRoot=root;
+  var baselineOriginal=original;
+  var baselinePlan=plan;
   // Verify the real player-facing directory transition: old root-level documents
   // are removed, nested documentation and the Chinese shortcut are installed, and rollback restores the old layout.
   root=Fixture(parent);
@@ -120,6 +124,9 @@ public static class AutoUpdateChecks
    File.ReadAllText(Path.Combine(root,"发布指南.md"))=="old root guide",
    "rollback restores all previous program files and removes new grouped documents (an empty folder is harmless)");
 
+  root=baselineRoot;
+  original=baselineOriginal;
+  plan=baselinePlan;
   var recovered=await Run(plan,recover:true);Check(recovered.Code==0&&recovered.Status=="restored"&&Same(root,original),"recovery restores byte-exact previous application including retired files");
   root=Fixture(parent);original=Snapshot(root);plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);run=await Run(plan,failAfter:2);Check(run.Code!=0&&run.Status=="restored"&&Same(root,original),"interrupted file replacement automatically restores previous application");
   root=Fixture(parent);original=Snapshot(root);plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);using(var locked=new FileStream(Path.Combine(root,"SpirePatch.dll"),FileMode.Open,FileAccess.Read,FileShare.Read)){run=await Run(plan);Check(run.Code!=0&&run.Status=="restored"&&Same(root,original),"locked application file triggers rollback without forcing another process closed");}
