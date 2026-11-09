@@ -47,13 +47,31 @@ jobs:
           Copy-Item third_party/WorkshopAndroidDownloader-LICENSE.txt (Join-Path $thirdParty 'WorkshopAndroidDownloader-LICENSE.txt')
           Copy-Item third_party/SharpCompress-LICENSE.txt (Join-Path $thirdParty 'SharpCompress-LICENSE.txt')
           ./scripts/整理玩家发布目录.ps1 -ApplicationDirectory $app
-          $chinese = Join-Path $app '00-启动尖塔修补站.exe'
-          if (!(Test-Path -LiteralPath $chinese) -or
-              (Get-FileHash -LiteralPath $chinese -Algorithm SHA256).Hash -ne
-              (Get-FileHash -LiteralPath (Join-Path $app 'SpirePatch.exe') -Algorithm SHA256).Hash) {
-            throw 'Portable Chinese entry differs from the verified apphost.'
+          $shortcut = Join-Path $app '00-启动尖塔修补站.lnk'
+          if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) {
+            throw 'Portable Chinese shortcut is missing.'
+          }
+          $shell = New-Object -ComObject WScript.Shell
+          try {
+            $link = $shell.CreateShortcut($shortcut)
+            try {
+              if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath((Join-Path $app 'SpirePatch.exe')) -or
+                  [IO.Path]::GetFullPath($link.WorkingDirectory) -ne [IO.Path]::GetFullPath($app)) {
+                throw 'Portable Chinese shortcut target or working directory is invalid.'
+              }
+            } finally {
+              if ([Runtime.InteropServices.Marshal]::IsComObject($link)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) }
+            }
+          } finally {
+            if ([Runtime.InteropServices.Marshal]::IsComObject($shell)) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) }
           }
           ./scripts/生成程序清单.ps1 -Directory $app
+          $manifest = Get-Content -LiteralPath (Join-Path $app 'manager-files.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $managedPaths = @($manifest.Files.PSObject.Properties.Name)
+          foreach ($required in @('00-启动尖塔修补站.lnk', '使用说明/使用说明.md')) {
+            if ($managedPaths -notcontains $required) { throw ('Release manifest is missing arranged file: ' + $required) }
+          }
+          if ($managedPaths -contains '使用说明.md') { throw 'A documentation file remains in the release root.' }
           $dir = Join-Path (Get-Location) 'release-output'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           $archive = Join-Path $dir 'SpirePatch-v0.14.6-beta.1-win-x64.zip'
