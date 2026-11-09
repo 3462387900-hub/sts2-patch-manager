@@ -17,7 +17,14 @@ if (!(Test-Path -LiteralPath $original -PathType Leaf)) {
 # WScript.Shell has trouble saving non-ASCII shortcut filenames on some
 # Windows locales. Create/inspect an ASCII temporary link, then move it with
 # .NET's Unicode-safe file APIs to the final Chinese filename.
-$tempShortcut = Join-Path $app ('SpirePatchLauncher-' + [Guid]::NewGuid().ToString('N') + '.lnk')
+$tempRoot = [IO.Path]::GetTempPath()
+if ($tempRoot -match '[^\x00-\x7F]') {
+    $tempRoot = Join-Path $env:WINDIR 'Temp'
+}
+if (!(Test-Path -LiteralPath $tempRoot -PathType Container)) {
+    throw 'No ASCII-compatible temporary directory is available for creating the Windows shortcut.'
+}
+$tempShortcut = Join-Path $tempRoot ('SpirePatchLauncher-' + [Guid]::NewGuid().ToString('N') + '.lnk')
 $shell = New-Object -ComObject WScript.Shell
 try {
     if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
@@ -66,7 +73,9 @@ try {
     }
 
     if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) {
-        [IO.File]::Move($tempShortcut, $shortcut)
+        # Copy instead of move: the system temp folder and portable app folder
+        # may be on different volumes.
+        [IO.File]::Copy($tempShortcut, $shortcut, $false)
     }
 }
 finally {
