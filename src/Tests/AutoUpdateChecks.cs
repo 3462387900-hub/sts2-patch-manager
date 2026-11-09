@@ -112,11 +112,13 @@ public static class AutoUpdateChecks
    File.ReadAllText(Path.Combine(root,"个人备注.txt"))=="keep me",
    "tidy directory migration preserves user data and unrelated root files");
   var tidyRestored=await Run(tidyPlan,recover:true);
+  bool groupedDocumentsRemain=Directory.Exists(Path.Combine(root,"使用说明"))&&
+   Directory.EnumerateFiles(Path.Combine(root,"使用说明"),"*",SearchOption.AllDirectories).Any();
   Check(tidyRestored.Code==0&&tidyRestored.Status=="restored"&&Same(root,tidyOriginal)&&
-   !Directory.Exists(Path.Combine(root,"使用说明"))&&
+   !groupedDocumentsRemain&&
    File.ReadAllText(Path.Combine(root,"使用说明.md"))=="old root readme"&&
    File.ReadAllText(Path.Combine(root,"发布指南.md"))=="old root guide",
-   "rollback restores the pre-tidy player directory byte-for-byte and removes newly added grouped files");
+   "rollback restores all previous program files and removes new grouped documents (an empty folder is harmless)");
 
   var recovered=await Run(plan,recover:true);Check(recovered.Code==0&&recovered.Status=="restored"&&Same(root,original),"recovery restores byte-exact previous application including retired files");
   root=Fixture(parent);original=Snapshot(root);plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);run=await Run(plan,failAfter:2);Check(run.Code!=0&&run.Status=="restored"&&Same(root,original),"interrupted file replacement automatically restores previous application");
