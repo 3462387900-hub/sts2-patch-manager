@@ -11,80 +11,123 @@ if (!(Test-Path -LiteralPath $original -PathType Leaf)) {
     throw 'SpirePatch.exe is missing; cannot create the Chinese shortcut.'
 }
 
-# Use a real Windows shortcut rather than a second apphost executable.
-# The shortcut starts the canonical SpirePatch.exe, so the updater can wait
-# for that process to exit and safely replace the canonical executable.
-# WScript.Shell has trouble saving non-ASCII shortcut filenames on some
-# Windows locales. Create/inspect an ASCII temporary link, then move it with
-# .NET's Unicode-safe file APIs to the final Chinese filename.
-$tempRoot = [IO.Path]::GetTempPath()
-if ($tempRoot -match '[^\x00-\x7F]') {
-    $tempRoot = Join-Path $env:WINDIR 'Temp'
-}
-if (!(Test-Path -LiteralPath $tempRoot -PathType Container)) {
-    throw 'No ASCII-compatible temporary directory is available for creating the Windows shortcut.'
-}
-$tempShortcut = Join-Path $tempRoot ('SpirePatchLauncher-' + [Guid]::NewGuid().ToString('N') + '.lnk')
-$shell = New-Object -ComObject WScript.Shell
-try {
-    if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
-        [IO.File]::Copy($shortcut, $tempShortcut, $false)
+# Use the Unicode IShellLinkW API instead of WScript.Shell. WScript.Shell
+# can reject Chinese shortcut names or Unicode target/working-directory paths.
+if (-not ('SpirePatch.ReleasePackaging.WindowsShortcut' -as [type])) {
+    Add-Type -Language CSharp -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+
+namespace SpirePatch.ReleasePackaging
+{
+    [ComImport]
+    [Guid("000214F9-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int maxPath, IntPtr findData, uint flags);
+        void GetIDList(out IntPtr itemIdList);
+        void SetIDList(IntPtr itemIdList);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int maxName);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder directory, int maxPath);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string directory);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder arguments, int maxPath);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string arguments);
+        void GetHotkey(out short hotkey);
+        void SetHotkey(short hotkey);
+        void GetShowCmd(out int showCommand);
+        void SetShowCmd(int showCommand);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder iconPath, int maxPath, out int iconIndex);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int iconIndex);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pathRelative, uint reserved);
+        void Resolve(IntPtr window, uint flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
     }
 
-    $link = $shell.CreateShortcut($tempShortcut)
-    try {
-        if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
-            $target = [IO.Path]::GetFullPath([string]$link.TargetPath)
-            $working = [IO.Path]::GetFullPath([string]$link.WorkingDirectory)
-            if (![string]::Equals($target, $original, [StringComparison]::OrdinalIgnoreCase) -or
-                ![string]::Equals($working, $app, [StringComparison]::OrdinalIgnoreCase)) {
-                throw 'The Chinese shortcut already exists but points to a different target; refusing to overwrite it.'
+    public static class WindowsShortcut
+    {
+        private static object NewLink()
+        {
+            var type = Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"), true);
+            return Activator.CreateInstance(type);
+        }
+
+        public static void Create(string shortcutPath, string targetPath, string workingDirectory, string description)
+        {
+            object instance = NewLink();
+            try
+            {
+                var link = (IShellLinkW)instance;
+                link.SetPath(Path.GetFullPath(targetPath));
+                link.SetWorkingDirectory(Path.GetFullPath(workingDirectory));
+                link.SetDescription(description);
+                link.SetShowCmd(1);
+                ((IPersistFile)instance).Save(Path.GetFullPath(shortcutPath), false);
+            }
+            finally
+            {
+                if (Marshal.IsComObject(instance)) Marshal.FinalReleaseComObject(instance);
             }
         }
-        else {
-            $link.TargetPath = $original
-            $link.WorkingDirectory = $app
-            $link.Description = '启动尖塔修补站'
-            $link.IconLocation = $original + ',0'
-            $link.WindowStyle = 1
-            $link.Save()
-        }
-    }
-    finally {
-        if ([Runtime.InteropServices.Marshal]::IsComObject($link)) {
-            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link)
-        }
-    }
 
-    # Re-open and verify the persisted shortcut before publishing it.
-    $verify = $shell.CreateShortcut($tempShortcut)
-    try {
-        $target = [IO.Path]::GetFullPath([string]$verify.TargetPath)
-        $working = [IO.Path]::GetFullPath([string]$verify.WorkingDirectory)
-        if (![string]::Equals($target, $original, [StringComparison]::OrdinalIgnoreCase) -or
-            ![string]::Equals($working, $app, [StringComparison]::OrdinalIgnoreCase)) {
-            throw 'The saved Chinese shortcut failed target or working-directory verification.'
+        public static string GetTarget(string shortcutPath)
+        {
+            object instance = NewLink();
+            try
+            {
+                ((IPersistFile)instance).Load(Path.GetFullPath(shortcutPath), 0);
+                var value = new StringBuilder(32768);
+                ((IShellLinkW)instance).GetPath(value, value.Capacity, IntPtr.Zero, 0);
+                return value.ToString();
+            }
+            finally
+            {
+                if (Marshal.IsComObject(instance)) Marshal.FinalReleaseComObject(instance);
+            }
         }
-    }
-    finally {
-        if ([Runtime.InteropServices.Marshal]::IsComObject($verify)) {
-            [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($verify)
-        }
-    }
 
-    if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) {
-        # Copy instead of move: the system temp folder and portable app folder
-        # may be on different volumes.
-        [IO.File]::Copy($tempShortcut, $shortcut, $false)
+        public static string GetWorkingDirectory(string shortcutPath)
+        {
+            object instance = NewLink();
+            try
+            {
+                ((IPersistFile)instance).Load(Path.GetFullPath(shortcutPath), 0);
+                var value = new StringBuilder(32768);
+                ((IShellLinkW)instance).GetWorkingDirectory(value, value.Capacity);
+                return value.ToString();
+            }
+            finally
+            {
+                if (Marshal.IsComObject(instance)) Marshal.FinalReleaseComObject(instance);
+            }
+        }
     }
 }
-finally {
-    if (Test-Path -LiteralPath $tempShortcut -PathType Leaf) {
-        [IO.File]::Delete($tempShortcut)
+'@
+}
+
+if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
+    $target = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetTarget($shortcut))
+    $working = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetWorkingDirectory($shortcut))
+    if (![string]::Equals($target, $original, [StringComparison]::OrdinalIgnoreCase) -or
+        ![string]::Equals($working, $app, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The Chinese shortcut already exists but points to a different target; refusing to overwrite it.'
     }
-    if ([Runtime.InteropServices.Marshal]::IsComObject($shell)) {
-        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
-    }
+}
+else {
+    [SpirePatch.ReleasePackaging.WindowsShortcut]::Create($shortcut, $original, $app, '启动尖塔修补站')
+}
+
+# Re-open and verify the persisted Unicode shortcut before moving documents.
+$target = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetTarget($shortcut))
+$working = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetWorkingDirectory($shortcut))
+if (![string]::Equals($target, $original, [StringComparison]::OrdinalIgnoreCase) -or
+    ![string]::Equals($working, $app, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The saved Chinese shortcut failed target or working-directory verification.'
 }
 
 # Documentation is safe to relocate: it is not a runtime or updater dependency.
