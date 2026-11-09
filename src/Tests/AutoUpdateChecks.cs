@@ -31,7 +31,11 @@ public static class AutoUpdateChecks
  {
   Directory.CreateDirectory(Path.GetDirectoryName(output)!);var lines=new List<string>();void Check(bool ok,string message){if(!ok)throw new InvalidOperationException(message);lines.Add("PASS "+message);File.WriteAllLines(output,lines);}
   string parent=Path.Combine(Path.GetDirectoryName(output)!,"自动更新隔离 "+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(parent);
-  var package=Package(parent);string root=Fixture(parent);var original=Snapshot(root);
+  var package=Package(parent);string root=Fixture(parent);
+  Check(ManagerAutoUpdate.IsCanonicalLauncher(root,Path.Combine(root,"SpirePatch.exe")),"canonical executable path is accepted as the self-update entry");
+  Check(!ManagerAutoUpdate.IsCanonicalLauncher(root,Path.Combine(root,"00-启动尖塔修补站.exe"))&&
+   !ManagerAutoUpdate.IsCanonicalLauncher(root,null),"renamed executable copies and unknown process paths are not accepted as self-update entries");
+  var original=Snapshot(root);
   var plan=await ManagerAutoUpdate.PrepareAsync(package.Release,package.Zip,root,fixture:true);Check(Same(root,original),"preparation verifies and extracts without changing application files");
   Check(File.Exists(Path.Combine(plan.Job,"恢复上一版.cmd")),"recovery command accompanies the verified update plan");
   var run=await Run(plan);Check(run.Code==0&&run.Status=="complete"&&File.ReadAllText(Path.Combine(root,"SpirePatch.dll")).StartsWith("new:"),"external worker replaces application after full preflight");
