@@ -1,0 +1,103 @@
+name: Publish v0.14.6 Beta 1 (ATLAS native WPF)
+on:
+  # This one-off release is immutable; keep publishing manual-only.
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-v0.14.6-beta.1
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Run isolated safety, WPF and ATLAS UI checks
+        shell: pwsh
+        run: ./scripts/打包.ps1 -BuildOnly -OutputRoot artifacts
+      - name: Assemble portable beta release ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$project = Get-Content -LiteralPath 'SpirePatch.csproj'
+          $version = [string]$project.Project.PropertyGroup.Version
+          $info = [string]$project.Project.PropertyGroup.InformationalVersion
+          if ($version -ne '0.14.6' -or $info -ne '0.14.6-beta.1') {
+            throw 'This workflow is exclusive to the 0.14.6-beta.1 assembly.'
+          }
+          $app = Get-ChildItem -LiteralPath 'artifacts' -Directory |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1 |
+            ForEach-Object { Join-Path $_.FullName ('尖塔修补站-v' + $version) }
+          if (!(Test-Path -LiteralPath (Join-Path $app 'SpirePatch.exe') -PathType Leaf)) {
+            throw 'No verified Windows build output.'
+          }
+          Copy-Item README.md (Join-Path $app '使用说明.md')
+          Copy-Item 发布指南.md (Join-Path $app '发布指南.md')
+          Copy-Item 补丁发布指南.md (Join-Path $app '补丁发布指南.md')
+          Copy-Item releases/v0.14.6-beta.1.md (Join-Path $app '本版更新内容.md')
+          Copy-Item 鸣谢与来源.md (Join-Path $app '鸣谢与来源.md')
+          Copy-Item THIRD-PARTY-NOTICES.md (Join-Path $app 'THIRD-PARTY-NOTICES.md')
+          $thirdParty = Join-Path $app 'third_party'
+          New-Item -ItemType Directory -Path $thirdParty -Force | Out-Null
+          Copy-Item third_party/WorkshopAndroidDownloader-LICENSE.txt (Join-Path $thirdParty 'WorkshopAndroidDownloader-LICENSE.txt')
+          Copy-Item third_party/SharpCompress-LICENSE.txt (Join-Path $thirdParty 'SharpCompress-LICENSE.txt')
+          ./scripts/整理玩家发布目录.ps1 -ApplicationDirectory $app
+          $shortcut = Join-Path $app '00-启动尖塔修补站.lnk'
+          if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) {
+            throw 'Portable Chinese shortcut is missing.'
+          }
+          # The organizer verifies the shortcut through an ASCII temporary path,
+          # then moves it to the Unicode filename with .NET file APIs.
+          ./scripts/生成程序清单.ps1 -Directory $app
+          $manifest = Get-Content -LiteralPath (Join-Path $app 'manager-files.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $managedPaths = @($manifest.Files.PSObject.Properties.Name)
+          foreach ($required in @('00-启动尖塔修补站.lnk', '使用说明/使用说明.md')) {
+            if ($managedPaths -notcontains $required) { throw ('Release manifest is missing arranged file: ' + $required) }
+          }
+          if ($managedPaths -contains '使用说明.md') { throw 'A documentation file remains in the release root.' }
+          $dir = Join-Path (Get-Location) 'release-output'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $archive = Join-Path $dir 'SpirePatch-v0.14.6-beta.1-win-x64.zip'
+          ./scripts/创建干净发布包.ps1 -ApplicationDirectory $app -ArchivePath $archive -Version $version
+          $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $record = [ordered]@{
+            version = $info
+            file_name = [IO.Path]::GetFileName($archive)
+            bytes = (Get-Item -LiteralPath $archive).Length
+            sha256 = $digest
+          }
+          $record | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir '校验信息.json') -Encoding utf8
+          if ((Get-Item -LiteralPath $archive).Length -lt 1000000) {
+            throw 'The beta release archive is unexpectedly small.'
+          }
+      - name: Publish isolated GitHub Pre-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = '${{ github.repository }}'
+          $tag = 'v0.14.6-beta.1'
+          $existing = gh release view $tag -R $repo --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw 'Beta release already exists; refusing to replace published assets.'
+          }
+          gh release create $tag -R $repo --target '${{ github.sha }}' --title '尖塔修补站 v0.14.6 Beta 1 · ATLAS 原生 WPF' --notes-file releases/v0.14.6-beta.1.md --prerelease --latest=false 'release-output/SpirePatch-v0.14.6-beta.1-win-x64.zip' 'release-output/校验信息.json'
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub beta release creation failed.' }
+          $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          $asset = @($release.assets | Where-Object {
+            $_.name -eq 'SpirePatch-v0.14.6-beta.1-win-x64.zip' -and $_.state -eq 'uploaded'
+          })
+          $expected = (Get-Content -LiteralPath 'release-output/校验信息.json' -Raw | ConvertFrom-Json)
+          if ($release.draft -or !$release.prerelease -or $release.tag_name -ne $tag -or
+              !$release.body -or $asset.Count -ne 1 -or
+              $asset[0].digest -ne ('sha256:' + $expected.sha256) -or
+              $asset[0].size -ne $expected.bytes) {
+            throw 'Published beta metadata, size, or SHA-256 does not match.'
+          }
+          Write-Output "Verified isolated beta release $tag and SHA-256 $($expected.sha256)."

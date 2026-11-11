@@ -36,6 +36,18 @@ if ($uiProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $uiProof)) {
     if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
     throw 'WPF 界面回归验证失败。'
 }
+# Verify the ATLAS native WPF workspace on a separate isolated fixture.
+$atlasFixtures = Join-Path $testRoot 'atlas-native-fixtures'
+$atlasOutput = Join-Path $testRoot 'atlas-native-capture'
+New-Item -ItemType Directory -Path $atlasFixtures, $atlasOutput -Force | Out-Null
+$atlasProcess = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--capture-atlas-native', ('"' + $atlasFixtures + '"'), ('"' + $atlasOutput + '"')) -WindowStyle Hidden -Wait -PassThru
+$atlasProof = Join-Path $atlasOutput 'ATLAS 原生界面验证.txt'
+if ($atlasProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $atlasProof)) {
+    if (Test-Path -LiteralPath $atlasProof) { Get-Content -LiteralPath $atlasProof | Write-Output }
+    $errorFile = Join-Path $appFolder 'startup-error.txt'
+    if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
+    throw 'ATLAS 原生 WPF 界面验证失败。'
+}
 if ($BuildOnly) { Write-Output ('构建与检查完成，未生成发布包：' + $runRoot); return }
 $integrationResult = Join-Path $testRoot 'integration-check.txt'
 $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--integration-check', ('"' + [IO.Path]::GetFullPath($Bundle) + '"'), ('"' + [IO.Path]::GetFullPath($Fixture) + '"'), ('"' + $integrationResult + '"')) -WindowStyle Hidden -Wait -PassThru
@@ -52,7 +64,15 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot 'third_party/SharpCompress-LICENSE
 $notes = Join-Path $sourceRoot ('releases/v' + $version + '.md')
 if (!(Test-Path -LiteralPath $notes)) { throw '缺少本版本发布说明。' }
 Copy-Item -LiteralPath $notes -Destination (Join-Path $appFolder '本版更新内容.md')
+# Apply the same tidy player-facing layout to every normal release package.
+& (Join-Path $PSScriptRoot '整理玩家发布目录.ps1') -ApplicationDirectory $appFolder
 & (Join-Path $PSScriptRoot '生成程序清单.ps1') -Directory $appFolder
+$manifest = Get-Content -LiteralPath (Join-Path $appFolder 'manager-files.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$managedPaths = @($manifest.Files.PSObject.Properties.Name)
+foreach ($required in @('SpirePatch.exe', '00-启动尖塔修补站.lnk', '使用说明/使用说明.md')) {
+    if ($managedPaths -notcontains $required) { throw ('发布清单缺少整理后的必要文件：' + $required) }
+}
+if ($managedPaths -contains '使用说明.md') { throw '发布根目录仍包含未整理的使用说明文件。' }
 $archive = Join-Path $runRoot ('SpirePatch-v' + $version + '-win-x64.zip')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($appFolder, $archive, [IO.Compression.CompressionLevel]::Optimal, $true)

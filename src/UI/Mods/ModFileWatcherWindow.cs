@@ -66,6 +66,12 @@ public partial class MainWindow
   watcher.EnableRaisingEvents=true;
  }
 
+ // The watcher may fire while the legacy navigation key still names a MOD page.
+ // ATLAS top-level pages must never be replaced by legacy ShowMods() as a side effect.
+ bool ShouldRenderLegacyModAfterWatch()=>
+  (!UiThemes.IsAtlasNative||atlasNativeRoot==null||atlasNativeEmbeddedWorkflow)&&
+  (page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page;
+
  void QueueModChange(string root,bool overflow,bool tree)
  {
   if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
@@ -91,7 +97,7 @@ public partial class MainWindow
     modStatus=overflow?"文件监测可能遗漏变化，请手动刷新。":"检测到 MOD 文件变化，正在等待文件写入结束。";
    }
    modWatchDebounce?.Stop();modWatchDebounce?.Start();
-   if((page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page&&!busy&&!transactionWriting)ShowMods();
+   if(ShouldRenderLegacyModAfterWatch()&&!busy&&!transactionWriting)ShowMods();
   }),DispatcherPriority.Background);
  }
 
@@ -113,6 +119,14 @@ public partial class MainWindow
   {
    InvalidateLifecycle("文件监测发现 MOD 环境变化，请重新扫描补丁健康状态。");
    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;modTogglePreview=null;
+  }
+  // FileSystemWatcher is only a change signal. Reconcile MOD inventory and
+  // orphan safety, but leave the invalidated patch report invalidated until a
+  // user-requested full scan. Avoid scanning the entire game on each burst.
+  if(modInventoryDirty&&UiThemes.IsAtlasNative)
+  {
+   _=RefreshAtlasNativeInventoryFromWatchAsync();
+   return;
   }
   // Even when the user is viewing another tab, a known previous inventory
   // must be reconciled so manually removed target MODs can retire their fixes.

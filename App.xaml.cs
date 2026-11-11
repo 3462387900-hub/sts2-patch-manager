@@ -30,6 +30,30 @@ public partial class App : Application
             if(e.Args.Contains("--coop-self-test")){var checks=new MainWindow(false);await checks.CheckCoopAsync(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--auto-update-self-test")){await AutoUpdateChecks.RunAsync(e.Args.Last());Shutdown(0);return;}
             if(e.Args.Contains("--manager-update-cleanup-self-test")){ManagerUpdateCleanupChecks.Run(e.Args.Last());Shutdown(0);return;}
+            if(e.Args.Contains("--single-file-layout-self-test"))
+            {
+                string root=AppContext.BaseDirectory;
+                var manifest=ManagerAutoUpdate.ReadManifest(root,ManagerUpdates.CurrentVersion);
+                string? processPath=Environment.ProcessPath;
+                if(!ManagerAutoUpdate.IsCanonicalLauncher(root,processPath))
+                    throw new InvalidOperationException("Single-file apphost path is not canonical.");
+                foreach(var item in manifest.Files)
+                {
+                    string path=ManagerAutoUpdate.Child(root,item.Key);
+                    if(!File.Exists(path)||!Catalog.Hash(path).Equals(item.Value,StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("Published updater manifest hash mismatch: "+item.Key);
+                }
+                File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    version=manifest.Version,
+                    fileCount=manifest.Files.Count,
+                    processPath,
+                    root=Path.GetFullPath(root),
+                    updaterManifestAccepted=true,
+                    allManagedFilesVerified=true
+                },new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                Shutdown(0);return;
+            }
             if(e.Args.Contains("--workshop-zip-self-test")){WorkshopZipChecks.Run(e.Args.Last());Shutdown(0);return;}
             if((e.Args.Length==0||e.Args.Contains("--manager-update-complete"))&&!AcquireManagerInstance()){MessageBox.Show("此目录的管理器已打开或正在更新，请稍后再试。","尖塔修补站");Shutdown(0);return;}
             if(e.Args.Contains("--update-restart-fail")){if(!File.Exists(Path.Combine(AppContext.BaseDirectory,ManagerAutoUpdate.FixtureMarker)))throw new InvalidOperationException("Only fixtures can simulate failed startup.");Shutdown(42);return;}
@@ -66,6 +90,7 @@ public partial class App : Application
             if(e.Args.Contains("--capture-coop")) { await window.CheckCoopAsync(e.Args.Last(),true); Shutdown(); }
             if(e.Args.Contains("--capture-updates")) { await window.CaptureUpdateChecksAsync(e.Args.Last()); Shutdown(); }
             if(e.Args.Contains("--capture-workspace")) { await window.CaptureWorkspaceAsync(e.Args[1],e.Args[2]); Shutdown(); }
+            if(e.Args.Contains("--capture-atlas-native")) { await window.CaptureAtlasNativeAsync(e.Args[1],e.Args[2]); Shutdown(); }
             if(e.Args.Contains("--capture-mods")) { await window.CaptureLiveModsAsync(e.Args[1],e.Args[2]); Shutdown(); }
             if(e.Args.Contains("--capture-selection")) { await window.CaptureSelectionAsync(e.Args[1],e.Args[2],e.Args[3]); Shutdown(); }
             if(e.Args.Contains("--capture-maintenance")) { await window.CaptureMaintenanceAsync(e.Args[1],e.Args[2],e.Args[3]); Shutdown(); }
