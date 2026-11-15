@@ -68,26 +68,28 @@ function Get-Inventory([string]$applicationDirectory) {
     Get-ChildItem -LiteralPath $applicationDirectory -Recurse -File |
         Sort-Object FullName |
         ForEach-Object {
-            $relative = $_.FullName.Substring($prefix.Length).Replace('\', '/')
+            # A catch block rebinds $_ to an ErrorRecord; retain the FileInfo explicitly.
+            $file = $_
+            $relative = $file.FullName.Substring($prefix.Length).Replace('\', '/')
             $kind = 'non-pe'
             $assemblyName = $null
             $assemblyVersion = $null
-            if ($_.Extension -in @('.exe', '.dll')) {
+            if ($file.Extension -in @('.exe', '.dll')) {
                 try {
-                    $identity = [Reflection.AssemblyName]::GetAssemblyName($_.FullName)
+                    $identity = [Reflection.AssemblyName]::GetAssemblyName($file.FullName)
                     $kind = 'managed-assembly'
                     $assemblyName = $identity.Name
                     $assemblyVersion = $identity.Version.ToString()
                 } catch [System.BadImageFormatException] {
-                    if (Is-PortableExecutable $_.FullName) { $kind = 'native-pe' }
+                    if (Is-PortableExecutable $file.FullName) { $kind = 'native-pe' }
                 } catch [System.IO.FileLoadException] {
                     if (Is-PortableExecutable $_.FullName) { $kind = 'native-pe' }
                 }
             }
             [pscustomobject][ordered]@{
                 Path = $relative
-                Bytes = $_.Length
-                SHA256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+                Bytes = $file.Length
+                SHA256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
                 Kind = $kind
                 Role = (Get-FileRole $relative $kind)
                 AssemblyName = $assemblyName
