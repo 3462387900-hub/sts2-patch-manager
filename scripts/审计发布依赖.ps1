@@ -119,7 +119,7 @@ $normalByPath = @{}
 $singleByPath = @{}
 foreach ($f in $normal) { $normalByPath[$f.Path] = $f }
 foreach ($f in $single) { $singleByPath[$f.Path] = $f }
-$allPaths = @($normalByPath.Keys + $singleByPath.Keys | Sort-Object -Unique)
+$allPaths = @(@($normalByPath.Keys) + @($singleByPath.Keys) | Sort-Object -Unique)
 $comparison = @(
     foreach ($path in $allPaths) {
         $n = $normalByPath[$path]
