@@ -19,6 +19,11 @@ public static class ManagerAutoUpdate
  static readonly JsonSerializerOptions Json=new(){WriteIndented=true,PropertyNameCaseInsensitive=true};
  public static string MutexName(string root)=>"Local\\SpireManager-"+Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(root).TrimEnd('\\').ToLowerInvariant())));
  static void Require(bool ok,string message){if(!ok)throw new InvalidDataException(message);}
+ public static bool IsCanonicalLauncher(string root,string? processPath)
+ {
+  if(string.IsNullOrWhiteSpace(processPath))return false;
+  return Path.GetFullPath(processPath).Equals(Path.GetFullPath(Child(root,"SpirePatch.exe")),StringComparison.OrdinalIgnoreCase);
+ }
  internal static string Child(string root,string name)
  {
   var path=BundleInstaller.Child(root,name);
@@ -62,6 +67,7 @@ public static class ManagerAutoUpdate
  public static Task<ReadyManagerUpdate> PrepareAsync(ManagerRelease release,string archive,string root,CancellationToken ct=default,bool fixture=false)=>Task.Run(()=>{
   ManagerUpdates.Validate(release);root=Path.GetFullPath(root).TrimEnd('\\');GameEnvironment.NoLinks(root);
   Require(!File.Exists(Path.Combine(root,"SlayTheSpire2.exe")),"请将管理器单独解压到文件夹后再自动更新。");
+  Require(fixture||IsCanonicalLauncher(root,Environment.ProcessPath),"请从 SpirePatch.exe 或中文快捷方式启动管理器后再自动更新，不能直接运行旧版 EXE 副本。");
   Require(!fixture||File.Exists(Child(root,FixtureMarker)),"自动更新测试只能使用带标记的隔离目录。");
   var previous=ReadManifest(root,fixture?null:ManagerUpdates.CurrentVersion,fixture);
   Require(ManagerUpdates.StableVersion(ManagerUpdates.CoreVersion(release.Version))>ManagerUpdates.StableVersion(previous.Version),"目标程序版本不高于当前版本，不能自动覆盖或降级。");VerifyFiles(root,previous.Files,ct);

@@ -51,21 +51,57 @@ public partial class MainWindow
   async Task OpenReadyPreview(string folder,bool enable)
   {
    string label=enable?"预览启用":"预览停用";
+   string lastPreviewFailure="",lastControlState="";
+   int inventoryRetries=0;
    for(int attempt=0;attempt<180;attempt++)
    {
     await Idle();
-    if(!busy&&!transactionWriting&&!modInventoryDirty&&
+    if(!busy&&!transactionWriting&&!modInventoryDirty&&selectedInstallRoot!=null&&
        modInventory?.Mods.Any(mod=>mod.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase))==true)
     {
-     ShowModDetail(folder);await Idle();
-     if(Controls<Button>(shell).Any(button=>button.Content?.ToString()==label&&button.IsEnabled))
-      return;
+     try
+     {
+      // The filesystem watcher can briefly hold the environment mutex while
+      // refreshing the same fixture. Probe the real read-only preview first;
+      // only inspect the button after the transaction lock is demonstrably free.
+      _=await Task.Run(()=>ModManager.Preview(selectedInstallRoot,folder,enable));
+      // A fresh lock-protected preview can succeed while the previously
+      // cached inventory still contains a transient manifest-read issue.
+      // Rebuild the inventory via the real production scan, never by
+      // clearing Issues or forcibly enabling the blocked button.
+      if(modInventory?.Issues.Count>0&&inventoryRetries<3)
+      {
+       inventoryRetries++;
+       await RefreshModsAsync();await Idle();
+      }
+      ShowModDetail(folder);await Idle();
+      var matching=Controls<Button>(shell).Where(button=>button.Content?.ToString()==label).ToArray();
+      if(matching.Any(button=>button.IsEnabled))return;
+      // When this intermittent WPF regression occurs, report whether the
+      // button is missing, blocked by a parent, or disabled by a dependency.
+      var target=modInventory?.Mods.FirstOrDefault(mod=>mod.Folder.Equals(folder,StringComparison.OrdinalIgnoreCase));
+      string reason=target!=null&&selectedInstallRoot!=null
+       ?ModManager.BlockReason(selectedInstallRoot,target,modInventory!)??"none":"MOD missing";
+      lastControlState="buttons="+matching.Length+"; enabled="+
+       string.Join(",",matching.Select(button=>button.IsEnabled))+
+       "; visible="+string.Join(",",matching.Select(button=>button.IsVisible))+
+       "; blockReason="+reason+"; inventoryIssues="+
+       string.Join(" / ",modInventory?.Issues.Take(3)??[])+
+       "; retry="+inventoryRetries+"; key="+(currentVisit?.Key??"none")+
+       "; theme="+UiThemes.Active+"; shell="+(content.Content?.GetType().Name??"null")+
+       "; watchTimer="+(modWatchDebounce?.IsEnabled??false);
+     }
+     catch(Exception error) when(error is InvalidOperationException or IOException or UnauthorizedAccessException)
+     {
+      lastPreviewFailure=error.Message;
+     }
     }
     await Task.Delay(60);
    }
    throw new InvalidOperationException("安全预览按钮在稳定扫描后仍不可用："+label+
     "; busy="+busy+"; writing="+transactionWriting+"; dirty="+modInventoryDirty+
-    "; page="+page+"; folder="+folder);
+    "; page="+page+"; preview="+lastPreviewFailure+"; controls="+lastControlState+
+    "; folder="+folder);
   }
   async Task Shot(string name){await Idle();var image=new RenderTargetBitmap((int)shell.ActualWidth,(int)shell.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(shell);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(Path.Combine(output,name+".png"));encoder.Save(stream);}
   // Regression: a visually opaque overlay hid the native acrylic throughout v0.12.0.
@@ -75,12 +111,19 @@ public partial class MainWindow
   Check(SpireGlassTheme.GlassPanel() is LinearGradientBrush surface&&
    surface.GradientStops.All(stop=>stop.Color.A<235),
    "glass cards allow blurred and ambient backdrop to show through");
+  SolidColorBrush ResolveBrush(object? value)
+  {
+   if(value is SolidColorBrush brush)return brush;
+   if(value is DynamicResourceExtension dynamicResource&&
+      FindResource(dynamicResource.ResourceKey) is SolidColorBrush resolved)return resolved;
+   throw new InvalidOperationException("样式画笔无法解析："+value?.GetType().Name);
+  }
   var baseButton=(Style)FindResource(typeof(Button));
-  var defaultBorder=(SolidColorBrush)((Setter)baseButton.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  var defaultBorder=ResolveBrush(((Setter)baseButton.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value);
   Check(defaultBorder.Color.A<=85,
    "normal buttons use soft translucent strokes rather than sharp opaque outlines");
   var primaryStyle=(Style)FindResource("Primary");
-  var primaryBorder=(SolidColorBrush)((Setter)primaryStyle.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value;
+  var primaryBorder=ResolveBrush(((Setter)primaryStyle.Setters.Cast<Setter>().Single(x=>x.Property==Button.BorderBrushProperty)).Value);
   Check(primaryBorder.Color.A<=100,
    "primary action buttons avoid opaque duplicate fill outlines");
   Check(SpireGlassTheme.Background(true) is LinearGradientBrush newTint&&
@@ -96,7 +139,7 @@ public partial class MainWindow
    b.FocusVisualStyle!=null&&b.BorderThickness.Left==3),
    "borderless navigation keeps a narrow accent and a keyboard-only custom focus visual");
   var selectedTabStyle=(Style)FindResource("SelectedTab");
-  Check(((SolidColorBrush)((Setter)selectedTabStyle.Setters.Cast<Setter>().Single(x=>
+  Check(ResolveBrush(((Setter)selectedTabStyle.Setters.Cast<Setter>().Single(x=>
    x.Property==Button.BackgroundProperty)).Value).Color.A<180,
    "selected filters use a subtle translucent fill rather than primary blue");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");

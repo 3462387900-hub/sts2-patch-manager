@@ -22,6 +22,7 @@ public partial class MainWindow
  {
   if(backButton!=null)backButton.IsEnabled=!busy&&!transactionWriting&&backHistory.Count>0;
   if(launchButton!=null)launchButton.IsEnabled=!busy&&!transactionWriting&&selectedInstallRoot!=null;
+  if(atlasNativeLaunchButton!=null)atlasNativeLaunchButton.IsEnabled=!busy&&!transactionWriting&&selectedInstallRoot!=null;
  }
  void ClearNavigation(){backHistory.Clear();currentVisit=null;UpdateGlobalControls();}
  void RememberPage(string key,Action render){if(currentVisit?.Key==key)currentVisit=currentVisit with{Render=render};}

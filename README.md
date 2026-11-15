@@ -8,8 +8,6 @@
 
 **[下载稳定版](https://github.com/3462387900-hub/sts2-patch-manager/releases/latest)** · **[下载 ATLAS 测试版](https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.6-beta.1)** · [所有版本与发布说明](https://github.com/3462387900-hub/sts2-patch-manager/releases) · [补丁数据仓库](https://github.com/3462387900-hub/sts2-patches)
 
-> **源码分支说明：** 默认 `main` 当前对应稳定版；ATLAS 原生 WPF 正在 [PR39](https://github.com/3462387900-hub/sts2-patch-manager/pull/39) 开发分支中，已独立发布可下载的 Beta 测试包。下表同时列出稳定版功能和已进入 Beta 的功能；尚未合并至 `main` 的 ATLAS 源码见测试分支。
-
 ## 已实现的功能
 
 | 模块 | 功能 |
@@ -35,10 +33,13 @@
 
 ## 下载与使用
 
-1. 从上方 **Releases** 下载 Windows ZIP，解压到独立、可写的文件夹。不要只复制 exe，也不要覆盖已有 `数据` 文件夹。
-2. 运行 **`SpirePatch.exe`**，部分便携发布包还包含中文入口 **`00-启动尖塔修补站.exe`**。
-3. 首次启动后确认检测到的《杀戮尖塔 2》目录；如不正确，手动选择包含 `SlayTheSpire2.exe` 的文件夹。
-4. 在模组库查看已安装 MOD；在修复中心检查已收录补丁；下载或更新前先看预览和依赖提示。
+1. 从上方 **Releases** 下载 Windows ZIP，解压到独立、可写的文件夹。不要只复制 EXE，也不要覆盖已有 `数据` 文件夹。
+2. 运行 **`SpirePatch.exe`**；采用整洁目录布局的新发布包还会提供中文快捷方式 **`00-启动尖塔修补站.lnk`**，它会启动同目录下的原始程序入口。
+3. 新版发布包将说明文档集中放在 `使用说明/`，第三方许可证放在 `third_party/`；程序运行依赖仍留在根目录，不要手动移动 DLL。
+4. 首次启动后确认检测到的《杀戮尖塔 2》目录；如不正确，手动选择包含 `SlayTheSpire2.exe` 的文件夹。
+5. 在模组库查看已安装 MOD；在修复中心检查已收录补丁；下载或更新前先看预览和依赖提示。
+
+> 注意：已发布的 v0.14.6 Beta 1 属于较早的测试包，包含旧式中文 EXE 副本。使用该包时请从 `SpirePatch.exe` 启动管理器；后续整洁目录版本改用快捷方式，避免更新时替换正在运行的入口文件。
 
 **想体验新版 ATLAS：** 在「检查更新」中选择「测试版 Beta」并主动检查，或直接下载 [v0.14.6 Beta 1](https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.6-beta.1)。该版本是**预发布测试版**，不会通过稳定版更新通道自动推送。测试前请备份 MOD 和管理器数据。
 
@@ -60,7 +61,7 @@ SpirePatch.csproj          # WPF/.NET 9 项目文件
 App.xaml / App.xaml.cs     # 应用入口
 src/
   UI/
-    Atlas/                 # 仅 ATLAS Beta / PR39 分支包含
+    Atlas/                 # ATLAS 原生工作台
     Shell/                 # 导航、主题、主窗口
     Mods/ Patches/ Online/ # MOD、修复与在线页面
   Domain/

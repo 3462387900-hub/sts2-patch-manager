@@ -72,9 +72,20 @@ public partial class MainWindow
     note.Foreground=gold;
     return;
    }
+   // Local input validation is safe while the inventory watcher is refreshing,
+   // but an actual download still requires a clean inventory and an idle writer.
+   if(busy||transactionWriting||modInventoryDirty)
+   {
+    note.Text=modInventoryDirty
+     ?"本地 MOD 文件已变化，请先刷新模组清单，再开始获取。"
+     :"正在执行其他操作，请稍后再获取。";
+    note.Foreground=gold;
+    return;
+   }
    DownloadWorkshopMod(presetWorkshopId:workshopId);
   },"Primary");
-  get.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
+  // Keep the input action clickable: its handler validates locally and guards
+  // all network/file work. A temporary scan must not freeze this button forever.
   var field=V(T("粘贴创意工坊链接或 Workshop ID",16,ink,true),input,note);
   Space(field,9);field.Children.Add(get);
   root.Children.Add(Card(field,padding:15));Space(root,13);

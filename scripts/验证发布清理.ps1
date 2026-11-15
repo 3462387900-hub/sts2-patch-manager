@@ -32,6 +32,60 @@ try {
  $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $app 'manager-files.json') -Encoding UTF8
  try { & (Join-Path $PSScriptRoot '创建干净发布包.ps1') -ApplicationDirectory $app -ArchivePath (Join-Path $work 'bad.zip') -Version '9.9.9'; throw 'Unsafe manifest path accepted.' }
  catch { if ($_.Exception.Message -eq 'Unsafe manifest path accepted.') { throw } }
+ $layoutScript = Join-Path $PSScriptRoot '整理玩家发布目录.ps1'
+ if (Test-Path -LiteralPath $layoutScript -PathType Leaf) {
+  $layout = Join-Path $work '尖塔修补站测试目录'
+  [IO.Directory]::CreateDirectory($layout) | Out-Null
+  [IO.File]::WriteAllText((Join-Path $layout 'SpirePatch.exe'),'apphost fixture')
+  [IO.Directory]::CreateDirectory((Join-Path $layout 'third_party')) | Out-Null
+  [IO.Directory]::CreateDirectory((Join-Path $layout '数据')) | Out-Null
+  [IO.File]::WriteAllText((Join-Path $layout 'third_party/license.txt'),'keep third-party license')
+  [IO.File]::WriteAllText((Join-Path $layout '数据/个人设置.json'),'keep user data')
+  $documentNames = @('使用说明.md','发布指南.md','补丁发布指南.md','本版更新内容.md','鸣谢与来源.md','THIRD-PARTY-NOTICES.md')
+  foreach ($name in $documentNames) {
+   [IO.File]::WriteAllText((Join-Path $layout $name),('fixture '+$name))
+  }
+  & $layoutScript -ApplicationDirectory $layout
+  $shortcut = Join-Path $layout '00-启动尖塔修补站.lnk'
+  if (!(Test-Path -LiteralPath $shortcut -PathType Leaf)) { throw 'Chinese Windows shortcut was not created.' }
+  if (Test-Path -LiteralPath (Join-Path $layout '00-启动尖塔修补站.exe')) { throw 'A duplicate executable launcher must not be created.' }
+  $shortcutTarget = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetTarget($shortcut))
+  $shortcutWorking = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetWorkingDirectory($shortcut))
+  if (![string]::Equals($shortcutTarget, [IO.Path]::GetFullPath((Join-Path $layout 'SpirePatch.exe')), [StringComparison]::OrdinalIgnoreCase)) {
+   throw ('Chinese shortcut target is incorrect: ' + $shortcutTarget)
+  }
+  if (![string]::Equals($shortcutWorking, [IO.Path]::GetFullPath($layout), [StringComparison]::OrdinalIgnoreCase)) {
+   throw ('Chinese shortcut working directory is incorrect: ' + $shortcutWorking)
+  }
+  foreach ($name in $documentNames) {
+   if (Test-Path -LiteralPath (Join-Path $layout $name)) { throw ('Document remained in the application root: '+$name) }
+   if (!(Test-Path -LiteralPath (Join-Path $layout ('使用说明/'+$name)) -PathType Leaf)) { throw ('Grouped document is missing: '+$name) }
+  }
+  if (!(Test-Path -LiteralPath (Join-Path $layout 'third_party/license.txt')) -or
+      (Get-Content -LiteralPath (Join-Path $layout '数据/个人设置.json') -Raw) -ne 'keep user data') {
+   throw 'Directory cleanup moved or modified runtime data or third-party licenses.'
+  }
+  # Running the organizer twice must be safe and must not duplicate or damage the shortcut.
+  & $layoutScript -ApplicationDirectory $layout
+
+  $conflict = Join-Path $work '快捷方式冲突测试目录'
+  [IO.Directory]::CreateDirectory($conflict) | Out-Null
+  [IO.File]::WriteAllText((Join-Path $conflict 'SpirePatch.exe'),'apphost fixture')
+  $wrongTarget = Join-Path $work 'wrong-target.exe'
+  [IO.File]::WriteAllText($wrongTarget,'do not overwrite shortcut')
+  $conflictShortcut = Join-Path $conflict '00-启动尖塔修补站.lnk'
+  $conflictSource = Join-Path $work 'conflict-source.lnk'
+  [SpirePatch.ReleasePackaging.WindowsShortcut]::Create($conflictSource, $wrongTarget, $work, 'conflicting shortcut')
+  [IO.File]::Move($conflictSource, $conflictShortcut)
+  $rejected = $false
+  try { & $layoutScript -ApplicationDirectory $conflict } catch { $rejected = $true }
+  if (!$rejected) { throw 'Organizer overwrote a pre-existing shortcut with a different target.' }
+  $conflictTarget = [IO.Path]::GetFullPath([SpirePatch.ReleasePackaging.WindowsShortcut]::GetTarget($conflictShortcut))
+  if (![string]::Equals($conflictTarget, [IO.Path]::GetFullPath($wrongTarget), [StringComparison]::OrdinalIgnoreCase)) {
+   throw 'Conflicting shortcut was modified.'
+  }
+  Write-Output 'PASS portable layout creates a verified Chinese shortcut, groups docs, preserves runtime data and refuses shortcut collisions.'
+ }
  Write-Output 'PASS clean release packaging excludes data, unlisted files and rejects unsafe manifests.'
 }finally{
  if ([IO.Directory]::Exists($work)) { [IO.Directory]::Delete($work,$true) }

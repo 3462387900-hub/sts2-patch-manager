@@ -17,6 +17,12 @@ jobs:
       - name: Build and test without touching a game
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly
+      - name: Validate single-file player package and existing updater
+        shell: pwsh
+        run: ./scripts/验证单文件发布.ps1 -BaselineRoot artifacts -OutputRoot artifacts
+      - name: Inventory normal and single-file Windows release dependencies
+        shell: pwsh
+        run: ./scripts/审计发布依赖.ps1 -ArtifactsRoot artifacts
       - name: Verify fixture helper in Windows PowerShell 5.1
         shell: powershell
         run: |
