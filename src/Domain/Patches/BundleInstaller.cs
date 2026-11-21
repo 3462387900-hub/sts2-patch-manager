@@ -140,6 +140,7 @@ public sealed class BundleInstaller
   }
   await Task.Run(()=>VerifyStage(package));
   string root=GameEnvironment.Root(gameRoot);
+  if(!Directory.Exists(Child(root,"mods")))throw new InvalidOperationException("Mods folder not found.");
   PatchSelection? selection=null;
   if(selectedIds!=null)
   {

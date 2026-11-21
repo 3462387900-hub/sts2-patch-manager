@@ -19,6 +19,7 @@ internal static class PatchRollbackManager
  internal static PatchRollbackPlan Preview(string gameRoot)
  {
   string root=GameEnvironment.Root(gameRoot);
+  if(!Directory.Exists(BundleInstaller.Child(root,"mods")))throw new InvalidOperationException("Mods folder not found.");
   if(GameEnvironment.Running(root))throw new InvalidOperationException("Close the game before installing or rolling back.");
   var latest=Latest(root);
   if(latest==null)return Finish(root,"","","",[],[]);
@@ -174,7 +175,7 @@ internal static class PatchRollbackManager
    using var document=JsonDocument.Parse(File.ReadAllText(recordPath));
    var record=document.RootElement;
    string status=Text(record,"Status");
-   if(status is "enabled" or "failed-restored")continue;
+   if(status!="disabled")continue;
    string prefix=Text(record,"Original").TrimEnd('\\')+"\\";
    foreach(var file in journal.GetProperty("files").EnumerateArray())
    {

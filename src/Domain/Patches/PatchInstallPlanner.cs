@@ -34,8 +34,30 @@ internal static class PatchInstallPlanner
   if(components.Length==0)throw new InvalidDataException("补丁包没有可安装组件。");
   var inventory=Inventory(root);
   var selected=(selectedIds??[]).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToArray();
+  AssertEnabledScope(root,components,selected);
   if(selected.Length==0)return CreateFull(package,root,spec,components,inventory,version);
   return CreateSelected(package,root,spec,components,inventory,version,selected);
+ }
+
+ static void AssertEnabledScope(string root,JsonElement[] components,string[] selected)
+ {
+  var scope=(selected.Length>0?selected:components.Select(x=>Text(x,"id")).ToArray())
+   .ToHashSet(StringComparer.OrdinalIgnoreCase);
+  string disabledRoot=BundleInstaller.Child(root,ModManager.StorageName);
+  if(!Directory.Exists(disabledRoot))return;
+  GameEnvironment.NoLinks(disabledRoot);
+  foreach(string slot in Directory.EnumerateDirectories(disabledRoot,"*",SearchOption.TopDirectoryOnly))
+  {
+   GameEnvironment.NoLinks(slot);
+   string recordPath=BundleInstaller.Child(slot,"记录.json");
+   if(!File.Exists(recordPath))throw new InvalidDataException("停用区记录缺失，请核对："+slot);
+   using var document=JsonDocument.Parse(File.ReadAllText(recordPath));
+   var record=document.RootElement;
+   string status=Text(record,"Status");
+   string id=Text(record,"ModId");
+   if(status is not("enabled" or "failed-restored")&&scope.Contains(id))
+    throw new InvalidOperationException("Mod is disabled: "+id+". Enable it in the mod manager first.");
+  }
  }
 
  static Dictionary<string,string> Inventory(string root)
