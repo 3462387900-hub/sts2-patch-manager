@@ -101,26 +101,44 @@ public partial class MainWindow
  {
   if(busy||transactionWriting||coopPeer is not {} peer||selectedInstallRoot==null||coopSelected.Count==0)return;
   if(onlineBusy){coopStatus="补丁源正在刷新，请完成后再准备方案。";ShowCoop();return;}
-  string root=selectedInstallRoot;string[] chosen=coopSelected.ToArray();bool needsPackage=coopRows!.Any(r=>chosen.Contains(r.Id)&&r.Action==CoopAction.Install);
-  busy=true;coopPlan=null;coopOutcome=null;preparationCancellation=new(TimeSpan.FromMinutes(5));coopStatus="正在重新核对差异与适配条件…";ShowCoop();
+  string root=selectedInstallRoot;string[] chosen=coopSelected.ToArray();var currentRows=coopRows?.ToArray()??[];
+  busy=true;coopPlan=null;coopPlanPackage=null;coopOutcome=null;
+  preparationCancellation=new(TimeSpan.FromMinutes(5));coopStatus="正在重新核对差异与适配条件…";ShowCoop();
   try{
-   PreparedPackage? package=null;
-   if(needsPackage)package=await GetPreparedPackageAsync(preparationCancellation.Token,status=>{coopStatus=status;ShowCoop();});
-   var plan=await CoopAlignment.PrepareAsync(installer,package,root,peer,chosen);preparationCancellation.Token.ThrowIfCancellationRequested();
-   coopPlan=plan;coopStatus="方案已就绪，请查看具体改动，再确认处理。";
+   var prepared=await CoopWorkflow.PrepareAsync(
+    root,peer,chosen,currentRows,
+    (ct,status)=>GetPreparedPackageAsync(ct,status),
+    preparationCancellation.Token,
+    status=>{coopStatus=status;ShowCoop();});
+   coopPlan=prepared.Plan;coopPlanPackage=prepared.Package;
+   preparationCancellation.Token.ThrowIfCancellationRequested();
+   coopStatus="方案已就绪，请查看具体改动，再确认处理。";
   }catch(Exception e){coopStatus="未能准备方案："+e.Message+"\n未修改游戏文件。请重新扫描并比较。";}
   finally{busy=false;preparationCancellation.Dispose();preparationCancellation=null;ShowCoop();if(coopPlan!=null)_=Dispatcher.BeginInvoke(()=>coopConfirmButton?.BringIntoView());}
  }
  async void ConfirmCoop()
  {
   if(busy||transactionWriting||coopPlan==null)return;
-  var plan=coopPlan;busy=true;transactionWriting=true;coopPlan=null;coopStatus="正在再次核对并执行方案，请等待完成…";ShowCoop();
+  var plan=coopPlan;
+  var prepared=new CoopWorkflowPreparedPlan(plan,coopPlanPackage);
+  busy=true;transactionWriting=true;coopPlan=null;coopPlanPackage=null;
+  coopStatus="正在再次核对并执行方案，请等待完成…";ShowCoop();
   CoopOutcome? outcome=null;
   try{
-   outcome=await CoopAlignment.ApplyAsync(installer,preparedPackage,plan);
-   await SetCoopComparisonAsync(plan.Peer);coopOutcome=outcome;
-   coopStatus=outcome.Success?"所选操作已完成，已重新扫描。停用保留与完全缺失会作为记录差异显示，双方均未启用时无需再处理。":"处理已停止："+outcome.Error;
-  }catch(Exception e){coopOutcome=outcome;coopStatus=(outcome==null?"处理未完成：":"处理已结束，但重新比较失败：")+e.Message;coopRows=null;coopComparison=null;}
+   var applied=await CoopWorkflow.ApplyAsync(prepared,CurrentCoopContext());
+   outcome=applied.Outcome;
+   if(applied.Comparison is null)
+    throw new InvalidOperationException("操作结果已记录，但重新扫描失败："+applied.RefreshError);
+   ApplyCoopComparison(applied.Comparison);
+   coopOutcome=outcome;
+   coopStatus=outcome.Success
+    ?"所选操作已完成，已重新扫描。停用保留与完全缺失会作为记录差异显示，双方均未启用时无需再处理。"
+    :"处理已停止："+outcome.Error;
+  }catch(Exception e){
+   coopOutcome=outcome;
+   coopStatus=(outcome==null?"处理未完成：":"处理已结束，但重新比较失败：")+e.Message;
+   coopRows=null;coopComparison=null;
+  }
   finally{InvalidateLifecycle();modTogglePreview=null;busy=false;transactionWriting=false;ShowCoop();}
  }
  void AddCoopResults(Panel root)
@@ -140,7 +158,7 @@ public partial class MainWindow
   if(coopLocal is {} local&&coopPeer is {} peer)summary.Children.Add(T($"本机扫描：{local.GetProperty("time").GetDateTimeOffset().ToLocalTime():yyyy-MM-dd HH:mm:ss}　队友清单：{peer.GetProperty("time").GetDateTimeOffset().ToLocalTime():yyyy-MM-dd HH:mm:ss}",12,muted));
   summary.Children.Add(T("以队友导出时的清单为目标；只调整本机已收录补丁。勾选不会改动文件。",12,muted));root.Children.Add(summary);Space(root,12);
   if(coopPeer is {} legacy&&!CoopPlanner.PresenceReport(legacy)){root.Children.Add(T("这是旧版清单，只支持查看。请双方更新至 0.9.0 或更新版本并重新导出，才能使用一键处理。",13,gold));Space(root,12);}
-  var bar=new WrapPanel();foreach(var button in new[]{Btn("全选可处理项",()=>{coopSelected.Clear();foreach(var row in coopRows.Where(r=>r.Selectable))coopSelected.Add(row.Id);coopPlan=null;ShowCoop();},"Ghost"),Btn("清空选择",()=>{coopSelected.Clear();coopPlan=null;ShowCoop();},"Ghost"),Btn("重新扫描并比较",RefreshCoop,"Ghost")}){button.Margin=new(0,0,8,8);bar.Children.Add(button);}
+  var bar=new WrapPanel();foreach(var button in new[]{Btn("全选可处理项",()=>{coopSelected.Clear();foreach(var row in coopRows.Where(r=>r.Selectable))coopSelected.Add(row.Id);coopPlan=null;coopPlanPackage=null;ShowCoop();},"Ghost"),Btn("清空选择",()=>{coopSelected.Clear();coopPlan=null;ShowCoop();},"Ghost"),Btn("重新扫描并比较",RefreshCoop,"Ghost")}){button.Margin=new(0,0,8,8);bar.Children.Add(button);}
   var process=Btn($"预览一键处理（{coopSelected.Count}）",PrepareCoop,"Primary");process.IsEnabled=coopSelected.Count>0;bar.Children.Add(process);root.Children.Add(bar);Space(root,8);
   root.Children.Add(T($"{coopRows.Count(r=>r.Selectable)} 项可处理 · {coopRows.Count(r=>!r.Selectable)} 项需核对或无需处理。全选包含移出项，执行前会再次展示范围。",12,muted));Space(root,12);
   foreach(var row in coopRows){
