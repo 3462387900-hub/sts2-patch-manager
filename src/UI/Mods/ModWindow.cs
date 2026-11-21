@@ -8,6 +8,9 @@ public partial class MainWindow
 {
  ModInventory? modInventory;
  string? orphanPatchNotice;
+ ModInventoryRefreshWorkflowService? modInventoryRefresh;
+ ModInventoryRefreshWorkflowService ModInventoryRefresh=>
+  modInventoryRefresh??=new ModInventoryRefreshWorkflowService(installer.DataRoot);
  ModTogglePlan? modTogglePreview;
  WorkshopZipPlan? zipImportPreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modIssueFilter="所有状态",modStatus="读取模组清单，管理本地模组的启用和停用。";
@@ -483,82 +486,71 @@ public partial class MainWindow
   if(busy)return;
   if(selectedInstallRoot==null){LocateGame();return;}
   string root=selectedInstallRoot;
-  int watchVersion=modChangeVersion;
-  string? recoveryNotice=null;
+  var initialStamp=new ModInventoryRefreshStamp(
+   root,Volatile.Read(ref modChangeVersion),modInventoryDirty);
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
   if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
-   var inventory=await Task.Run(()=>ModManager.Scan(root));
-   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)||watchVersion!=modChangeVersion)
+   var result=await ModInventoryRefresh.RefreshAsync(
+    root,
+    initialStamp,
+    ()=>new ModInventoryRefreshStamp(
+     selectedInstallRoot,Volatile.Read(ref modChangeVersion),modInventoryDirty),
+    (confirmation,token)=>Task.FromResult(
+     confirmation.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
+     confirmation.ChangeVersion==Volatile.Read(ref modChangeVersion)&&
+     OrphanPatchAutoStop.Enabled(installer.DataRoot)),
+    ()=>modFileWatcher.DeferQuietPeriod(),
+    checkpoint=>
+    {
+     if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+     modInventory=checkpoint.Inventory;
+     modInventoryDirty=false;
+     modStatus=checkpoint.Status;
+     if(checkpoint.ClearDiscoveryCache)githubDiscovery?.ClearCache();
+    },
+    progress=>
+    {
+     if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+     modStatus=progress.Status;
+     transactionWriting=progress.TransactionWriting;
+    });
+
+   if(result.Cancelled)return;
+   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+
+   if(result.Inventory!=null)modInventory=result.Inventory;
+   modInventoryDirty=result.InventoryDirty;
+   modStatus=result.Status;
+
+   if(result.OrphanPatchNotice!=null)
    {
-    modInventoryDirty=true;modStatus="扫描期间目录发生变化，正在准备重新刷新。";
-    modFileWatcher.DeferQuietPeriod();
-    return;
+    orphanPatchNotice=result.OrphanPatchNotice;
+    toast.Text=orphanPatchNotice;
    }
-   if(modInventoryDirty)githubDiscovery?.ClearCache();
-   recoveryNotice=ModEnvironmentSnapshots.TakeRecoveryNotice();
-   modInventory=inventory;modInventoryDirty=false;
-   modStatus=$"共 {inventory.Mods.Count} 项 · {inventory.Mods.Count(m=>m.Enabled)} 项启用 · {inventory.Mods.Count(m=>!m.Enabled)} 项停用";
-   // Only a complete, stable inventory is eligible for orphan-patch automation.
-   // This observation belongs to the manager data directory, not the game.
-   if(inventory.Issues.Count==0)
+
+   if(result.ClearLifecycleState)
    {
-    try
-    {
-     bool enabled=OrphanPatchAutoStop.Enabled(installer.DataRoot);
-     var candidates=await Task.Run(()=>OrphanPatchAutoStop.Observe(root,installer.DataRoot,inventory,enabled));
-     if(enabled&&candidates.Length>0)
-     {
-      modStatus="发现可能失去对应 MOD 的独立修复补丁，等待文件操作结束并再次校验…";
-      await Task.Delay(3500);
-      if(watchVersion!=modChangeVersion||!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
-      {
-       modInventoryDirty=true;
-       modStatus="扫描期间 MOD 环境再次发生变化，已取消自动停用并安排复查。";
-       modFileWatcher.DeferQuietPeriod();
-       return;
-      }
-      if(OrphanPatchAutoStop.Enabled(installer.DataRoot))
-      {
-       transactionWriting=true;
-       try
-       {
-        var outcome=await Task.Run(()=>OrphanPatchAutoStop.Reconcile(root,installer.DataRoot));
-        modInventory=outcome.Inventory;
-        modStatus=$"共 {outcome.Inventory.Mods.Count} 项 · {outcome.Inventory.Mods.Count(m=>m.Enabled)} 项启用 · {outcome.Inventory.Mods.Count(m=>!m.Enabled)} 项停用";
-        if(outcome.Disabled.Length>0)
-        {
-         orphanPatchNotice="已自动停用 "+outcome.Disabled.Length+" 个失去目标 MOD 的修复补丁："+string.Join("、",outcome.Disabled.Take(3))+
-          (outcome.Disabled.Length>3?" 等":"")+"。补丁文件完整保留，可在修复补丁中重新启用。";
-         toast.Text=orphanPatchNotice;
-         InvalidateLifecycle("目标 MOD 已移除，相关修复补丁已安全停用，请重新扫描。");
-         report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
-        }
-        if(outcome.Skipped.Length>0)
-        {
-         orphanPatchNotice="部分修复补丁未能自动停用："+string.Join("；",outcome.Skipped.Take(2))+
-          "。未改变这些补丁的文件，请退出游戏或检查 MOD 目录后再刷新。";
-         toast.Text=orphanPatchNotice;
-        }
-       }
-       finally{transactionWriting=false;}
-      }
-     }
-    }
-    catch(Exception e)
-    {
-     orphanPatchNotice="孤立补丁自动检查未完成："+e.Message+"。不会未经核对移动补丁文件。";
-     toast.Text=orphanPatchNotice;
-    }
+    InvalidateLifecycle(result.LifecycleInvalidationReason??
+     "目标 MOD 已移除，相关修复补丁已安全停用，请重新扫描。");
+    report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;
+   }
+
+   if(result.RecoveryNotice!=null)toast.Text=result.RecoveryNotice;
+  }
+  catch(Exception error)
+  {
+   if(root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+   {
+    modInventoryDirty=true;
+    modStatus="无法读取模组："+error.Message;
    }
   }
-  catch(Exception ex){modInventoryDirty=true;modStatus="无法读取模组："+ex.Message;}
   finally
   {
+   transactionWriting=false;
    busy=false;
-   if(recoveryNotice!=null&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
-    toast.Text=recoveryNotice;
    if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
