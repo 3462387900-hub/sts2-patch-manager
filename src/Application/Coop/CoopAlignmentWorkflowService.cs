@@ -13,7 +13,8 @@ internal sealed record CoopAlignmentWorkflowContext(
 internal sealed record CoopWorkflowFreshReport(
     ScanReport? Report,
     ModInventory? Inventory,
-    JsonElement Snapshot);
+    JsonElement Snapshot,
+    IReadOnlyList<OnlinePatch>? Definitions);
 
 internal sealed record CoopWorkflowComparison(
     JsonElement Peer,
@@ -96,7 +97,7 @@ internal sealed class CoopAlignmentWorkflowService
         if (context.Demo)
         {
             var demo = backend.CreateDemo(context.DemoReport, context.DemoStates);
-            return new(null, null, demo);
+            return new(null, null, demo, null);
         }
 
         if (string.IsNullOrWhiteSpace(context.GameRoot))
@@ -106,7 +107,7 @@ internal sealed class CoopAlignmentWorkflowService
         var scan = await Task.Run(
             () => backend.Scan(context.GameRoot, context.Definitions, context.Revision),
             cancellationToken);
-        return new(scan.Report, scan.Inventory, scan.Snapshot);
+        return new(scan.Report, scan.Inventory, scan.Snapshot, context.Definitions);
     }
 
     public async Task<CoopWorkflowFreshReport> ExportFreshReportAsync(
