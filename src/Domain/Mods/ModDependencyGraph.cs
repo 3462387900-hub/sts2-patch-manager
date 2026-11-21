@@ -169,7 +169,7 @@ internal static class ModDependencyGraph
             activeIssues);
     }
 
-    static (ModDependencyStatus Status, string Message) CheckVersion(
+    internal static (ModDependencyStatus Status, string Message) CheckVersion(
         ModDependency dependency,
         ManagedMod prerequisite)
     {
