@@ -183,7 +183,8 @@ internal sealed class ModToggleWorkflowService
 
         for (int index = 0; index < selected.Count; index++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+                return CancelledPreview(normalizedRoot, enable, selected, reviews);
             ManagedMod selectedMod = selected[index];
 
             if (!seenFolders.Add(selectedMod.Folder))
@@ -223,7 +224,7 @@ internal sealed class ModToggleWorkflowService
         }
 
         if (cancellationToken.IsCancellationRequested)
-            return CancelledPreview(normalizedRoot, enable, selected.Count, reviews);
+            return CancelledPreview(normalizedRoot, enable, selected, reviews);
 
         var graph = ModDependencyGraph.Analyze(inventory);
         var cycleIds = graph.Cycles
@@ -276,7 +277,8 @@ internal sealed class ModToggleWorkflowService
 
         while (ready.Count > 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+                return CancelledPreview(normalizedRoot, enable, selected, reviews);
             Candidate next = ready[0];
             ready.RemoveAt(0);
             ordered.Add(next);
@@ -307,7 +309,8 @@ internal sealed class ModToggleWorkflowService
 
         foreach (var candidate in ordered)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+                return CancelledPreview(normalizedRoot, enable, selected, reviews);
 
             int projectedIndex = projectedMods.FindIndex(mod =>
                 mod.Folder.Equals(candidate.Mod.Folder, StringComparison.OrdinalIgnoreCase));
@@ -340,7 +343,7 @@ internal sealed class ModToggleWorkflowService
             }
 
             if (cancellationToken.IsCancellationRequested)
-                return CancelledPreview(normalizedRoot, enable, selected.Count, reviews);
+                return CancelledPreview(normalizedRoot, enable, selected, reviews);
 
             Exception? previewError = null;
             try
@@ -351,7 +354,7 @@ internal sealed class ModToggleWorkflowService
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return CancelledPreview(normalizedRoot, enable, selected.Count, reviews);
+                return CancelledPreview(normalizedRoot, enable, selected, reviews);
             }
             catch (Exception error)
             {
@@ -395,7 +398,7 @@ internal sealed class ModToggleWorkflowService
         }
 
         if (cancellationToken.IsCancellationRequested)
-            return CancelledPreview(normalizedRoot, enable, selected.Count, reviews);
+            return CancelledPreview(normalizedRoot, enable, selected, reviews);
 
         for (int index = 0; index < reviews.Length; index++)
         {
@@ -462,14 +465,15 @@ internal sealed class ModToggleWorkflowService
             }
         }
 
-        foreach (var review in preview.Reviews.Where(review => review.State == "跳过"))
+        foreach (var review in preview.Reviews.Where(review => review.State is "跳过" or "已取消"))
         {
-            results.Add(new(review.Folder, review.Name, "跳过", review.Explanation));
-            skipped++;
+            results.Add(new(review.Folder, review.Name, review.State, review.Explanation));
+            if (review.State == "已取消") cancelled++;
+            else skipped++;
             reportProgress?.Invoke(new(
-                "预览阶段已跳过 " + review.Name + "。",
+                "预览阶段" + review.State + "：" + review.Name + "。",
                 Name: review.Name,
-                State: "跳过",
+                State: review.State,
                 Explanation: review.Explanation,
                 Completed: results.Count,
                 Total: preview.SelectedCount));
@@ -477,8 +481,6 @@ internal sealed class ModToggleWorkflowService
 
         if (preview.Cancelled)
         {
-            foreach (var step in preview.ExecutionOrder)
-                AddResult(step.Mod, "已取消", "预览阶段已取消，未开始文件写入。");
             return BuildResult(false, true, results, success, failed, skipped, cancelled,
                 "批量预览已取消，未移动任何文件。");
         }
@@ -646,13 +648,14 @@ internal sealed class ModToggleWorkflowService
     static ModToggleBatchPreview CancelledPreview(
         string root,
         bool enable,
-        int selectedCount,
+        IReadOnlyList<ManagedMod> selected,
         ModToggleBatchReview?[] reviews)
     {
         for (int index = 0; index < reviews.Length; index++)
         {
             if (reviews[index] is null)
-                reviews[index] = new(index, "", "未完成", "预览阶段已取消，未开始文件写入。");
+                reviews[index] = Review(
+                    index, selected[index], "已取消", "预览阶段已取消，未开始文件写入。");
             else if (reviews[index]!.State is "可处理" or "需复核")
                 reviews[index] = reviews[index]! with
                 {
@@ -662,7 +665,7 @@ internal sealed class ModToggleWorkflowService
         }
 
         return new(
-            root, enable, selectedCount,
+            root, enable, selected.Count,
             reviews.Select(review => review!).ToArray(),
             Array.Empty<ModToggleBatchStep>(),
             true,
