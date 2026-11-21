@@ -92,6 +92,11 @@ internal static class NativePatchInstallerChecks
      root.GetProperty("files").EnumerateArray().All(x=>x.TryGetProperty("relative",out _)&&x.TryGetProperty("backup",out _)),
      "new restore.json keeps the legacy version/status/files/backup field contract");
    }
+   var move=new PatchFolderMove("FixAlpha","FixAlpha",Path.Combine(fullRoot,"mods","FixAlpha"),
+    Path.Combine(fullRoot,"mods",PatchOrganizer.CollectionName,"FixAlpha"),new Dictionary<string,string>());
+   var journalMoves=PatchJournalRelocator.Plan(fullRoot,[move]);
+   Check(journalMoves.Length==1&&journalMoves[0].UpdatedText.Contains(PatchOrganizer.CollectionName),
+    "PatchJournalRelocator can rewrite a journal produced by the native C# transaction engine");
    var undo=await installer.RunAsync(package,fullRoot,"RollbackPreview");
    var restored=await installer.RunAsync(package,fullRoot,"Rollback",undo.Token);
    Check(restored.Message=="RolledBack"&&Same(before,Snapshot(fullRoot)),
