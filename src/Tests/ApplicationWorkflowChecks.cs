@@ -64,6 +64,92 @@ internal static class ApplicationWorkflowChecks
         }
     }
 
+    sealed class FakeModToggleBackend : IModToggleWorkflowBackend
+    {
+        public ModInventory Inventory { get; private set; }
+        public List<string> PreviewAttempts { get; } = [];
+        public List<string> AppliedOrder { get; } = [];
+        public int ApplyCount { get; private set; }
+        public Action<string>? PreviewCompleted { get; set; }
+        public Action<ModTogglePlan>? BeforeApply { get; set; }
+        public Func<ModTogglePlan, Exception?>? ApplyFailure { get; set; }
+
+        public FakeModToggleBackend(ModInventory inventory)
+        {
+            Inventory = inventory;
+        }
+
+        public string? BlockReason(string root, ManagedMod mod, ModInventory inventory)
+        {
+            if (inventory.Issues.Count > 0)
+                return "先处理清单读取或重复 ID 问题，再启用/停用。";
+
+            var enabled = inventory.Mods.Where(item => item.Enabled).ToArray();
+            if (mod.Enabled)
+            {
+                var dependents = enabled
+                    .Where(item => item.Folder != mod.Folder &&
+                        item.Dependencies.Any(dependency =>
+                            dependency.Id.Equals(mod.Id, StringComparison.OrdinalIgnoreCase)))
+                    .ToArray();
+                if (dependents.Length > 0)
+                    return "这些启用项依赖它，请先停用依赖项：" +
+                        string.Join("、", dependents.Select(item => item.Name));
+            }
+            else
+            {
+                foreach (var dependency in mod.Dependencies)
+                {
+                    var prerequisite = enabled.FirstOrDefault(item =>
+                        item.Id.Equals(dependency.Id, StringComparison.OrdinalIgnoreCase));
+                    if (prerequisite is null)
+                        return "请先启用前置模组：" + dependency.Id;
+                }
+            }
+
+            return null;
+        }
+
+        public ModTogglePlan Preview(string root, string folder, bool enable)
+        {
+            PreviewAttempts.Add(folder);
+            var mod = Inventory.Mods.Single(item =>
+                item.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase));
+            string? reason = BlockReason(root, mod, Inventory);
+            if (reason is not null)
+                throw new InvalidOperationException(reason);
+            if (mod.Enabled == enable)
+                throw new InvalidOperationException("模组状态已改变。");
+
+            var plan = new ModTogglePlan(root, folder, enable, mod.Name,
+                "fixture-token-" + PreviewAttempts.Count, 2);
+            PreviewCompleted?.Invoke(folder);
+            return plan;
+        }
+
+        public void Apply(ModTogglePlan plan)
+        {
+            ApplyCount++;
+            BeforeApply?.Invoke(plan);
+            Exception? failure = ApplyFailure?.Invoke(plan);
+            if (failure is not null)
+                throw failure;
+
+            var current = Inventory.Mods.Single(item =>
+                item.Folder.Equals(plan.Folder, StringComparison.OrdinalIgnoreCase));
+            if (current.Enabled == plan.Enable)
+                throw new InvalidOperationException("模组状态已改变。");
+
+            Inventory = new ModInventory(
+                Inventory.Mods.Select(item =>
+                    item.Folder.Equals(plan.Folder, StringComparison.OrdinalIgnoreCase)
+                        ? item with { Enabled = plan.Enable }
+                        : item).ToList(),
+                Inventory.Issues);
+            AppliedOrder.Add(plan.Name);
+        }
+    }
+
     sealed class FailingApplyBackend : ICoopAlignmentWorkflowBackend
     {
         readonly DomainCoopAlignmentWorkflowBackend inner = new();
@@ -202,6 +288,177 @@ internal static class ApplicationWorkflowChecks
         await snapshots.DeleteAsync(restored.Restore.SafetySnapshotId);
         check(snapshots.List().Length == 0,
             "snapshot workflow deletes selected snapshots without touching the game executable");
+
+        // MOD toggle workflows: all paths are temporary and all file operations use a fake backend.
+        string toggleRoot = Path.Combine(home, "toggle-game");
+        Directory.CreateDirectory(toggleRoot);
+        ManagedMod ToggleFixture(
+            string id, string name, string folder, bool enabled, params ModDependency[] dependencies) =>
+            new(id, name, "1.0.0", "fixture", "fixture description",
+                folder, Path.Combine(folder, "manifest.json"), enabled, dependencies,
+                enabled ? null : Path.Combine(home, "disabled", id),
+                Path.Combine("mods", name));
+
+        var singleMod = ToggleFixture(
+            "fixture.toggle.single", "Single", Path.Combine(toggleRoot, "disabled", "single"), false);
+        var singleBackend = new FakeModToggleBackend(new([singleMod], []));
+        var toggleWorkflow = new ModToggleWorkflowService(singleBackend);
+        var singlePlan = await toggleWorkflow.PreviewAsync(toggleRoot, singleMod.Folder, true);
+        bool rejectedConfirmation = false;
+        var rejectedSingle = await toggleWorkflow.ConfirmAndApplyAsync(
+            singlePlan,
+            (_, _) =>
+            {
+                rejectedConfirmation = true;
+                return Task.FromResult(false);
+            });
+        int applyCallsAfterRejection = singleBackend.ApplyCount;
+        var singleProgress = new List<bool>();
+        var appliedSingle = await toggleWorkflow.ConfirmAndApplyAsync(
+            singlePlan,
+            (_, _) => Task.FromResult(true),
+            progress => singleProgress.Add(progress.TransactionWriting));
+        check(rejectedConfirmation && rejectedSingle.Cancelled &&
+            applyCallsAfterRejection == 0 && singleBackend.ApplyCount == 1 && appliedSingle.Success &&
+            singleBackend.AppliedOrder.SequenceEqual(["Single"]) &&
+            singleProgress.SequenceEqual([true, false]),
+            "single MOD workflow previews, delegates confirmation, leaves files untouched on rejection and returns the applied result");
+
+        var baseMod = ToggleFixture(
+            "fixture.toggle.base", "Base", Path.Combine(toggleRoot, "disabled", "base"), false);
+        var dependentMod = ToggleFixture(
+            "fixture.toggle.dependent", "Dependent", Path.Combine(toggleRoot, "disabled", "dependent"),
+            false, new ModDependency("fixture.toggle.base"));
+        var batchBackend = new FakeModToggleBackend(new([baseMod, dependentMod], []));
+        var batchWorkflow = new ModToggleWorkflowService(batchBackend);
+        var unknownSelected = ToggleFixture(
+            "fixture.toggle.unknown", "Unknown", Path.Combine(toggleRoot, "unknown"), false);
+        var batchPreview = await batchWorkflow.PrepareBatchAsync(
+            toggleRoot,
+            batchBackend.Inventory,
+            [dependentMod, baseMod, unknownSelected, dependentMod],
+            enable: true);
+        bool batchPreflightDidNotWrite = batchBackend.ApplyCount == 0;
+        var batchWatcher = new RecordingWatcher();
+        bool batchWriting = false;
+        int writingStartCount = 0;
+        var batchResult = await batchWorkflow.ConfirmAndApplyBatchAsync(
+            batchPreview,
+            (_, _) => Task.FromResult(true),
+            progress =>
+            {
+                if (progress.TransactionWriting && !batchWriting)
+                {
+                    batchWriting = true;
+                    writingStartCount++;
+                }
+                else if (!progress.TransactionWriting && batchWriting)
+                {
+                    batchWriting = false;
+                    batchWatcher.DeferQuietPeriod();
+                }
+            });
+        check(batchPreview.ExecutionOrder.Select(step => step.Mod.Name)
+                .SequenceEqual(["Base", "Dependent"]) &&
+            batchPreview.Reviews.Any(review => review.Name == "Dependent" && review.State == "需复核") &&
+            batchPreview.Reviews.Count(review => review.State == "跳过") == 2 &&
+            batchPreflightDidNotWrite &&
+            batchResult.SuccessCount == 2 && batchResult.SkippedCount == 2 &&
+            batchBackend.AppliedOrder.SequenceEqual(["Base", "Dependent"]) &&
+            writingStartCount == 1 && !batchWriting &&
+            batchWatcher.Calls.SequenceEqual(["defer"]),
+            "batch selection validation previews all items, enables prerequisites first and defers watcher quiet-period reconciliation after writes");
+
+        var disablePreview = await batchWorkflow.PrepareBatchAsync(
+            toggleRoot,
+            batchBackend.Inventory,
+            [batchBackend.Inventory.Mods.Single(mod => mod.Id == "fixture.toggle.base"),
+             batchBackend.Inventory.Mods.Single(mod => mod.Id == "fixture.toggle.dependent")],
+            enable: false);
+        var disabledBatch = await batchWorkflow.ConfirmAndApplyBatchAsync(
+            disablePreview, (_, _) => Task.FromResult(true));
+        check(disablePreview.ExecutionOrder.Select(step => step.Mod.Name)
+                .SequenceEqual(["Dependent", "Base"]) &&
+            disabledBatch.SuccessCount == 2 &&
+            batchBackend.AppliedOrder.TakeLast(2).SequenceEqual(["Dependent", "Base"]),
+            "batch disable order processes dependents before their prerequisites");
+
+        var previewCancelMods = new[]
+        {
+            ToggleFixture("fixture.toggle.cancel.a", "Cancel A", Path.Combine(toggleRoot, "cancel-a"), false),
+            ToggleFixture("fixture.toggle.cancel.b", "Cancel B", Path.Combine(toggleRoot, "cancel-b"), false)
+        };
+        var previewCancelBackend = new FakeModToggleBackend(new(previewCancelMods.ToList(), []));
+        using (var previewCancellation = new CancellationTokenSource())
+        {
+            previewCancelBackend.PreviewCompleted = _ => previewCancellation.Cancel();
+            var cancelledPreview = await new ModToggleWorkflowService(previewCancelBackend).PrepareBatchAsync(
+                toggleRoot, previewCancelBackend.Inventory, previewCancelMods, true,
+                cancellationToken: previewCancellation.Token);
+            check(cancelledPreview.Cancelled &&
+                cancelledPreview.Reviews.All(review => review.State == "已取消") &&
+                previewCancelBackend.ApplyCount == 0,
+                "batch cancellation during preflight stops before the write phase and returns cancelled review entries");
+        }
+
+        var writeCancelMods = new[]
+        {
+            ToggleFixture("fixture.toggle.write.a", "Write A", Path.Combine(toggleRoot, "write-a"), false),
+            ToggleFixture("fixture.toggle.write.b", "Write B", Path.Combine(toggleRoot, "write-b"), false)
+        };
+        var writeCancelBackend = new FakeModToggleBackend(new(writeCancelMods.ToList(), []));
+        var writeCancelWorkflow = new ModToggleWorkflowService(writeCancelBackend);
+        var writeCancelPreview = await writeCancelWorkflow.PrepareBatchAsync(
+            toggleRoot, writeCancelBackend.Inventory, writeCancelMods, true);
+        var applyEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using (var releaseApply = new ManualResetEventSlim(false))
+        using (var writeCancellation = new CancellationTokenSource())
+        {
+            writeCancelBackend.BeforeApply = plan =>
+            {
+                if (plan.Name == "Write A")
+                {
+                    applyEntered.TrySetResult(true);
+                    releaseApply.Wait(TimeSpan.FromSeconds(5));
+                }
+            };
+            var applying = writeCancelWorkflow.ConfirmAndApplyBatchAsync(
+                writeCancelPreview, (_, _) => Task.FromResult(true),
+                cancellationToken: writeCancellation.Token);
+            await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            writeCancellation.Cancel();
+            releaseApply.Set();
+            var writeCancelled = await applying.WaitAsync(TimeSpan.FromSeconds(5));
+            check(writeCancelBackend.ApplyCount == 1 &&
+                writeCancelled.SuccessCount == 1 &&
+                writeCancelled.CancelledCount == 1 &&
+                writeCancelled.Items.Single(item => item.Name == "Write A").State == "成功" &&
+                writeCancelled.Items.Single(item => item.Name == "Write B").State == "已取消",
+                "batch cancellation during a file move lets the active Domain transaction finish and stops only later items");
+        }
+
+        var partialMods = new[]
+        {
+            ToggleFixture("fixture.toggle.partial.a", "Partial A", Path.Combine(toggleRoot, "partial-a"), false),
+            ToggleFixture("fixture.toggle.partial.b", "Partial B", Path.Combine(toggleRoot, "partial-b"), false),
+            ToggleFixture("fixture.toggle.partial.c", "Partial C", Path.Combine(toggleRoot, "partial-c"), false)
+        };
+        var partialBackend = new FakeModToggleBackend(new(partialMods.ToList(), []))
+        {
+            ApplyFailure = plan => plan.Name == "Partial B"
+                ? new IOException("isolated simulated write failure")
+                : null
+        };
+        var partialWorkflow = new ModToggleWorkflowService(partialBackend);
+        var partialPreview = await partialWorkflow.PrepareBatchAsync(
+            toggleRoot, partialBackend.Inventory, partialMods, true);
+        var partialResult = await partialWorkflow.ConfirmAndApplyBatchAsync(
+            partialPreview, (_, _) => Task.FromResult(true));
+        check(partialResult.SuccessCount == 2 && partialResult.FailedCount == 1 &&
+            partialResult.SkippedCount == 0 &&
+            partialBackend.AppliedOrder.SequenceEqual(["Partial A", "Partial C"]) &&
+            partialResult.Items.Single(item => item.Name == "Partial B").State == "失败",
+            "batch workflow continues independent items after one failure and returns per-item partial results");
 
         // MOD inventory refresh: all backends below are fake and all paths are temporary.
         string refreshRoot = Path.Combine(home, "refresh-game");
