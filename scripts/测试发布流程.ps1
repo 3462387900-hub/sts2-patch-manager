@@ -145,15 +145,23 @@ try{
     )
     & $validator -Directory $package -SourceRoot $repositoryRoot -ArchivePath $archivePath
 
+    $missingLicense=Join-Path $package 'third_party/WorkshopAndroidDownloader-LICENSE.txt'
+    $missingBackup=Join-Path $tempRoot 'WorkshopAndroidDownloader-LICENSE.backup'
+    Move-Item -LiteralPath $missingLicense -Destination $missingBackup
+    $rejected=$false
+    try{& $validator -Directory $package -SourceRoot $repositoryRoot}catch{$rejected=$true}
+    finally{Move-Item -LiteralPath $missingBackup -Destination $missingLicense}
+    if(!$rejected){throw '打包完整性检查没有识别缺失的第三方许可证。'}
+
     $licensePath=Join-Path $package 'third_party/SharpCompress-LICENSE.txt'
     $licenseBackup=Join-Path $tempRoot 'SharpCompress-LICENSE.backup'
     Copy-Item -LiteralPath $licensePath -Destination $licenseBackup
     Set-Content -LiteralPath $licensePath -Value 'intentionally tampered' -NoNewline
     $rejected=$false
     try{& $validator -Directory $package -SourceRoot $repositoryRoot}catch{$rejected=$true}
-    Copy-Item -LiteralPath $licenseBackup -Destination $licensePath -Force
+    finally{Copy-Item -LiteralPath $licenseBackup -Destination $licensePath -Force}
     if(!$rejected){throw '打包完整性检查没有识别内容被篡改的许可证。'}
-    Write-Output 'PASS 声明/许可证校验能识别内容被篡改的文件。'
+    Write-Output 'PASS 声明/许可证校验能识别缺失或内容被篡改的文件。'
     Write-Output 'PASS 发布索引和打包声明本地隔离测试全部完成。'
 }
 finally{
