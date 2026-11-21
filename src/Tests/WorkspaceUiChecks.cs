@@ -262,6 +262,18 @@ public partial class MainWindow
    "clicking the card background opens contextual details without leaving the list");
   await Click("✕");await Idle();
   var checkedFolder=((ModListRow)cardToSelect.DataContext).Mod.Folder;
+  ModCardControl? currentCard=null;
+  for(int attempt=0;attempt<100;attempt++)
+  {
+   await Idle();
+   currentCard=Controls<ModCardControl>(activeModList!).FirstOrDefault(card=>
+    card.DataContext is ModListRow row&&row.Mod.Folder.Equals(checkedFolder,StringComparison.OrdinalIgnoreCase));
+   if(!busy&&!transactionWriting&&!modInventoryDirty&&currentCard!=null)break;
+   currentCard=null;await Task.Delay(60);
+  }
+  Check(currentCard!=null&&!busy&&!transactionWriting&&!modInventoryDirty,
+   "card selection waits for any asynchronous file-watcher refresh to settle");
+  cardToSelect=currentCard!;
   cardToSelect.SelectBox.IsChecked=true;await Idle();
   Check(chosenModFolders.Contains(checkedFolder)&&
    Controls<TextBlock>(shell).Any(t=>t.Text.Contains("已选 1 项")),

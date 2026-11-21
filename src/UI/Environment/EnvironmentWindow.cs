@@ -8,25 +8,44 @@ public partial class MainWindow
  string SettingsPath=>Path.Combine(installer.DataRoot,"偏好.json");
  List<GameCandidate> gameCandidates=[];
  string locateStatus="检查 Steam 库、上次使用的目录和常用安装位置。";
+ GameEnvironmentSessionService? environmentSession;
+ GameEnvironmentSessionService EnvironmentSession
+ {
+  get
+  {
+   if(environmentSession!=null)return environmentSession;
+   EnsureModWatcherEvents();
+   environmentSession=new GameEnvironmentSessionService(SettingsPath,modFileWatcher,selectedInstallRoot);
+   environmentSession.DirectoryChanging+=(_,_)=>CancelModUpdateCheck();
+   environmentSession.DirectoryChanged+=(_,e)=>
+   {
+    selectedInstallRoot=e.CurrentRoot;
+    watchedGameRoot=e.CurrentRoot;
+    modInventoryDirty=false;modWatchOverflow=false;modWatchTreeChanged=false;modChangeVersion=0;
+    report=null;states=[];ClearCoop();demo=false;ClearSelection();installPreview=null;lastInstallResult=null;
+    modInventory=null;modTogglePreview=null;orphanPatchNotice=null;
+    modStatus="目录已切换，请刷新模组列表。";
+    InvalidateLifecycle("已切换游戏目录，请重新扫描补丁健康状态。");
+   };
+   return environmentSession;
+  }
+ }
  void UseGameRoot(string path)
  {
-  string root=GameEnvironment.Root(path);
-  if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)){
-   CancelModUpdateCheck(); // Cancel old game's read-only source check before switching.
-   selectedInstallRoot=root;report=null;states=[];ClearCoop();demo=false;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;modTogglePreview=null;orphanPatchNotice=null;modStatus="目录已切换，请刷新模组列表。";InvalidateLifecycle("已切换游戏目录，请重新扫描补丁健康状态。");
-  }
-  StartModWatch(root);
-  if(rememberEnvironment)try{GameEnvironment.SaveRoot(SettingsPath,root);}catch(Exception e){toast.Text="目录已选择，但未能记住路径："+e.Message;}
-  folderLabel.Text=root;UpdateGlobalControls();
+  var result=EnvironmentSession.SelectRoot(path,rememberEnvironment);
+  watchedGameRoot=result.Root;
+  if(result.PreferenceError is not null)
+   toast.Text="目录已选择，但未能记住路径："+result.PreferenceError;
+  folderLabel.Text=result.Root;UpdateGlobalControls();
  }
  async Task LocateGameAsync(bool startup=false)
  {
   if(busy||transactionWriting)return;
   busy=true;locateStatus="正在查找游戏目录…";if(!startup)ShowLocations();
   try{
-   string? saved=GameEnvironment.LoadRoot(SettingsPath);
+   string? saved=EnvironmentSession.LoadRememberedRoot();
    if(startup&&saved!=null){UseGameRoot(saved);locateStatus="已恢复上次使用的目录。";return;}
-   gameCandidates=await Task.Run(()=>GameEnvironment.Discover(saved));
+   gameCandidates=await EnvironmentSession.DiscoverAsync(saved);
    if(gameCandidates.Count==1){UseGameRoot(gameCandidates[0].Directory);locateStatus="已定位游戏目录："+gameCandidates[0].Directory;}
    else locateStatus=gameCandidates.Count==0?"没有找到可用安装，请手动选择游戏目录。":"发现多个安装目录，请选择本次使用的一个。";
   }catch(Exception e){locateStatus="自动查找未完成："+e.Message;}
