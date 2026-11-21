@@ -312,13 +312,14 @@ internal static class ApplicationWorkflowChecks
                 rejectedConfirmation = true;
                 return Task.FromResult(false);
             });
+        int applyCallsAfterRejection = singleBackend.ApplyCount;
         var singleProgress = new List<bool>();
         var appliedSingle = await toggleWorkflow.ConfirmAndApplyAsync(
             singlePlan,
             (_, _) => Task.FromResult(true),
             progress => singleProgress.Add(progress.TransactionWriting));
         check(rejectedConfirmation && rejectedSingle.Cancelled &&
-            singleBackend.ApplyCount == 1 && appliedSingle.Success &&
+            applyCallsAfterRejection == 0 && singleBackend.ApplyCount == 1 && appliedSingle.Success &&
             singleBackend.AppliedOrder.SequenceEqual(["Single"]) &&
             singleProgress.SequenceEqual([true, false]),
             "single MOD workflow previews, delegates confirmation, leaves files untouched on rejection and returns the applied result");
