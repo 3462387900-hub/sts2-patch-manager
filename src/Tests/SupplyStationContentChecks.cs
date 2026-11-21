@@ -226,7 +226,7 @@ internal static class SupplyStationContentChecks
                     return Bytes(request, manifestZip);
                 if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
-                    return Redirect(request, "http://st.dl.eccdnx.com" + request.RequestUri.AbsolutePath);
+                    return Redirect(request, "http://st.dl.bscstorage.net" + request.RequestUri.AbsolutePath);
                 throw new InvalidOperationException("HTTP downgrade destination must never be requested.");
             })))
             {
@@ -239,7 +239,7 @@ internal static class SupplyStationContentChecks
                     downgradeError = error.Message;
                 }
                 Check(downgradeError?.Contains("只允许 HTTPS 默认端口 443", StringComparison.Ordinal) == true &&
-                    !downgradeRequests.Contains("st.dl.eccdnx.com", StringComparer.OrdinalIgnoreCase),
+                    !downgradeRequests.Contains("st.dl.bscstorage.net", StringComparer.OrdinalIgnoreCase),
                     "even a trusted Steam CDN host cannot receive a temporary authorization query over HTTP");
             }
 
