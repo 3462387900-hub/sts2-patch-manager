@@ -88,7 +88,7 @@ internal sealed class ModDependencyDiagnosticsService
     public ModDependencyDiagnosticsService(
         Func<string, ManagedMod, ModInventory, string?>? blockReason = null)
     {
-        this.blockReason = blockReason ?? ModManager.BlockReason;
+        this.blockReason = blockReason ?? ((root, mod, inventory) => ModManager.BlockReason(root, mod, inventory));
     }
 
     public ModDependencyDiagnosticsReport Analyze(ModInventory inventory)
@@ -264,10 +264,10 @@ internal sealed class ModDependencyDiagnosticsService
         string? message = blockReason(root, mod, inventory);
         ModToggleBlockKind kind = message is null
             ? ModToggleBlockKind.None
-            : isDependencyBlock
-                ? ModToggleBlockKind.Dependency
-                : inventory.Issues.Count > 0
-                    ? ModToggleBlockKind.Inventory
+            : inventory.Issues.Count > 0
+                ? ModToggleBlockKind.Inventory
+                : isDependencyBlock
+                    ? ModToggleBlockKind.Dependency
                     : ModToggleBlockKind.FileOrDirectory;
 
         return new(message is null, message, kind, relatedEnabledDependents);
