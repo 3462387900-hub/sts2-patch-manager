@@ -95,7 +95,8 @@ public sealed class BundleInstaller
   var checksEntry=zip.GetEntry(PackageFolder+"/checksums.json")??throw new InvalidDataException("压缩包缺少校验清单。");
   var expected=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
   using(var checkStream=checksEntry.Open())
-  using(var checks=JsonDocument.Parse(checkStream))
+  using(var checkReader=new StreamReader(checkStream,Encoding.UTF8,true))
+  using(var checks=JsonDocument.Parse(checkReader.ReadToEnd()))
   {
    foreach(var item in checks.RootElement.EnumerateArray())
    {

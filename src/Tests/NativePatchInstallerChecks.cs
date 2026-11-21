@@ -33,9 +33,10 @@ internal static class NativePatchInstallerChecks
   byte[] legacyScript=Encoding.UTF8.GetBytes("Write-Host 'legacy only'"),payloadBytes=Encoding.UTF8.GetBytes("verified payload");
   string legacyHash=Convert.ToHexString(SHA256.HashData(legacyScript));
   string payloadHash=Convert.ToHexString(SHA256.HashData(payloadBytes));
-  byte[] checksBytes=Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[]{
+  byte[] checksJson=Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[]{
    new{path="Common.ps1",sha256=legacyHash},new{path="payload/data.bin",sha256=payloadHash}
   }));
+  byte[] checksBytes=Encoding.UTF8.GetPreamble().Concat(checksJson).ToArray();
   void MakeLegacyZip(string path,byte[] scriptBytes)
   {
    using var zip=ZipFile.Open(path,ZipArchiveMode.Create);
