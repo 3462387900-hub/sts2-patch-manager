@@ -360,7 +360,10 @@ internal static class ApplicationWorkflowChecks
             });
         check(batchPreview.ExecutionOrder.Select(step => step.Mod.Name)
                 .SequenceEqual(["Base", "Dependent"]) &&
-            batchPreview.Reviews.Any(review => review.Name == "Dependent" && review.State == "需复核") &&
+            batchPreview.Reviews.Any(review => review.Name == "Dependent" &&
+                review.State == "需复核" && review.Explanation.Contains("前置项", StringComparison.Ordinal)) &&
+            batchPreview.ExecutionOrder.Single(step => step.Mod.Name == "Dependent")
+                .OrderExplanation.Contains("前置项", StringComparison.Ordinal) &&
             batchPreview.Reviews.Count(review => review.State == "跳过") == 2 &&
             batchPreflightDidNotWrite &&
             batchResult.SuccessCount == 2 && batchResult.SkippedCount == 2 &&
@@ -495,7 +498,7 @@ internal static class ApplicationWorkflowChecks
         var cycleInventory = new ModInventory([cycleA, cycleB], []);
         var cycleReport = dependencyDiagnostics.Analyze(cycleInventory);
         var cycleOrder = dependencyDiagnostics.CreateToggleOrder(
-            cycleInventory, [cycleA, cycleB], enable: true, cycleReport);
+            cycleInventory, [cycleA, cycleB], enable: true, diagnostics: cycleReport);
         check(cycleReport.Cycles.Length == 1 &&
             cycleReport.Cycles[0].ModIds.ToHashSet(StringComparer.OrdinalIgnoreCase)
                 .SetEquals([cycleA.Id, cycleB.Id]) &&
