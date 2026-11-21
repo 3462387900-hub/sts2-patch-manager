@@ -1004,8 +1004,9 @@ public partial class MainWindow
    {
     var emptyProgress=new ModBatchProgressWindow(this,"正在批量"+name,selected.Length);
     emptyProgress.Show();
+    int completed=0;
     foreach(var review in preview.Reviews)
-     emptyProgress.Record(review.Name,review.State,review.Explanation,emptyProgress.Completed+1);
+     emptyProgress.Record(review.Name,review.State,review.Explanation,++completed);
     InvalidateLifecycle();
     ClearSelection();ClearCoop();report=null;states=[];installPreview=null;lastInstallResult=null;
     modInventoryDirty=true;
