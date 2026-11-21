@@ -72,7 +72,7 @@ jobs:
 
           $versionMatch = [regex]::Match(
             $rawVersion,
-            '^(?<base>(?:0|[1-9]d*).(?:0|[1-9]d*).(?:0|[1-9]d*))(?<suffix>-[0-9A-Za-z-]+(?:.[0-9A-Za-z-]+)*)?$'
+            '^(?<base>(?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*))(?<suffix>-[0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?$'
           )
           if (!$versionMatch.Success) {
             throw "版本号格式不正确：$rawVersion。请使用 0.14.4 或 0.14.4-beta.1 这样的格式。"
@@ -108,7 +108,7 @@ jobs:
           }
 
           $title = "尖塔修补站 $tag"
-          if ($isBeta -and $suffix -match '(?i)^-beta(?:.(?<number>d+))?$') {
+          if ($isBeta -and $suffix -match '(?i)^-beta(?:[.](?<number>[0-9]+))?$') {
             if ($Matches.number) {
               $title = "尖塔修补站 v$baseVersion Beta $($Matches.number)"
             }
