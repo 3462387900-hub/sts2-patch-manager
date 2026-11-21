@@ -101,6 +101,15 @@ public partial class MainWindow
    "selected filters use a subtle translucent fill rather than primary blue");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");
   await Click("使用此目录",true);
+  // The watcher publishes file versions before WPF dispatch. If the first scan
+  // overlaps a queued filesystem notification, it is correctly discarded and
+  // the existing quiet-period workflow performs the stable follow-up scan.
+  for(int attempt=0;attempt<180;attempt++)
+  {
+   await Idle();
+   if(!busy&&!transactionWriting&&!modInventoryDirty&&modInventory?.Mods.Count==7)break;
+   await Task.Delay(60);
+  }
   Check(selectedInstallRoot==first&&modInventory?.Mods.Count==7&&folderLabel.Text==first,
    "directory choice is shared by mod management and global controls"+
    "; selectedRoot="+(selectedInstallRoot??"<null>")+
