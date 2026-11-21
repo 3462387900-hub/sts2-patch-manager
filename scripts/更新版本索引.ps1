@@ -7,7 +7,7 @@ $ErrorActionPreference='Stop'
 
 $stablePattern='^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$'
 $betaPattern='^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-beta\.[1-9][0-9]{0,8}$'
-if($Channel -ceq 'Stable'){
+if($Channel -ieq 'Stable'){
     if($Tag -cnotmatch $stablePattern){throw '稳定版必须使用 v三段版本 标签，例如 v0.14.4。'}
     $expectedPrerelease=$false
     $destinationName='manager-update.json'
