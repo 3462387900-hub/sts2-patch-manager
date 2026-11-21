@@ -995,12 +995,26 @@ public partial class MainWindow
    .ToArray();
   if(preview.ExecutionOrder.Count==0)
   {
-   _=ModBatchDialogs.Confirm(
+   bool confirmed=ModBatchDialogs.Confirm(
     this,
     "批量"+name+" · 执行前预览",
-    "本次没有可执行项目。请查看每一项被跳过或阻止的原因。",
+    "预览不移动文件。依赖待复核项可能在其他模组处理后才能通过；每一项执行前仍会调用安全预检。操作成功的项不会因为后续失败自动回滚。",
     reviews);
-   modStatus=preview.Status;
+   if(confirmed)
+   {
+    var emptyProgress=new ModBatchProgressWindow(this,"正在批量"+name,selected.Length);
+    emptyProgress.Show();
+    foreach(var review in preview.Reviews)
+     emptyProgress.Record(review.Name,review.State,review.Explanation,emptyProgress.Completed+1);
+    InvalidateLifecycle();
+    ClearSelection();ClearCoop();report=null;states=[];installPreview=null;lastInstallResult=null;
+    modInventoryDirty=true;
+    modInventory=await Task.Run(()=>ModManager.Scan(root));
+    modInventoryDirty=false;
+    modStatus=$"批量{name}结束：成功 0 项，跳过 {selected.Length} 项。可在结果窗口查看每个模组的处理情况。";
+    emptyProgress.Finish(modStatus);
+   }
+   else modStatus=preview.Status;
    ShowMods();
    return;
   }
@@ -1016,7 +1030,7 @@ public partial class MainWindow
      bool confirmed=ModBatchDialogs.Confirm(
       this,
       "批量"+name+" · 执行前预览",
-      "预览不移动文件。依赖待复核项会在前置操作完成后重新预览；所有项目完成预览与依赖检查后才进入写入阶段。每一项写入前仍会重新核对文件和依赖。操作成功的项不会因为后续失败自动回滚。",
+      "预览不移动文件。依赖待复核项可能在其他模组处理后才能通过；每一项执行前仍会调用安全预检。操作成功的项不会因为后续失败自动回滚。",
       reviews);
      if(confirmed)
      {
@@ -1052,10 +1066,9 @@ public partial class MainWindow
     },
     ()=>progress?.CancelRequested==true);
 
-   bool needsRescan=result.SuccessCount>0||result.FailedCount>0;
-   if(needsRescan)
+   if(result.Confirmed)
    {
-    InvalidateLifecycle("批量启停了 MOD，请重新检查补丁健康状态。");
+    InvalidateLifecycle();
     ClearSelection();ClearCoop();report=null;states=[];installPreview=null;lastInstallResult=null;
     modInventoryDirty=true;
     modInventory=await Task.Run(()=>ModManager.Scan(root));
