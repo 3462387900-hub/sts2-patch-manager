@@ -345,12 +345,12 @@ internal static class ApplicationWorkflowChecks
             (_, _) => Task.FromResult(true),
             progress =>
             {
-                if (progress.TransactionWriting)
+                if (progress.TransactionWriting && !batchWriting)
                 {
                     batchWriting = true;
                     writingStartCount++;
                 }
-                else if (batchWriting)
+                else if (!progress.TransactionWriting && batchWriting)
                 {
                     batchWriting = false;
                     batchWatcher.DeferQuietPeriod();
