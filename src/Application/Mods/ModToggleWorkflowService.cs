@@ -516,9 +516,10 @@ internal sealed class ModToggleWorkflowService
                 }
                 catch (Exception error)
                 {
+                    bool dependencyBlocked = dependencyDiagnostics.IsDependencyBlockMessage(error.Message);
                     AddResult(mod,
-                        IsDependencyBlock(error.Message) ? "跳过" : "失败",
-                        IsDependencyBlock(error.Message)
+                        dependencyBlocked ? "跳过" : "失败",
+                        dependencyBlocked
                             ? "前置操作未能完成，当前依赖条件仍不满足：" + error.Message
                             : "执行前重新预览失败：" + error.Message);
                     continue;
