@@ -149,7 +149,7 @@ internal static class WorkshopModUpdateChecks
             requestCode = "123456789",
             endpoints = new[]
             {
-                new { origin = "http://cdn.example", query = "bootstrap=fixture-secret" }
+                new { origin = "http://st.dl.eccdnx.com", query = "bootstrap=fixture-secret" }
             },
             depotKeyBase64 = DepotKey,
             expiresAt = Future
