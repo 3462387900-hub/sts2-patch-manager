@@ -64,6 +64,92 @@ internal static class ApplicationWorkflowChecks
         }
     }
 
+    sealed class FakeModToggleBackend : IModToggleWorkflowBackend
+    {
+        public ModInventory Inventory { get; private set; }
+        public List<string> PreviewAttempts { get; } = [];
+        public List<string> AppliedOrder { get; } = [];
+        public int ApplyCount { get; private set; }
+        public Action<string>? PreviewCompleted { get; set; }
+        public Action<ModTogglePlan>? BeforeApply { get; set; }
+        public Func<ModTogglePlan, Exception?>? ApplyFailure { get; set; }
+
+        public FakeModToggleBackend(ModInventory inventory)
+        {
+            Inventory = inventory;
+        }
+
+        public string? BlockReason(string root, ManagedMod mod, ModInventory inventory)
+        {
+            if (inventory.Issues.Count > 0)
+                return "先处理清单读取或重复 ID 问题，再启用/停用。";
+
+            var enabled = inventory.Mods.Where(item => item.Enabled).ToArray();
+            if (mod.Enabled)
+            {
+                var dependents = enabled
+                    .Where(item => item.Folder != mod.Folder &&
+                        item.Dependencies.Any(dependency =>
+                            dependency.Id.Equals(mod.Id, StringComparison.OrdinalIgnoreCase)))
+                    .ToArray();
+                if (dependents.Length > 0)
+                    return "这些启用项依赖它，请先停用依赖项：" +
+                        string.Join("、", dependents.Select(item => item.Name));
+            }
+            else
+            {
+                foreach (var dependency in mod.Dependencies)
+                {
+                    var prerequisite = enabled.FirstOrDefault(item =>
+                        item.Id.Equals(dependency.Id, StringComparison.OrdinalIgnoreCase));
+                    if (prerequisite is null)
+                        return "请先启用前置模组：" + dependency.Id;
+                }
+            }
+
+            return null;
+        }
+
+        public ModTogglePlan Preview(string root, string folder, bool enable)
+        {
+            PreviewAttempts.Add(folder);
+            var mod = Inventory.Mods.Single(item =>
+                item.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase));
+            string? reason = BlockReason(root, mod, Inventory);
+            if (reason is not null)
+                throw new InvalidOperationException(reason);
+            if (mod.Enabled == enable)
+                throw new InvalidOperationException("模组状态已改变。");
+
+            var plan = new ModTogglePlan(root, folder, enable, mod.Name,
+                "fixture-token-" + PreviewAttempts.Count, 2);
+            PreviewCompleted?.Invoke(folder);
+            return plan;
+        }
+
+        public void Apply(ModTogglePlan plan)
+        {
+            ApplyCount++;
+            BeforeApply?.Invoke(plan);
+            Exception? failure = ApplyFailure?.Invoke(plan);
+            if (failure is not null)
+                throw failure;
+
+            var current = Inventory.Mods.Single(item =>
+                item.Folder.Equals(plan.Folder, StringComparison.OrdinalIgnoreCase));
+            if (current.Enabled == plan.Enable)
+                throw new InvalidOperationException("模组状态已改变。");
+
+            Inventory = new ModInventory(
+                Inventory.Mods.Select(item =>
+                    item.Folder.Equals(plan.Folder, StringComparison.OrdinalIgnoreCase)
+                        ? item with { Enabled = plan.Enable }
+                        : item).ToList(),
+                Inventory.Issues);
+            AppliedOrder.Add(plan.Name);
+        }
+    }
+
     sealed class FailingApplyBackend : ICoopAlignmentWorkflowBackend
     {
         readonly DomainCoopAlignmentWorkflowBackend inner = new();
