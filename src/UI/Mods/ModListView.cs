@@ -28,6 +28,17 @@ internal sealed record ModListRow(
 
 internal static class ModListView
 {
+ // Keep the original UI-test/helper signature; the compatibility overload still
+ // delegates all readiness decisions to the Application diagnostics service.
+ internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,
+  Func<ManagedMod,string>? github=null,Func<ManagedMod,string>? dependency=null,
+  Func<ManagedMod,bool>? dependencyIssue=null)
+ {
+  var diagnostics=new ModDependencyDiagnosticsService();
+  return Rows(root,inventory,health,github,dependency,dependencyIssue,
+   mod=>diagnostics.DiagnoseToggle(root,mod,inventory));
+ }
+
  internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,
   Func<ManagedMod,string>? github,Func<ManagedMod,string>? dependency,
   Func<ManagedMod,bool>? dependencyIssue,
