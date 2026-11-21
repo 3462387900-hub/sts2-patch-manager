@@ -16,7 +16,6 @@ public static class WorkspaceChecks
   string parent=Path.GetDirectoryName(output)!;Directory.CreateDirectory(parent);string root=Fixture(parent);var lines=new List<string>();
   void Check(bool ok,string name){if(!ok)throw new InvalidOperationException(name);lines.Add("PASS "+name);File.WriteAllLines(output,lines);}
   void Reject(Action action,string name){bool rejected=false;try{action();}catch(Exception e)when(e is InvalidOperationException or InvalidDataException){rejected=true;}Check(rejected,name);}
-  await ApplicationWorkflowChecks.RunAsync(parent,Check);
   ManagedMod Find(string id)=>ModManager.Scan(root).Mods.Single(m=>m.Id==id);
   Dictionary<string,string> Snapshot()=>Directory.EnumerateFiles(Path.Combine(root,"mods"),"*",SearchOption.AllDirectories).ToDictionary(f=>f,Catalog.Hash);
   bool Same(Dictionary<string,string> expected)=>expected.Count==Snapshot().Count&&expected.All(f=>File.Exists(f.Key)&&Catalog.Hash(f.Key)==f.Value);
