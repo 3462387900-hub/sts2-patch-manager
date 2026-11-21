@@ -5,110 +5,106 @@ namespace SpirePatch;
 
 public partial class MainWindow
 {
- // A file watcher is an early warning, NOT an integrity check or permission to retire patches.
- readonly List<FileSystemWatcher> modWatchers=[];
- DispatcherTimer? modWatchDebounce;
+ // The watcher is infrastructure; this partial only translates service events into existing UI state.
+ readonly ModFileWatcherService modFileWatcher = new();
+ bool modWatcherEventsSubscribed;
  string? watchedGameRoot;
  bool modInventoryDirty,modWatchOverflow,modWatchTreeChanged;
  int modChangeVersion;
 
+ void EnsureModWatcherEvents()
+ {
+  if(modWatcherEventsSubscribed)return;
+  modWatcherEventsSubscribed=true;
+  modFileWatcher.ChangeDetected+=OnModWatchChangeDetected;
+  modFileWatcher.QuietPeriodElapsed+=OnModWatchQuiet;
+  modFileWatcher.MonitoringFailed+=OnModWatchMonitoringFailed;
+ }
+
  void StopModWatch()
  {
-  modWatchDebounce?.Stop();
-  foreach(var watcher in modWatchers){watcher.EnableRaisingEvents=false;watcher.Dispose();}
-  modWatchers.Clear();watchedGameRoot=null;
+  EnsureModWatcherEvents();
+  modFileWatcher.Stop();
+  watchedGameRoot=null;
  }
 
  void StartModWatch(string root)
  {
+  EnsureModWatcherEvents();
   if(root.Equals(watchedGameRoot,StringComparison.OrdinalIgnoreCase))return;
-  StopModWatch();
+  modFileWatcher.Stop();
   modInventoryDirty=false;modWatchOverflow=false;modWatchTreeChanged=false;
   watchedGameRoot=root;
-  modWatchDebounce??=new DispatcherTimer(DispatcherPriority.Background){Interval=TimeSpan.FromMilliseconds(850)};
-  modWatchDebounce.Tick-=OnModWatchQuiet;
-  modWatchDebounce.Tick+=OnModWatchQuiet;
-  try
-  {
-   WatchFolder(root,root,false,true);
-   string mods=Path.Combine(root,"mods");
-   if(Directory.Exists(mods))WatchFolder(root,mods,true,false);
-   string disabled=Path.Combine(root,ModManager.StorageName);
-   if(Directory.Exists(disabled))WatchFolder(root,disabled,true,false);
-  }
-  catch(Exception ex)
-  {
-   StopModWatch();modWatchOverflow=true;modInventoryDirty=true;
-   modStatus="文件自动监测无法启动，请手动刷新："+ex.Message;
-   InvalidateLifecycle("文件监测未启用，请重新扫描健康状态。");
-  }
+  modFileWatcher.Start(root);
  }
 
- void WatchFolder(string root,string folder,bool recursive,bool onlyTopFolders)
- {
-  var watcher=new FileSystemWatcher(folder){
-   IncludeSubdirectories=recursive,NotifyFilter=NotifyFilters.FileName|NotifyFilters.DirectoryName|
-    NotifyFilters.LastWrite|NotifyFilters.Size|NotifyFilters.CreationTime,
-   InternalBufferSize=32*1024
-  };
-  if(onlyTopFolders)
-  {
-   watcher.Filters.Clear();
-   watcher.Filters.Add("mods");
-   watcher.Filters.Add(ModManager.StorageName);
-  }
-  watcher.Changed+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
-  watcher.Created+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
-  watcher.Deleted+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
-  watcher.Renamed+=(_,_)=>QueueModChange(root,false,onlyTopFolders);
-  watcher.Error+=(_,_)=>QueueModChange(root,true,onlyTopFolders);
-  modWatchers.Add(watcher);
-  watcher.EnableRaisingEvents=true;
- }
-
- void QueueModChange(string root,bool overflow,bool tree)
+ void OnModWatchChangeDetected(object? sender,ModFileChangeEventArgs e)
  {
   if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
   _=Dispatcher.BeginInvoke(new Action(()=>{
-   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+   if(!e.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
    modChangeVersion++;
-   modWatchTreeChanged|=tree;
+   modWatchTreeChanged|=e.TreeChanged;
    if(transactionWriting)
    {
     modInventoryDirty=true;
-    modWatchDebounce?.Stop();modWatchDebounce?.Start();
     return;
    }
-   // One burst invalidates the current report once, but subsequent writes restart the quiet timer.
-   if(!modInventoryDirty||overflow)
+   // One burst invalidates the current report once, but subsequent writes restart the service timer.
+   if(!modInventoryDirty||e.Overflow)
    {
     modInventoryDirty=true;
-    modWatchOverflow|=overflow;
-    InvalidateLifecycle(overflow
+    modWatchOverflow|=e.Overflow;
+    InvalidateLifecycle(e.Overflow
      ?"文件监测发生溢出，无法保证通知完整。请重新扫描。"
      :"检测到 MOD 文件变化，请重新检查健康状态。");
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;modTogglePreview=null;
-    modStatus=overflow?"文件监测可能遗漏变化，请手动刷新。":"检测到 MOD 文件变化，正在等待文件写入结束。";
+    modStatus=e.Overflow?"文件监测可能遗漏变化，请手动刷新。":"检测到 MOD 文件变化，正在等待文件写入结束。";
    }
-   modWatchDebounce?.Stop();modWatchDebounce?.Start();
    if((page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page&&!busy&&!transactionWriting)ShowMods();
   }),DispatcherPriority.Background);
  }
 
- void OnModWatchQuiet(object? sender,EventArgs e)
+ void OnModWatchMonitoringFailed(object? sender,ModFileWatchFailureEventArgs e)
  {
-  modWatchDebounce?.Stop();
-  if(selectedInstallRoot==null)return;
-  if(busy||transactionWriting){modWatchDebounce?.Start();return;}
-  string root=selectedInstallRoot;
-  // A new mods / disabled-folder tree may have appeared since monitoring began.
-  if(modWatchOverflow||modWatchTreeChanged||modWatchers.Count<2)
+  if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
+  _=Dispatcher.BeginInvoke(new Action(()=>{
+   if(!e.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+   watchedGameRoot=null;modWatchOverflow=true;modInventoryDirty=true;
+   modStatus="文件自动监测无法启动，请手动刷新："+e.Message;
+   InvalidateLifecycle("文件监测未启用，请重新扫描健康状态。");
+  }),DispatcherPriority.Background);
+ }
+
+ void OnModWatchQuiet(object? sender,ModFileWatchQuietEventArgs e)
+ {
+  if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
+  _=Dispatcher.BeginInvoke(new Action(()=>ProcessModWatchQuiet(e)),DispatcherPriority.Background);
+ }
+
+ void ProcessModWatchQuiet(ModFileWatchQuietEventArgs e)
+ {
+  if(selectedInstallRoot==null||!e.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+  if(busy||transactionWriting)
   {
-   watchedGameRoot=null;
-   StartModWatch(root);
-   // Keep the stale warning even if monitoring was successfully recreated.
-   modInventoryDirty=true;
+   modFileWatcher.DeferQuietPeriod();
+   return;
   }
+
+  var reconfigured=modFileWatcher.CompleteQuietPeriod(e.Version);
+  if(reconfigured.Error is not null)
+  {
+   watchedGameRoot=null;modWatchOverflow=true;modInventoryDirty=true;
+   modStatus="文件自动监测重新启动失败，请手动刷新："+reconfigured.Error;
+   InvalidateLifecycle("文件监测未启用，请重新扫描健康状态。");
+  }
+  else if(reconfigured.Recreated)
+  {
+   watchedGameRoot=e.Root;
+   // The service has rebuilt the root / mods / disabled watchers. Keep the stale warning.
+   modInventoryDirty=true;modWatchOverflow=false;modWatchTreeChanged=false;
+  }
+
   if(modInventoryDirty&&HasValidLifecycleReport)
   {
    InvalidateLifecycle("文件监测发现 MOD 环境变化，请重新扫描补丁健康状态。");
@@ -122,5 +118,9 @@ public partial class MainWindow
    toast.Text="检测到 MOD 文件变化。进入模组管理刷新列表，并重新检查补丁健康状态。";
  }
 
- void CloseModWatch()=>StopModWatch();
+ void CloseModWatch()
+ {
+  StopModWatch();
+  modFileWatcher.Dispose();
+ }
 }
