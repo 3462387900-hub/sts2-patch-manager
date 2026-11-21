@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Net;
+using System.Net.Sockets;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -87,6 +88,13 @@ internal sealed record SupplyStationChunkProbeResult(
 
 
 // Phase 1 only resolves and validates the public protocol. It never downloads or installs a MOD.
+internal sealed class SupplyStationRateLimitException(string message, TimeSpan retryAfter)
+    : HttpRequestException(message, null, HttpStatusCode.TooManyRequests)
+{
+    public TimeSpan RetryAfter { get; } = retryAfter;
+}
+internal sealed class SupplyStationBudgetExceededException()
+    : HttpRequestException("Workshop 下载总请求次数已达安全预算。");
 internal sealed class SpireSupplyStationClient : IDisposable
 {
     internal const uint SupportedAppId = 2868840;
@@ -144,21 +152,52 @@ internal sealed class SpireSupplyStationClient : IDisposable
     };
 
     readonly HttpClient client;
+    readonly TimeSpan apiTimeout;
+    readonly TimeSpan cdnTimeout;
+    readonly Func<string, CancellationToken, Task<IPAddress[]>>? dnsResolver;
     readonly ConcurrentDictionary<string, CachedCdnToken> cdnTokenCache = new(StringComparer.OrdinalIgnoreCase);
     readonly ConcurrentDictionary<string, SemaphoreSlim> cdnTokenLocks = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, DateTimeOffset> unchangedTokenRefreshes = new(StringComparer.OrdinalIgnoreCase);
+    static readonly ConcurrentDictionary<string, RateLimitWindow> LiveRateLimits = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, RateLimitWindow> rateLimits;
+    sealed record RateLimitWindow(DateTimeOffset Until, int Count);
 
-    public SpireSupplyStationClient(HttpMessageHandler? handler = null)
+    // One budget covers all API, token, Manifest, redirect and Chunk requests for a Workshop ID.
+    sealed class RequestBudget(int allowance)
     {
+        int remaining = allowance;
+        public void AllowChunks(int count) => Interlocked.Add(ref remaining, checked(count * 3));
+        public void Charge()
+        {
+            if (Interlocked.Decrement(ref remaining) < 0)
+                throw new SupplyStationBudgetExceededException();
+        }
+    }
+
+    public SpireSupplyStationClient(
+        HttpMessageHandler? handler = null,
+        TimeSpan? apiTimeout = null,
+        TimeSpan? cdnTimeout = null,
+        Func<string, CancellationToken, Task<IPAddress[]>>? dnsResolver = null)
+    {
+        bool isolated =
+            string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) ||
+            Environment.GetEnvironmentVariable("SPIREPATCH_NETWORK_ISOLATED") == "1";
+        if (handler is null && isolated)
+            throw new InvalidOperationException("CI/隔离测试模式禁止创建真实网络客户端；必须显式注入模拟 HttpMessageHandler。");
+        this.apiTimeout = apiTimeout ?? TimeSpan.FromSeconds(20);
+        this.cdnTimeout = cdnTimeout ?? TimeSpan.FromSeconds(60);
+        this.dnsResolver = dnsResolver ?? (handler is null ? Dns.GetHostAddressesAsync : null);
+        rateLimits = handler is null ? LiveRateLimits :
+            new ConcurrentDictionary<string, RateLimitWindow>(StringComparer.OrdinalIgnoreCase);
         var transport = handler ?? new HttpClientHandler
         {
             AllowAutoRedirect = false,
             UseProxy = true,
             UseCookies = false
         };
-        client = new HttpClient(transport, disposeHandler: true)
-        {
-            Timeout = Timeout.InfiniteTimeSpan
-        };
+        client = new HttpClient(transport, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
         client.DefaultRequestHeaders.UserAgent.ParseAdd(RequiredUserAgent);
     }
 
