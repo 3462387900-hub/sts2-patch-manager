@@ -9,9 +9,9 @@ internal static class ApplicationWorkflowChecks
     sealed class RecordingWatcher : IModFileWatcherService
     {
         public List<string> Calls { get; } = [];
-        public event EventHandler<ModFileChangeEventArgs>? ChangeDetected;
-        public event EventHandler<ModFileWatchQuietEventArgs>? QuietPeriodElapsed;
-        public event EventHandler<ModFileWatchFailureEventArgs>? MonitoringFailed;
+        public event EventHandler<ModFileChangeEventArgs>? ChangeDetected { add { } remove { } }
+        public event EventHandler<ModFileWatchQuietEventArgs>? QuietPeriodElapsed { add { } remove { } }
+        public event EventHandler<ModFileWatchFailureEventArgs>? MonitoringFailed { add { } remove { } }
         public void Start(string root) => Calls.Add("start:" + root);
         public void Stop() => Calls.Add("stop");
         public void DeferQuietPeriod() => Calls.Add("defer");
