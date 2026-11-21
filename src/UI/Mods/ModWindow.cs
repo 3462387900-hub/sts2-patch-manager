@@ -972,6 +972,7 @@ public partial class MainWindow
   catch(Exception e)
   {
    modStatus="批量预览失败："+e.Message;
+   busy=false;
    ShowMods();
    return;
   }
@@ -989,16 +990,20 @@ public partial class MainWindow
    ShowMods();
    return;
   }
+  var reviews=preview.Reviews
+   .Select(review=>new ModBatchReview(review.Name,review.State,review.Explanation))
+   .ToArray();
   if(preview.ExecutionOrder.Count==0)
   {
+   _=ModBatchDialogs.Confirm(
+    this,
+    "批量"+name+" · 执行前预览",
+    "本次没有可执行项目。请查看每一项被跳过或阻止的原因。",
+    reviews);
    modStatus=preview.Status;
    ShowMods();
    return;
   }
-
-  var reviews=preview.Reviews
-   .Select(review=>new ModBatchReview(review.Name,review.State,review.Explanation))
-   .ToArray();
   ModBatchProgressWindow? progress=null;
   bool writing=false;
   busy=true;
@@ -1017,6 +1022,9 @@ public partial class MainWindow
      {
       progress=new ModBatchProgressWindow(this,"正在批量"+name,selected.Length);
       progress.Show();
+      int reviewed=0;
+      foreach(var skipped in batch.Reviews.Where(review=>review.State=="跳过"))
+       progress.Record(skipped.Name,"跳过",skipped.Explanation,++reviewed);
      }
      return Task.FromResult(confirmed);
     },
