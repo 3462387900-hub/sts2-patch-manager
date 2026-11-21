@@ -28,13 +28,16 @@ internal static class ApplicationWorkflowChecks
             (_, _) => OrphanPatchOutcome.Empty(new([], []));
         public bool Enabled { get; set; } = true;
         public string? RecoveryNotice { get; set; }
-        public int ScanCount { get; private set; }
-        public int ObserveCount { get; private set; }
-        public int ReconcileCount { get; private set; }
+        int scanCount;
+        int observeCount;
+        int reconcileCount;
+        public int ScanCount => Volatile.Read(ref scanCount);
+        public int ObserveCount => Volatile.Read(ref observeCount);
+        public int ReconcileCount => Volatile.Read(ref reconcileCount);
 
         public ModInventory Scan(string root)
         {
-            ScanCount++;
+            Interlocked.Increment(ref scanCount);
             return ScanHandler(root);
         }
 
@@ -50,13 +53,13 @@ internal static class ApplicationWorkflowChecks
         public OrphanPatchCandidate[] Observe(
             string root, string dataRoot, ModInventory inventory, bool enabled)
         {
-            ObserveCount++;
+            Interlocked.Increment(ref observeCount);
             return ObserveHandler(root, dataRoot, inventory, enabled);
         }
 
         public OrphanPatchOutcome Reconcile(string root, string dataRoot)
         {
-            ReconcileCount++;
+            Interlocked.Increment(ref reconcileCount);
             return ReconcileHandler(root, dataRoot);
         }
     }
