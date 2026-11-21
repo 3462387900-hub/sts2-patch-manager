@@ -254,6 +254,29 @@ internal static class ApplicationWorkflowChecks
             raceDeferred && raceBackend.ObserveCount == 0,
             "MOD refresh rejects scan results when watcher version changes and defers the next quiet-period check");
 
+        // The dirty flag is part of the scan stamp even if a monitor failure
+        // cannot advance the ordinary filesystem event version.
+        var dirtyStamp = new ModInventoryRefreshStamp(refreshRoot, 12, false);
+        var dirtyCurrent = dirtyStamp;
+        var dirtyBackend = new FakeModInventoryRefreshBackend
+        {
+            ScanHandler = _ =>
+            {
+                dirtyCurrent = dirtyCurrent with { InventoryDirty = true };
+                return emptyInventory;
+            }
+        };
+        var dirtyService = new ModInventoryRefreshWorkflowService(
+            refreshData, dirtyBackend, TimeSpan.FromMilliseconds(1));
+        bool dirtyDeferred = false;
+        var dirtyResult = await dirtyService.RefreshAsync(
+            refreshRoot, dirtyStamp, () => dirtyCurrent,
+            (_, _) => Task.FromResult(false),
+            () => dirtyDeferred = true);
+        check(dirtyResult.Stale && dirtyResult.InventoryDirty &&
+            dirtyResult.Inventory is null && dirtyDeferred,
+            "MOD refresh rejects a result when the dirty marker changes without a watcher version increment");
+
         // Publishing a scan result is atomic with the watcher's version lock.
         using (var commitWatcher = new ModFileWatcherService(TimeSpan.FromMilliseconds(20)))
         {
