@@ -518,13 +518,17 @@ internal static class ApplicationWorkflowChecks
         var missingInventory = new ModInventory(
             [missingDependent, disabledPrerequisite, disabledDependent], []);
         var missingReport = dependencyDiagnostics.Analyze(missingInventory);
+        var missingReadiness = dependencyDiagnostics.DiagnoseToggle(toggleRoot, missingDependent, missingInventory);
+        var disabledReadiness = dependencyDiagnostics.DiagnoseToggle(toggleRoot, disabledDependent, missingInventory);
         check(missingReport.Edges.Any(edge =>
                 edge.Dependent.Id == missingDependent.Id && edge.Status == ModDependencyStatus.Missing) &&
             missingReport.Edges.Any(edge =>
                 edge.Dependent.Id == disabledDependent.Id &&
                 edge.Status == ModDependencyStatus.DisabledPrerequisite &&
-                edge.Prerequisite?.Id == disabledPrerequisite.Id),
-            "dependency diagnostics distinguish an uninstalled prerequisite from a prerequisite that is installed but disabled");
+                edge.Prerequisite?.Id == disabledPrerequisite.Id) &&
+            !missingReadiness.CanProceed && missingReadiness.Kind == ModToggleBlockKind.Dependency &&
+            !disabledReadiness.CanProceed && disabledReadiness.Kind == ModToggleBlockKind.Dependency,
+            "dependency diagnostics distinguish missing and disabled prerequisites and return structured toggle blockers");
 
         var versionPrerequisite = ToggleFixture(
             "fixture.dependency.version-base", "Version Base", Path.Combine(toggleRoot, "version-base"), true) with
