@@ -53,7 +53,7 @@ internal static class SupplyStationChecks
             if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                 return Json(request, UgcDescriptor());
             if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                return Json(request, Token("http://cdn.example", "token=secret-token&expiration_time=4102444800"));
+                return Json(request, Token("http://st.dl.eccdnx.com", "token=secret-token&expiration_time=4102444800"));
             throw new InvalidOperationException("Unexpected request path.");
         })))
         {
@@ -64,7 +64,7 @@ internal static class SupplyStationChecks
                 "probe result preserves the machine-readable source and user-facing attribution");
             Check(result.ManifestId == "2983186950050217793" && result.DepotId == 2868841,
                 "64-bit Manifest ID and Depot ID are retained without numeric truncation");
-            Check(result.CdnTokenValidated && result.CdnHosts.SequenceEqual(["cdn.example"]),
+            Check(result.CdnTokenValidated && result.CdnHosts.SequenceEqual(["st.dl.eccdnx.com"]),
                 "CDN token origin is checked against the authorized endpoint");
             Check(!result.ContentDownloaded && !result.GameBranchVerified &&
                 result.RequestedBranch == SpireSupplyStationClient.DefaultBranchNamespace,
@@ -72,7 +72,7 @@ internal static class SupplyStationChecks
             Check(requests.Count == 2 &&
                 requests[0].Path.EndsWith("/descriptor", StringComparison.Ordinal) &&
                 requests[1].Path.EndsWith("/cdn/token", StringComparison.Ordinal) &&
-                requests[1].Host!.Contains("host=cdn.example", StringComparison.Ordinal),
+                requests[1].Host!.Contains("host=st.dl.eccdnx.com", StringComparison.Ordinal),
                 "only descriptor and CDN-token endpoints are called in phase 1");
             Check(requests.All(item =>
                 item.UserAgent == "Sts2PatchManager/" + ManagerUpdates.CurrentVersion &&
@@ -109,7 +109,7 @@ internal static class SupplyStationChecks
         using (var client = new SpireSupplyStationClient(new Handler(request =>
         {
             if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
-                return Json(request, DirectDescriptor("https://cdn.example/ancient.zip?signature=private"));
+                return Json(request, DirectDescriptor("https://st.dl.eccdnx.com/ancient.zip?signature=private"));
             tokenCalled = true;
             throw new InvalidOperationException("DIRECT mode must not request a CDN token.");
         })))
@@ -131,7 +131,7 @@ internal static class SupplyStationChecks
         }
 
         using (var client = new SpireSupplyStationClient(new Handler(request =>
-            Json(request, UgcDescriptor(origin: "https://cdn.example:444")))))
+            Json(request, UgcDescriptor(origin: "https://st.dl.eccdnx.com:444")))))
         {
             await ExpectFailure(
                 () => client.ProbeAsync(AppId, ItemId),
@@ -153,7 +153,7 @@ internal static class SupplyStationChecks
         }
 
         using (var client = new SpireSupplyStationClient(new Handler(request =>
-            Json(request, DirectDescriptor("http://cdn.example/unsafe.zip")))))
+            Json(request, DirectDescriptor("http://st.dl.eccdnx.com/unsafe.zip")))))
         {
             await ExpectFailure(
                 () => client.ProbeAsync(AppId, ItemId),
@@ -167,8 +167,8 @@ internal static class SupplyStationChecks
             directRefreshCalls++;
             return Json(request, DirectDescriptor(
                 directRefreshCalls == 1
-                    ? "https://cdn.example/ancient.zip?signature=old"
-                    : "https://cdn.example/ancient.zip?signature=new",
+                    ? "https://st.dl.eccdnx.com/ancient.zip?signature=old"
+                    : "https://st.dl.eccdnx.com/ancient.zip?signature=new",
                 directRefreshCalls == 1 ? "2000-01-01T00:00:00Z" : Future));
         })))
         {
@@ -197,7 +197,7 @@ internal static class SupplyStationChecks
                 return Json(request, UgcDescriptor(
                     expiresAt: descriptorCalls == 1 ? "2000-01-01T00:00:00Z" : Future));
             }
-            return Json(request, Token("http://cdn.example", "token=refreshed&expiration_time=4102444800"));
+            return Json(request, Token("http://st.dl.eccdnx.com", "token=refreshed&expiration_time=4102444800"));
         })))
         {
             var result = await client.ProbeAsync(AppId, ItemId);
@@ -229,6 +229,8 @@ internal static class SupplyStationChecks
                 "oversized JSON responses are rejected before parsing");
         }
 
+        await SupplyStationNetworkHardeningChecks.RunAsync(Check);
+
         Check(true, "phase-1 protocol tests completed without writing to a game directory");
     }
 
@@ -258,7 +260,7 @@ internal static class SupplyStationChecks
 
     static string UgcDescriptor(
         string publishedFileId = "3830005491",
-        string origin = "http://cdn.example",
+        string origin = "http://st.dl.eccdnx.com",
         string expiresAt = Future,
         string? depotKey = null)
     {

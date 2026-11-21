@@ -1,4 +1,5 @@
 using System.IO;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
@@ -21,18 +22,20 @@ internal sealed record WorkshopModUpdateResult(
 /// </summary>
 internal sealed class WorkshopModUpdates
 {
-    readonly Dictionary<string, WorkshopModUpdateResult> checks = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, WorkshopModUpdateResult> checks = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<ulong, SemaphoreSlim> inFlightGates = new();
     readonly Func<SpireSupplyStationClient> clientFactory;
     static readonly TimeSpan CacheAge = TimeSpan.FromMinutes(15);
+    static readonly TimeSpan ForcedMinimumInterval = TimeSpan.FromSeconds(30);
 
     public WorkshopModUpdates(Func<SpireSupplyStationClient>? clientFactory = null)
     {
         this.clientFactory = clientFactory ?? (() => new SpireSupplyStationClient());
     }
 
-    public WorkshopModUpdateResult? Cached(string modId) => checks.GetValueOrDefault(modId);
+    public WorkshopModUpdateResult? Cached(string modId) => checks.TryGetValue(modId, out var result) ? result : null;
 
-    public void Invalidate(string modId) => checks.Remove(modId);
+    public void Invalidate(string modId) => checks.TryRemove(modId, out _);
 
     public async Task<WorkshopModUpdateResult> CheckAsync(
         ManagedMod mod,
@@ -44,6 +47,10 @@ internal sealed class WorkshopModUpdates
         if (workshopId == 0 || sources.Get(mod.Id) != workshopId)
             throw new InvalidOperationException("当前 MOD 尚未关联这个 Workshop ID。");
 
+        var gate = inFlightGates.GetOrAdd(workshopId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
         var now = DateTimeOffset.UtcNow;
         var baseline = sources.GetBaseline(mod.Id);
         if (baseline is null || baseline.WorkshopId != workshopId)
@@ -61,11 +68,10 @@ internal sealed class WorkshopModUpdates
                 "本地版本或文件内容与上次验证时不同。需要重新下载并核对文件，不能直接判断线上是否有更新。",
                 now));
 
-        if (!force &&
-            checks.TryGetValue(mod.Id, out var cached) &&
+        if (checks.TryGetValue(mod.Id, out var cached) &&
             cached.WorkshopId == workshopId &&
             cached.LocalVersion == mod.Version &&
-            now - cached.CheckedAt < CacheAge)
+            now - cached.CheckedAt < (force ? ForcedMinimumInterval : CacheAge))
             return cached;
 
         try
@@ -113,6 +119,8 @@ internal sealed class WorkshopModUpdates
                 "创意工坊检查未完成：" + error.Message,
                 DateTimeOffset.UtcNow));
         }
+        }
+        finally { gate.Release(); }
     }
 
     public async Task<int> CheckAllAsync(
