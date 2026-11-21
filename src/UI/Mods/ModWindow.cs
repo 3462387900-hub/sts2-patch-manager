@@ -598,7 +598,7 @@ public partial class MainWindow
    // A directory change cancels a scan, but the replacement scan must start only
    // after the old async UI operation has released its busy state.
    if(pendingRoot!=null&&pendingRoot.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
-    Dispatcher.BeginInvoke(new Action(RefreshMods),System.Windows.Threading.DispatcherPriority.Background);
+    _=Dispatcher.BeginInvoke(new Action(RefreshMods),System.Windows.Threading.DispatcherPriority.Background);
   }
  }
  readonly HashSet<string> chosenModFolders=new(StringComparer.OrdinalIgnoreCase);
