@@ -43,13 +43,13 @@ try{
         throw 'SpirePatch.csproj 的 Version 与 InformationalVersion 必须是相同的基础三段版本。'
     }
     $infoPattern='^(?<base>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))(?<suffix>-beta\.[1-9][0-9]{0,8})?$'
-    foreach($candidate in @($projectVersion,$projectVersion+'-beta.1')){
+    foreach($candidate in @($projectVersion,($projectVersion+'-beta.1'))){
         $match=[regex]::Match($candidate,$infoPattern)
         if(!$match.Success -or $match.Groups['base'].Value -cne $projectVersion){
             throw ('有效的程序集 InformationalVersion 被拒绝：'+$candidate)
         }
     }
-    foreach($candidate in @($projectVersion+'-rc.1',$projectVersion+'-beta.0',$projectVersion+'-beta.01')){
+    foreach($candidate in @(($projectVersion+'-rc.1'),($projectVersion+'-beta.0'),($projectVersion+'-beta.01'))){
         if([regex]::IsMatch($candidate,$infoPattern)){
             throw ('无效的程序集 InformationalVersion 被接受：'+$candidate)
         }
