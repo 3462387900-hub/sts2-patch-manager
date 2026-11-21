@@ -236,7 +236,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
     {
         ValidateRequest(appId, publishedFileId);
         var request = new WorkshopRequest(appId, publishedFileId);
-        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        var budget = new RequestBudget(12);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken, budget);
 
         bool tokenValidated = false;
         string[] hosts = [];
@@ -282,7 +283,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
     {
         ValidateRequest(appId, publishedFileId);
         var request = new WorkshopRequest(appId, publishedFileId);
-        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        var budget = new RequestBudget(12);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken, budget);
         if (descriptor.Mode != "UGC")
             throw new InvalidOperationException("该条目不是 UGC 下载模式，没有 Steam Depot Manifest。");
 
@@ -329,7 +331,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
     {
         ValidateRequest(appId, publishedFileId);
         var request = new WorkshopRequest(appId, publishedFileId);
-        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        var budget = new RequestBudget(12);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken, budget);
         if (descriptor.Mode != "UGC")
             throw new InvalidOperationException("该条目不是 UGC 下载模式，无法下载 Steam UGC Chunk。");
 
@@ -516,7 +519,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
     {
         ValidateRequest(appId, publishedFileId);
         var request = new WorkshopRequest(appId, publishedFileId);
-        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        var budget = new RequestBudget(12);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken, budget);
         if (descriptor.Mode != "UGC")
             throw new InvalidOperationException("该条目不是 UGC 下载模式，无法组装 Steam UGC Chunk。");
 
@@ -916,7 +920,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
         TimeSpan? delta = response.Headers.RetryAfter?.Delta;
         if (delta is null && response.Headers.RetryAfter?.Date is DateTimeOffset date)
             delta = date - now;
-        TimeSpan delay = delta is > TimeSpan.Zero ? delta.Value :
+        TimeSpan delay = delta.HasValue && delta.Value > TimeSpan.Zero ? delta.Value :
             TimeSpan.FromMilliseconds(Math.Min(30000, 500 * (1 << Math.Min(current.Count, 6))) +
                 Random.Shared.Next(100, 400));
         rateLimits.AddOrUpdate("*", _ => new RateLimitWindow(now + delay, 1),
