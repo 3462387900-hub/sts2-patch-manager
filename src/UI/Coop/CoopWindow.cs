@@ -129,6 +129,7 @@ public partial class MainWindow
    outcome=applied.Outcome;
    if(applied.Comparison is null)
     throw new InvalidOperationException("操作结果已记录，但重新扫描失败："+applied.RefreshError);
+   coopSelected.Clear();
    ApplyCoopComparison(applied.Comparison);
    coopOutcome=outcome;
    coopStatus=outcome.Success
@@ -158,12 +159,12 @@ public partial class MainWindow
   if(coopLocal is {} local&&coopPeer is {} peer)summary.Children.Add(T($"本机扫描：{local.GetProperty("time").GetDateTimeOffset().ToLocalTime():yyyy-MM-dd HH:mm:ss}　队友清单：{peer.GetProperty("time").GetDateTimeOffset().ToLocalTime():yyyy-MM-dd HH:mm:ss}",12,muted));
   summary.Children.Add(T("以队友导出时的清单为目标；只调整本机已收录补丁。勾选不会改动文件。",12,muted));root.Children.Add(summary);Space(root,12);
   if(coopPeer is {} legacy&&!CoopPlanner.PresenceReport(legacy)){root.Children.Add(T("这是旧版清单，只支持查看。请双方更新至 0.9.0 或更新版本并重新导出，才能使用一键处理。",13,gold));Space(root,12);}
-  var bar=new WrapPanel();foreach(var button in new[]{Btn("全选可处理项",()=>{coopSelected.Clear();foreach(var row in coopRows.Where(r=>r.Selectable))coopSelected.Add(row.Id);coopPlan=null;coopPlanPackage=null;ShowCoop();},"Ghost"),Btn("清空选择",()=>{coopSelected.Clear();coopPlan=null;ShowCoop();},"Ghost"),Btn("重新扫描并比较",RefreshCoop,"Ghost")}){button.Margin=new(0,0,8,8);bar.Children.Add(button);}
+  var bar=new WrapPanel();foreach(var button in new[]{Btn("全选可处理项",()=>{coopSelected.Clear();foreach(var row in coopRows.Where(r=>r.Selectable))coopSelected.Add(row.Id);coopPlan=null;coopPlanPackage=null;ShowCoop();},"Ghost"),Btn("清空选择",()=>{coopSelected.Clear();coopPlan=null;coopPlanPackage=null;ShowCoop();},"Ghost"),Btn("重新扫描并比较",RefreshCoop,"Ghost")}){button.Margin=new(0,0,8,8);bar.Children.Add(button);}
   var process=Btn($"预览一键处理（{coopSelected.Count}）",PrepareCoop,"Primary");process.IsEnabled=coopSelected.Count>0;bar.Children.Add(process);root.Children.Add(bar);Space(root,8);
   root.Children.Add(T($"{coopRows.Count(r=>r.Selectable)} 项可处理 · {coopRows.Count(r=>!r.Selectable)} 项需核对或无需处理。全选包含移出项，执行前会再次展示范围。",12,muted));Space(root,12);
   foreach(var row in coopRows){
    var check=new CheckBox{Content=row.Name,FontSize=15,Foreground=ink,IsChecked=coopSelected.Contains(row.Id),IsEnabled=row.Selectable,Margin=new(0,0,0,7)};
-   check.Checked+=(_,_)=>{coopSelected.Add(row.Id);coopPlan=null;ShowCoop();};check.Unchecked+=(_,_)=>{coopSelected.Remove(row.Id);coopPlan=null;ShowCoop();};
+   check.Checked+=(_,_)=>{coopSelected.Add(row.Id);coopPlan=null;coopPlanPackage=null;ShowCoop();};check.Unchecked+=(_,_)=>{coopSelected.Remove(row.Id);coopPlan=null;coopPlanPackage=null;ShowCoop();};
    var body=V(check,H(Badge(row.Diagnosis,row.Selectable?gold:muted),T(row.ActionLabel,12,row.Selectable?gold:muted)),T($"本机：{row.Mine}　/　队友：{row.Peer}",12,muted),T(row.Detail,12,muted));root.Children.Add(Card(body,"#BB182942",16));Space(root,8);
   }
   if(coopPlan is {} plan){
@@ -172,7 +173,7 @@ public partial class MainWindow
    if(plan.Install is {} installation){Space(review,10);review.Children.Add(T("实际安装范围（含必要关联）："+string.Join("、",(installation.SelectedIds??[]).Select(id=>Catalog.All.Single(p=>p.Id==id).Name))+$"\n将修改 {installation.Changed} 个文件，保留备份。",13,gold));}
    foreach(var move in plan.Moves){Space(review,8);review.Children.Add(T($"{move.Plan.Name}：{(move.Plan.Enable?"恢复启用":"移出并保留")} {move.Plan.FileCount} 个文件\n{move.Plan.Folder}",12,muted));}
    Space(review,12);review.Children.Add(T("逐步执行并记录结果。任一步骤失败会停止后续处理，已完成项会保留并明确列出；可通过现有恢复入口撤销。",12,muted));Space(review,14);
-   coopConfirmButton=Btn("确认一键处理",ConfirmCoop,"Primary");review.Children.Add(H(coopConfirmButton,Btn("取消本次方案",()=>{coopPlan=null;coopStatus="已取消方案，未修改游戏文件。";ShowCoop();},"Ghost")));root.Children.Add(Card(review,"#EDF3E8"));Space(root,12);
+   coopConfirmButton=Btn("确认一键处理",ConfirmCoop,"Primary");review.Children.Add(H(coopConfirmButton,Btn("取消本次方案",()=>{coopPlan=null;coopPlanPackage=null;coopStatus="已取消方案，未修改游戏文件。";ShowCoop();},"Ghost")));root.Children.Add(Card(review,"#EDF3E8"));Space(root,12);
    if(plan.Install is {} files){AddPlanGroups(root,"将安装或更新的文件",files.Files,true);}
   }
  }
