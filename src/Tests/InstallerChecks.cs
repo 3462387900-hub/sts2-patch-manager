@@ -44,7 +44,7 @@ public static class InstallerChecks
   Check(Catalog.Scan(root).Patches.Count(p=>p.Status=="需联动")==3,"rollback restores the coordinated Act4 and Spire update recommendation");
   undo=await backend.RunAsync(package,root,"RollbackPreview");Check(undo.Changed==0&&undo.Message=="NothingToRollback","repeat rollback does not select an already-restored journal");
   string stageScript=Path.Combine(package.Directory,"Common.ps1");byte[] script=File.ReadAllBytes(stageScript);File.WriteAllBytes(stageScript,script.Concat(new byte[]{32}).ToArray());
-  await Reject(()=>backend.RunAsync(package,root,"Preview"),"tampered cached installer is never executed");File.WriteAllBytes(stageScript,script);
+  await Reject(()=>backend.RunAsync(package,root,"Preview"),"tampered legacy Common.ps1 archive member is rejected by package integrity verification");File.WriteAllBytes(stageScript,script);
   string badArchive=Path.Combine(checks,"损坏修复包.zip");File.Copy(archive,badArchive,true);using(var f=new FileStream(badArchive,FileMode.Open,FileAccess.Write)){f.Position=f.Length-1;f.WriteByte(1);}
   await Reject(async()=>{await backend.PrepareAsync(badArchive);},"incorrect ZIP hash is rejected before staging");
   string hostile=Path.Combine(checks,"路径越界测试.zip"),stage=Path.Combine(checks,"路径验证");Directory.CreateDirectory(stage);
