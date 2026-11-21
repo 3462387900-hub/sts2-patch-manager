@@ -229,6 +229,8 @@ internal static class SupplyStationChecks
                 "oversized JSON responses are rejected before parsing");
         }
 
+        await SupplyStationNetworkHardeningChecks.RunAsync(Check);
+
         Check(true, "phase-1 protocol tests completed without writing to a game directory");
     }
 
