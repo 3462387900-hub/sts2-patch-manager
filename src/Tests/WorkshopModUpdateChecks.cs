@@ -102,6 +102,22 @@ internal static class WorkshopModUpdateChecks
                 changedManifestRequests == 1,
                 "a changed remote Manifest is reported as an update without downloading MOD content");
 
+            int sharedCalls = 0;
+            var concurrentService = new WorkshopModUpdates(() =>
+                new SpireSupplyStationClient(new Handler(request =>
+                {
+                    Interlocked.Increment(ref sharedCalls);
+                    return Json(request, Descriptor("1002"));
+                })));
+            var simultaneous = await Task.WhenAll(
+                Enumerable.Range(0, 12).Select(_ =>
+                    concurrentService.CheckAsync(mod, WorkshopId, reloadedSources, force: true)));
+            Check(simultaneous.All(result => result.Status == "有更新") && sharedCalls == 1,
+                "same Workshop ID concurrent checks share the first result");
+            var forcedAgain = await concurrentService.CheckAsync(mod, WorkshopId, reloadedSources, force: true);
+            Check(forcedAgain.Status == "有更新" && sharedCalls == 1,
+                "force refresh cannot bypass the minimum cooldown immediately");
+
             File.WriteAllText(dll, "manual local edit");
             int requestsAfterLocalEdit = 0;
             var localEditService = new WorkshopModUpdates(() =>
