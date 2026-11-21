@@ -33,6 +33,7 @@ public partial class MainWindow
  void UseGameRoot(string path)
  {
   var result=EnvironmentSession.SelectRoot(path,rememberEnvironment);
+  watchedGameRoot=result.Root;
   if(result.PreferenceError is not null)
    toast.Text="目录已选择，但未能记住路径："+result.PreferenceError;
   folderLabel.Text=result.Root;UpdateGlobalControls();
