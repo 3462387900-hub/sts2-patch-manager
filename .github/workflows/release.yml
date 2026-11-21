@@ -86,7 +86,7 @@ jobs:
             throw "已勾选 Beta，但版本号没有 -beta.N 后缀。请使用例如 0.14.4-beta.1 的格式。"
           }
 
-          # 任何预发布后缀都强制进入 prerelease 流程，不能误发到稳定版渠道。
+          # 任何 -beta.N 后缀都强制进入 prerelease 流程，不能误发到稳定版渠道。
           $isBeta = $hasPrerelease
           if ($isBeta -and !$requestedBeta -and $env:EVENT_NAME -eq 'workflow_dispatch') {
             Write-Warning "检测到 -beta.N 后缀；已自动忽略未勾选的 Beta 开关，强制按 Beta 发布。"
