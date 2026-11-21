@@ -25,6 +25,7 @@ public partial class MainWindow
  {
   EnsureModWatcherEvents();
   modFileWatcher.Stop();
+  modChangeVersion=0;
   watchedGameRoot=null;
  }
 
@@ -36,14 +37,23 @@ public partial class MainWindow
   modInventoryDirty=false;modWatchOverflow=false;modWatchTreeChanged=false;
   watchedGameRoot=root;
   modFileWatcher.Start(root);
+  modChangeVersion=modFileWatcher.ChangeVersion;
  }
 
  void OnModWatchChangeDetected(object? sender,ModFileChangeEventArgs e)
  {
+  if(e.Root.Equals(modFileWatcher.CurrentRoot,StringComparison.OrdinalIgnoreCase))
+  {
+   int observed;
+   do
+   {
+    observed=Volatile.Read(ref modChangeVersion);
+    if(e.Version<=observed)break;
+   }while(Interlocked.CompareExchange(ref modChangeVersion,e.Version,observed)!=observed);
+  }
   if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
   _=Dispatcher.BeginInvoke(new Action(()=>{
    if(!e.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
-   modChangeVersion++;
    modWatchTreeChanged|=e.TreeChanged;
    if(transactionWriting)
    {
@@ -120,6 +130,7 @@ public partial class MainWindow
 
  void CloseModWatch()
  {
+  modInventoryRefresh?.Cancel();
   StopModWatch();
   modFileWatcher.Dispose();
  }
