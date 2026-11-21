@@ -337,6 +337,7 @@ internal static class ApplicationWorkflowChecks
             batchBackend.Inventory,
             [dependentMod, baseMod, unknownSelected, dependentMod],
             enable: true);
+        bool batchPreflightDidNotWrite = batchBackend.ApplyCount == 0;
         var batchWatcher = new RecordingWatcher();
         bool batchWriting = false;
         int writingStartCount = 0;
@@ -360,6 +361,7 @@ internal static class ApplicationWorkflowChecks
                 .SequenceEqual(["Base", "Dependent"]) &&
             batchPreview.Reviews.Any(review => review.Name == "Dependent" && review.State == "需复核") &&
             batchPreview.Reviews.Count(review => review.State == "跳过") == 2 &&
+            batchPreflightDidNotWrite &&
             batchResult.SuccessCount == 2 && batchResult.SkippedCount == 2 &&
             batchBackend.AppliedOrder.SequenceEqual(["Base", "Dependent"]) &&
             writingStartCount == 1 && !batchWriting &&
