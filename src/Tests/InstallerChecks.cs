@@ -43,12 +43,12 @@ public static class InstallerChecks
   var restored=await backend.RunAsync(package,root,"Rollback",undo.Token);Check(restored.Message=="RolledBack"&&Same(original,Snapshot(root)),"real rollback restores byte-exact originals including retired legacy files");
   Check(Catalog.Scan(root).Patches.Count(p=>p.Status=="需联动")==3,"rollback restores the coordinated Act4 and Spire update recommendation");
   undo=await backend.RunAsync(package,root,"RollbackPreview");Check(undo.Changed==0&&undo.Message=="NothingToRollback","repeat rollback does not select an already-restored journal");
-  string stageScript=Path.Combine(package.Directory,"Common.ps1");byte[] script=File.ReadAllBytes(stageScript);File.WriteAllBytes(stageScript,script.Concat(new byte[]{32}).ToArray());
-  await Reject(()=>backend.RunAsync(package,root,"Preview"),"tampered legacy Common.ps1 archive member is rejected by package integrity verification");File.WriteAllBytes(stageScript,script);
+  Check(!File.Exists(Path.Combine(package.Directory,"Common.ps1")),
+   "legacy Common.ps1 ZIP member is checksum-verified in memory and never extracted to the staging directory");
   string badArchive=Path.Combine(checks,"损坏修复包.zip");File.Copy(archive,badArchive,true);using(var f=new FileStream(badArchive,FileMode.Open,FileAccess.Write)){f.Position=f.Length-1;f.WriteByte(1);}
   await Reject(async()=>{await backend.PrepareAsync(badArchive);},"incorrect ZIP hash is rejected before staging");
   string hostile=Path.Combine(checks,"路径越界测试.zip"),stage=Path.Combine(checks,"路径验证");Directory.CreateDirectory(stage);
-  using(var zip=ZipFile.Open(hostile,ZipArchiveMode.Create)){using var writer=new StreamWriter(zip.CreateEntry(BundleInstaller.PackageFolder+"/../../escape.txt").Open());writer.Write("escape");}
+  using(var zip=ZipFile.Open(hostile,ZipArchiveMode.Create)){using(var checksWriter=new StreamWriter(zip.CreateEntry(BundleInstaller.PackageFolder+"/checksums.json").Open()))checksWriter.Write("[]");using var writer=new StreamWriter(zip.CreateEntry(BundleInstaller.PackageFolder+"/../../escape.txt").Open());writer.Write("escape");}
   await Reject(()=>Task.Run(()=>BundleInstaller.ExtractArchive(hostile,stage)),"archive path traversal is rejected");Check(!File.Exists(Path.Combine(checks,"escape.txt")),"no file escapes the extraction directory");
   Check(Same(original,Snapshot(root)),"all tests leave fixture mods in their original state");
  }

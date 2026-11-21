@@ -67,16 +67,20 @@ public sealed class BundleInstaller
    string package=Child(stage,PackageFolder);
    using var checks=JsonDocument.Parse(File.ReadAllText(Child(package,"checksums.json")));
    var files=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+   var listed=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
    foreach(var f in checks.RootElement.EnumerateArray())
    {
     string path=f.GetProperty("path").GetString()!,hash=f.GetProperty("sha256").GetString()!;
     Child(package,path);
-    if(!Regex.IsMatch(hash,@"\A[0-9A-Fa-f]{64}\z")||!files.TryAdd(path,hash))
+    if(!Regex.IsMatch(hash,@"\A[0-9A-Fa-f]{64}\z")||!listed.Add(path))
      throw new InvalidDataException("包内校验清单无效。");
+    // Common.ps1 is checked directly against its ZIP entry and is never written to disk.
+    if(path.Equals("Common.ps1",StringComparison.OrdinalIgnoreCase))continue;
+    files.Add(path,hash);
    }
    files.Add("checksums.json",Catalog.Hash(Child(package,"checksums.json")));
-   // Common.ps1 remains an opaque, checksummed legacy archive member for ZIP compatibility.
-   // It is neither required nor loaded by the manager.
+   // The legacy Common.ps1 ZIP member is checksummed in-memory, not extracted or executed.
+   // Its archive entry remains unchanged for compatibility with existing patch bundles.
    var result=new PreparedPackage(package,files);
    VerifyStage(result);
    if(Catalog.Hash(cached)!=SupportedHash)throw new InvalidDataException("准备期间修复包发生变化。");
@@ -88,7 +92,21 @@ public sealed class BundleInstaller
  internal static void ExtractArchive(string archive,string stage,CancellationToken ct=default)
  {
   using var zip=ZipFile.OpenRead(archive);
+  var checksEntry=zip.GetEntry(PackageFolder+"/checksums.json")??throw new InvalidDataException("压缩包缺少校验清单。");
+  var expected=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+  using(var checkStream=checksEntry.Open())
+  using(var checks=JsonDocument.Parse(checkStream))
+  {
+   foreach(var item in checks.RootElement.EnumerateArray())
+   {
+    string relative=item.GetProperty("path").GetString()!,hash=item.GetProperty("sha256").GetString()!;
+    Child(stage,PackageFolder+"/"+relative);
+    if(!Regex.IsMatch(hash,@"\A[0-9A-Fa-f]{64}\z")||!expected.TryAdd(relative,hash))
+     throw new InvalidDataException("包内校验清单无效。");
+   }
+  }
   var names=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+  var opaqueVerified=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
   long bytes=0;
   if(zip.Entries.Count>2000)throw new InvalidDataException("压缩包文件数超限。");
   foreach(var entry in zip.Entries)
@@ -99,15 +117,27 @@ public sealed class BundleInstaller
       ((entry.ExternalAttributes>>16)&0xF000)==0xA000)
     throw new InvalidDataException("压缩包包含不支持的路径或链接。");
    bool directory=name.EndsWith('/');
+   string relativeEntry=name[(PackageFolder.Length+1)..];
    string path=Child(stage,directory?name.TrimEnd('/'):name);
    if(!names.Add(path))throw new InvalidDataException("压缩包存在重复路径。");
    if(directory){Directory.CreateDirectory(path);continue;}
    bytes+=entry.Length;
    if(entry.Length>100*1024*1024||bytes>200*1024*1024)throw new InvalidDataException("压缩包展开大小超限。");
+   if(relativeEntry.Equals("Common.ps1",StringComparison.OrdinalIgnoreCase))
+   {
+    if(!expected.TryGetValue(relativeEntry,out var expectedHash))
+     throw new InvalidDataException("Common.ps1 缺少可信校验值。");
+    using var input=entry.Open();
+    string actual=Convert.ToHexString(SHA256.HashData(input));
+    if(!actual.Equals(expectedHash,StringComparison.OrdinalIgnoreCase))
+     throw new InvalidDataException("旧版安装脚本 ZIP 成员校验失败。");
+    opaqueVerified.Add(relativeEntry);
+    continue;
+   }
    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-   using var input=entry.Open();using var output=new FileStream(path,FileMode.CreateNew);
+   using var source=entry.Open();using var output=new FileStream(path,FileMode.CreateNew);
    var buffer=new byte[65536];long written=0;int n;
-   while((n=input.Read(buffer))>0)
+   while((n=source.Read(buffer))>0)
    {
     ct.ThrowIfCancellationRequested();written+=n;
     if(written>entry.Length)throw new InvalidDataException("压缩包文件长度异常。");
@@ -115,8 +145,9 @@ public sealed class BundleInstaller
    }
    if(written!=entry.Length)throw new InvalidDataException("压缩包文件不完整。");
   }
+  foreach(string opaque in expected.Keys.Where(x=>x.Equals("Common.ps1",StringComparison.OrdinalIgnoreCase)))
+   if(!opaqueVerified.Contains(opaque))throw new InvalidDataException("压缩包缺少 Common.ps1 校验成员。");
  }
-
  public static void VerifyStage(PreparedPackage package)
  {
   var actual=Directory.EnumerateFiles(package.Directory,"*",new EnumerationOptions{RecurseSubdirectories=true,AttributesToSkip=0})

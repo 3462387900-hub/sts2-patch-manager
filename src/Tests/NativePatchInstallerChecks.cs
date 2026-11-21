@@ -30,6 +30,28 @@ internal static class NativePatchInstallerChecks
   BundleInstaller.VerifyStage(package);
   Check(true,"synthetic archive staging passes exact file and SHA-256 verification");
 
+  byte[] legacyScript=Encoding.UTF8.GetBytes("Write-Host 'legacy only'"),payloadBytes=Encoding.UTF8.GetBytes("verified payload");
+  string legacyHash=Convert.ToHexString(SHA256.HashData(legacyScript));
+  string payloadHash=Convert.ToHexString(SHA256.HashData(payloadBytes));
+  byte[] checksBytes=Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[]{
+   new{path="Common.ps1",sha256=legacyHash},new{path="payload/data.bin",sha256=payloadHash}
+  }));
+  void MakeLegacyZip(string path,byte[] scriptBytes)
+  {
+   using var zip=ZipFile.Open(path,ZipArchiveMode.Create);
+   void Add(string name,byte[] bytes){using var stream=zip.CreateEntry(BundleInstaller.PackageFolder+"/"+name).Open();stream.Write(bytes);}
+   Add("checksums.json",checksBytes);Add("Common.ps1",scriptBytes);Add("payload/data.bin",payloadBytes);
+  }
+  string opaqueZip=Path.Combine(home,"legacy-script-opaque.zip"),opaqueStage=Path.Combine(home,"legacy-script-stage");
+  MakeLegacyZip(opaqueZip,legacyScript);BundleInstaller.ExtractArchive(opaqueZip,opaqueStage);
+  Check(!File.Exists(Path.Combine(opaqueStage,BundleInstaller.PackageFolder,"Common.ps1"))&&
+   File.Exists(Path.Combine(opaqueStage,BundleInstaller.PackageFolder,"payload","data.bin")),
+   "legacy Common.ps1 is checksum-verified from the ZIP stream but never extracted");
+  string tamperedZip=Path.Combine(home,"legacy-script-tampered.zip");
+  MakeLegacyZip(tamperedZip,Encoding.UTF8.GetBytes("tampered script"));
+  Reject(()=>BundleInstaller.ExtractArchive(tamperedZip,Path.Combine(home,"legacy-script-tampered-stage")),
+   "tampered legacy Common.ps1 is rejected by its in-memory ZIP member hash");
+
   string disabledRoot=Fixture(home,"停用保护");
   string disabledSlot=Path.Combine(disabledRoot,ModManager.StorageName,"slot");Directory.CreateDirectory(disabledSlot);
   File.WriteAllText(Path.Combine(disabledSlot,"记录.json"),JsonSerializer.Serialize(new{ModId="FixAlpha",Original="mods\\FixAlpha",Files=new Dictionary<string,string>(),Status="disabled"}));
