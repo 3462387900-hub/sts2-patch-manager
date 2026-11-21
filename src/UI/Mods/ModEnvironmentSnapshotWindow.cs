@@ -5,6 +5,23 @@ namespace SpirePatch;
 
 public partial class MainWindow
 {
+    ModEnvironmentSnapshotWorkflowService SnapshotWorkflow(string root) =>
+        new(root, installer.DataRoot, invalidateCaches: ids =>
+        {
+            try
+            {
+                var sources = WorkshopSources();
+                var updates = WorkshopUpdates();
+                foreach (string id in ids)
+                {
+                    sources.ClearBaseline(id);
+                    updates.Invalidate(id);
+                }
+                return null;
+            }
+            catch (Exception error) { return error.Message; }
+        });
+
     void ShowModEnvironmentSnapshots()
     {
         if (selectedInstallRoot is null)
@@ -15,7 +32,7 @@ public partial class MainWindow
 
         ModEnvironmentSnapshotEntry[] entries = [];
         string? listWarning = null;
-        try { entries = ModEnvironmentSnapshots.List(selectedInstallRoot, installer.DataRoot); }
+        try { entries = SnapshotWorkflow(selectedInstallRoot).List(); }
         catch (Exception error) { listWarning = error.Message; }
 
         var root = V(ModWorkspaceHeader("MOD 环境快照",
@@ -111,8 +128,7 @@ public partial class MainWindow
         ShowModEnvironmentSnapshots();
         try
         {
-            var snapshot = await Task.Run(() =>
-                ModEnvironmentSnapshots.Create(gameRoot, installer.DataRoot, "手动快照"));
+            var snapshot = await SnapshotWorkflow(gameRoot).CreateAsync("手动快照");
             if (gameRoot == selectedInstallRoot)
                 toast.Text = $"环境快照已创建：{snapshot.CreatedAt.ToLocalTime():yyyy-MM-dd HH:mm:ss} · " +
                     $"{snapshot.Files.Length:N0} 个文件 · {ModEnvironmentSnapshots.FormatBytes(snapshot.TotalBytes)}";
@@ -140,8 +156,7 @@ public partial class MainWindow
         toast.Text = "正在校验快照文件并比较当前 MOD 环境…";
         try
         {
-            preview = await Task.Run(() =>
-                ModEnvironmentSnapshots.PreviewRestore(gameRoot, installer.DataRoot, snapshotId));
+            preview = await SnapshotWorkflow(gameRoot).PreviewRestoreAsync(snapshotId);
         }
         catch (Exception error) { errorMessage = error.Message; }
         finally { busy = false; }
@@ -225,17 +240,16 @@ public partial class MainWindow
         busy = true;
         transactionWriting = true;
         toast.Text = "正在准备恢复，当前环境会先自动保存…";
-        ModEnvironmentSnapshotRestoreResult? result = null;
+        ModEnvironmentSnapshotWorkflowRestoreResult? workflowResult = null;
         string? restoreError = null;
         try
         {
-            result = await Task.Run(() => ModEnvironmentSnapshots.Restore(
-                gameRoot, installer.DataRoot, preview.SnapshotId, preview.Token));
+            workflowResult = await SnapshotWorkflow(gameRoot).ConfirmRestoreAsync(preview, previousIds);
         }
         catch (Exception error) { restoreError = error.Message; }
         finally
         {
-            if (result is null)
+            if (workflowResult is null)
             {
                 transactionWriting = false;
                 busy = false;
@@ -248,13 +262,14 @@ public partial class MainWindow
             busy = false;
             return;
         }
-        if (result is null)
+        if (workflowResult is null)
         {
             toast.Text = "环境恢复未完成：" + restoreError;
             ShowModEnvironmentSnapshots();
             return;
         }
 
+        var result = workflowResult.Restore;
         InvalidateLifecycle("MOD 环境已恢复，修复补丁健康结果需要重新扫描。");
         report = null;
         states = [];
@@ -264,39 +279,24 @@ public partial class MainWindow
         lastInstallResult = null;
         modTogglePreview = null;
 
-        try
+        var refreshed = workflowResult.RefreshedInventory;
+        if (refreshed is null)
         {
-            var refreshed = await Task.Run(() => ModManager.Scan(gameRoot));
+            modInventoryDirty = true;
+            toast.Text = $"环境恢复已完成，恢复前自动保护快照：{result.SafetySnapshotId}。但刷新 MOD 清单失败：{workflowResult.RefreshError}";
+        }
+        else
+        {
             modInventory = refreshed;
             modInventoryDirty = false;
-            var allIds = previousIds.Concat(refreshed.Mods.Select(mod => mod.Id))
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            string cacheWarning = "";
-            try
-            {
-                var sources = WorkshopSources();
-                var updates = WorkshopUpdates();
-                foreach (string id in allIds)
-                {
-                    sources.ClearBaseline(id);
-                    updates.Invalidate(id);
-                }
-            }
-            catch (Exception error)
-            {
-                cacheWarning = "；部分创意工坊版本基线未能清理：" + error.Message;
-            }
-
+            string cacheWarning = workflowResult.CacheWarning is null
+                ? ""
+                : "；部分创意工坊版本基线未能清理：" + workflowResult.CacheWarning;
             modStatus = $"恢复完成 · 共 {refreshed.Mods.Count} 个 MOD · {refreshed.Mods.Count(mod => mod.Enabled)} 个启用 · {refreshed.Mods.Count(mod => !mod.Enabled)} 个停用";
             toast.Text = $"环境恢复完成。恢复前自动保护快照：{result.SafetySnapshotId}。" +
                 cacheWarning + (refreshed.Issues.Count > 0
                     ? "；恢复后的清单仍有 " + refreshed.Issues.Count + " 项问题，请查看模组管理。"
                     : "");
-        }
-        catch (Exception error)
-        {
-            modInventoryDirty = true;
-            toast.Text = $"环境恢复已完成，恢复前自动保护快照：{result.SafetySnapshotId}。但刷新 MOD 清单失败：{error.Message}";
         }
         finally
         {
@@ -319,7 +319,7 @@ public partial class MainWindow
         transactionWriting = true;
         try
         {
-            await Task.Run(() => ModEnvironmentSnapshots.Delete(gameRoot, installer.DataRoot, snapshotId));
+            await SnapshotWorkflow(gameRoot).DeleteAsync(snapshotId);
             if (gameRoot == selectedInstallRoot) toast.Text = "已删除指定环境快照。";
         }
         catch (Exception error)
