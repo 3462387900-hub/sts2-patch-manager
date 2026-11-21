@@ -320,6 +320,15 @@ internal sealed class ModInventoryRefreshWorkflowService
                 }
             }
 
+            if (!IsCurrent())
+            {
+                DeferIfStillWatchingThisRoot();
+                return new(true, false, true, inventory, true,
+                    "扫描期间 MOD 环境发生变化，已安排重新刷新。",
+                    orphanNotice, recoveryNotice, clearLifecycleState,
+                    lifecycleInvalidationReason);
+            }
+
             return new(true, false, false, inventory, false, status,
                 orphanNotice, recoveryNotice, clearLifecycleState,
                 lifecycleInvalidationReason);
