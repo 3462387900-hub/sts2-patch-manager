@@ -138,7 +138,6 @@ public partial class MainWindow
             if (gameRoot == selectedInstallRoot)
                 toast.Text = "创建快照失败：" + error.Message;
         }
-        }
         finally
         {
             transactionWriting = false;
