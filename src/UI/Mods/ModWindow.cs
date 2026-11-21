@@ -2067,7 +2067,9 @@ public partial class MainWindow
   {
    var result=await ModToggleWorkflow.ConfirmAndApplyAsync(
     plan,
-    (_,token)=>Task.FromResult(true),
+    (confirmedPlan,token)=>Task.FromResult(
+     currentVisit?.Key=="mod-confirm"&&
+     confirmedPlan.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)),
     progress=>
     {
      if(progress.TransactionWriting&&!writing)
