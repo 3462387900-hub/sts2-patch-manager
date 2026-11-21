@@ -16,6 +16,13 @@ internal static class PatchRollbackManager
  static bool Bool(JsonElement value,string name,bool fallback=false) =>
   value.ValueKind==JsonValueKind.Object&&value.TryGetProperty(name,out var p)&&p.ValueKind is JsonValueKind.True or JsonValueKind.False?p.GetBoolean():fallback;
 
+ internal static void EnsureCanInstall(string gameRoot)
+ {
+  string root=GameEnvironment.Root(gameRoot);
+  if(!Directory.Exists(BundleInstaller.Child(root,"mods")))throw new InvalidOperationException("Mods folder not found.");
+  _=Latest(root);
+ }
+
  internal static PatchRollbackPlan Preview(string gameRoot)
  {
   string root=GameEnvironment.Root(gameRoot);

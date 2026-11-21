@@ -148,6 +148,9 @@ public sealed class BundleInstaller
    selection=await Task.Run(()=>SelectionPlanner.Resolve(root,selectedIds));
   }
   string[] selected=selection?.Included??[];
+  string packageVersion;
+  using(var packageDocument=JsonDocument.Parse(File.ReadAllText(Child(package.Directory,"plan.json"))))
+   packageVersion=packageDocument.RootElement.GetProperty("version").GetString()??throw new InvalidDataException("补丁包缺少版本号。");
   string job=Child(DataRoot,"操作记录/"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N"));
   Directory.CreateDirectory(job);
   string request=Child(job,"request.json"),resultPath=Child(job,"result.json"),logPath=Child(job,"执行日志.txt");
@@ -158,6 +161,7 @@ public sealed class BundleInstaller
     if(GameEnvironment.Running(root))throw new InvalidOperationException("Close the game before installing or rolling back.");
     if(mode is "Preview" or "Install")
     {
+     PatchRollbackManager.EnsureCanInstall(root);
      var plan=PatchInstallPlanner.Create(package,root,selected);
      var changed=plan.Changes.Select(ToInstallFile).ToArray();
      var checkedFiles=plan.All.Select(ToInstallFile).ToArray();
@@ -173,9 +177,9 @@ public sealed class BundleInstaller
     }
     var rollback=PatchRollbackManager.Preview(root);
     if(mode=="RollbackPreview")
-     return new InstallResult(true,mode,root,rollback.Version,rollback.Token,rollback.Backup,
+     return new InstallResult(true,mode,root,packageVersion,rollback.Token,rollback.Backup,
       rollback.Backup.Length==0?"NothingToRollback":"ReadyToRollback",rollback.Files,rollback.Files.Length,[],[]);
-    return PatchRollbackManager.Apply(rollback,token??"");
+    return PatchRollbackManager.Apply(rollback,token??"") with{Version=packageVersion};
    }));
    await WriteResultAsync(resultPath,result);
    await File.WriteAllTextAsync(logPath,FormatLog(result));

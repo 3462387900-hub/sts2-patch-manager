@@ -30,6 +30,12 @@ internal static class NativePatchInstallerChecks
   BundleInstaller.VerifyStage(package);
   Check(true,"synthetic archive staging passes exact file and SHA-256 verification");
 
+  string disabledRoot=Fixture(home,"停用保护");
+  string disabledSlot=Path.Combine(disabledRoot,ModManager.StorageName,"slot");Directory.CreateDirectory(disabledSlot);
+  File.WriteAllText(Path.Combine(disabledSlot,"记录.json"),JsonSerializer.Serialize(new{ModId="FixAlpha",Original="mods\\FixAlpha",Files=new Dictionary<string,string>(),Status="disabled"}));
+  Reject(()=>PatchInstallPlanner.Create(package,disabledRoot),
+   "native planner refuses to install over a disabled component");
+
   string selectedRoot=Fixture(home,"选择安装");
   Reject(()=>PatchInstallPlanner.Create(package,selectedRoot,["FixAlpha"]),
    "selection planner refuses a missing required companion patch");
@@ -74,6 +80,9 @@ internal static class NativePatchInstallerChecks
    Check(!Directory.EnumerateFiles(dataRoot,"InstallerBridge.ps1",SearchOption.AllDirectories).Any()&&
     !Directory.EnumerateFiles(dataRoot,"SelectionBridge.ps1",SearchOption.AllDirectories).Any(),
     "operation records no longer extract either bridge script");
+   Check(Directory.EnumerateDirectories(Path.Combine(dataRoot,"操作记录")).All(d=>
+    File.Exists(Path.Combine(d,"request.json"))&&File.Exists(Path.Combine(d,"result.json"))&&File.Exists(Path.Combine(d,"执行日志.txt"))),
+    "native operation records retain the legacy request/result/log file layout");
    using(var journal=JsonDocument.Parse(File.ReadAllText(Path.Combine(installed.Backup,"restore.json"))))
    {
     var root=journal.RootElement;
@@ -116,6 +125,11 @@ internal static class NativePatchInstallerChecks
   Check(JsonDocument.Parse(File.ReadAllText(failedJournal)).RootElement.GetProperty("status").GetString()=="install-failed-restored",
    "failed transaction records the legacy install-failed-restored status");
 
+  string oldJob=Path.Combine(dataRoot,"操作记录","20261120-120000-legacy");Directory.CreateDirectory(oldJob);
+  foreach(var pair in new Dictionary<string,string>{{"request.json","legacy request"},{"result.json","legacy result"},{"执行日志.txt","legacy powershell log"},{"InstallerBridge.ps1","legacy bridge marker"}})
+   File.WriteAllText(Path.Combine(oldJob,pair.Key),pair.Value);
+  string oldJobHash=Catalog.Hash(Path.Combine(oldJob,"result.json"));
+
   string legacyRoot=Fixture(home,"旧版PowerShell备份");
   string legacyTarget=Path.Combine(legacyRoot,"mods","LegacyFix","LegacyFix.dll");
   Directory.CreateDirectory(Path.GetDirectoryName(legacyTarget)!);
@@ -145,6 +159,17 @@ internal static class NativePatchInstallerChecks
   Check(JsonDocument.Parse(File.ReadAllText(Path.Combine(legacyBackup,"restore.json")))
    .RootElement.GetProperty("status").GetString()=="rolled-back",
    "C# rollback updates the legacy PowerShell journal in place");
+  Check(Catalog.Hash(Path.Combine(oldJob,"result.json"))==oldJobHash&&File.Exists(Path.Combine(oldJob,"InstallerBridge.ps1")),
+   "legacy PowerShell operation records remain untouched after C# rollback");
+
+  string preparedRoot=Fixture(home,"未完成旧事务");
+  string preparedDir=Path.Combine(preparedRoot,"mod_fix_backups","STS2-AllFixes-20261102-20261121020202000-22222222222222222222222222222222");
+  Directory.CreateDirectory(preparedDir);
+  File.WriteAllText(Path.Combine(preparedDir,"restore.json"),JsonSerializer.Serialize(new{version="20261102.3",status="prepared",files=Array.Empty<object>()},new JsonSerializerOptions{WriteIndented=true}),new UTF8Encoding(true));
+  bool preparedBlocked=false;
+  try{await installer.RunAsync(package,preparedRoot,"Preview");}
+  catch(Exception e)when(e is InvalidOperationException or InvalidDataException){preparedBlocked=true;}
+  Check(preparedBlocked,"an incomplete legacy installer transaction blocks a new preview");
 
   Check(!File.Exists(Path.Combine(home,"escape.txt")),"all native installer fixtures remain inside their isolated roots");
  }
