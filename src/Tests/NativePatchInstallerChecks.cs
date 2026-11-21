@@ -201,6 +201,7 @@ internal static class NativePatchInstallerChecks
   Check(preparedBlocked,"an incomplete legacy installer transaction blocks a new preview");
 
   Check(!File.Exists(Path.Combine(home,"escape.txt")),"all native installer fixtures remain inside their isolated roots");
+  try{Directory.Delete(home,true);}catch{ /* Keep the test result even if Windows temporarily holds a fixture handle. */ }
  }
 
  static string Fixture(string parent,string name)
