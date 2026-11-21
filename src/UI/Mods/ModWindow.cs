@@ -11,6 +11,8 @@ public partial class MainWindow
  ModInventoryRefreshWorkflowService? modInventoryRefresh;
  ModInventoryRefreshWorkflowService ModInventoryRefresh=>
   modInventoryRefresh??=new ModInventoryRefreshWorkflowService(installer.DataRoot);
+ bool modInventoryRefreshRunning;
+ string? activeModInventoryRefreshRoot,pendingModInventoryRefreshRoot;
  ModTogglePlan? modTogglePreview;
  WorkshopZipPlan? zipImportPreview;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modIssueFilter="所有状态",modStatus="读取模组清单，管理本地模组的启用和停用。";
@@ -483,9 +485,17 @@ public partial class MainWindow
 
  async void RefreshMods()
  {
-  if(busy)return;
+  if(busy)
+  {
+   if(modInventoryRefreshRunning&&selectedInstallRoot is string requestedRoot&&
+      !requestedRoot.Equals(activeModInventoryRefreshRoot,StringComparison.OrdinalIgnoreCase))
+    pendingModInventoryRefreshRoot=requestedRoot;
+   return;
+  }
   if(selectedInstallRoot==null){LocateGame();return;}
   string root=selectedInstallRoot;
+  modInventoryRefreshRunning=true;
+  activeModInventoryRefreshRoot=root;
   var initialStamp=new ModInventoryRefreshStamp(
    root,Volatile.Read(ref modChangeVersion),modInventoryDirty);
   busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
@@ -551,6 +561,10 @@ public partial class MainWindow
   {
    transactionWriting=false;
    busy=false;
+   modInventoryRefreshRunning=false;
+   activeModInventoryRefreshRoot=null;
+   string? pendingRoot=pendingModInventoryRefreshRoot;
+   pendingModInventoryRefreshRoot=null;
    if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
@@ -567,6 +581,11 @@ public partial class MainWindow
    else if(page=="模组管理"&&currentVisit?.Key is "mod-snapshots" or "mod-snapshot-preview")ShowModEnvironmentSnapshots();
    else if(page=="更新中心")ShowModUpdatesCenter();
    else if(page=="总览")ShowOverview();
+
+   // A directory change cancels a scan, but the replacement scan must start only
+   // after the old async UI operation has released its busy state.
+   if(pendingRoot!=null&&pendingRoot.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+    Dispatcher.BeginInvoke(new Action(RefreshMods),System.Windows.Threading.DispatcherPriority.Background);
   }
  }
  readonly HashSet<string> chosenModFolders=new(StringComparer.OrdinalIgnoreCase);
