@@ -120,7 +120,8 @@ public static class ModManager
      var versionCheck=ModDependencyGraph.CheckVersion(dependency,actual);
      if(versionCheck.Status==ModDependencyStatus.VersionUnknown)return "无法核对前置版本："+actual.Id+" "+actual.Version;
      if(versionCheck.Status!=ModDependencyStatus.Satisfied){
-      string bound=dependency.Minimum.Length>0?"最低 "+dependency.Minimum:"最高 "+dependency.Maximum;
+      string bound=versionCheck.FailedBound ??
+       (dependency.Minimum.Length>0?"最低 "+dependency.Minimum:"最高 "+dependency.Maximum);
       return "前置版本未满足："+actual.Id+"，"+bound;
      }
     }
