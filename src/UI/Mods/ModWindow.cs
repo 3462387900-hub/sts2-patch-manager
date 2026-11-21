@@ -1266,7 +1266,7 @@ public partial class MainWindow
    return string.Join(" · ",context);
   },mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
    mod=>dependencyReport?.Summary(mod.Id).HasIssue??false,
-   mod=>ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot,mod,modInventory!));
+   mod=>ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot,mod,modInventory!,dependencyReport));
   ListBox list=null!;
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
@@ -1628,7 +1628,7 @@ public partial class MainWindow
    return string.Join(" · ",context);
   },mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
    mod=>dependencyReport?.Summary(mod.Id).HasIssue??false,
-   mod=>ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot,mod,modInventory!));
+   mod=>ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot,mod,modInventory!,dependencyReport));
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
   int cardColumns=2;
   var workspace=new Grid();
@@ -1970,7 +1970,7 @@ public partial class MainWindow
     Btn("查看依据",()=>ShowPatchEvidence(mod.Id),"Ghost")));
    Space(root,18);
   }
-  var readiness=ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot!,mod,modInventory!);var toggle=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Primary");toggle.IsEnabled=!busy&&readiness.CanProceed;root.Children.Add(H(toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost")));Space(root,10);if(readiness.Message!=null)root.Children.Add(T(readiness.Message,13,gold));
+  var readiness=ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot!,mod,modInventory!,dependencyReport);var toggle=Btn(mod.Enabled?"预览停用":"预览启用",()=>PrepareModToggle(mod),"Primary");toggle.IsEnabled=!busy&&readiness.CanProceed;root.Children.Add(H(toggle,Btn("打开文件夹",()=>OpenUrl(mod.Folder),"Ghost")));Space(root,10);if(readiness.Message!=null)root.Children.Add(T(readiness.Message,13,gold));
   SetPage("模组管理",root,"mod:"+folder,()=>ShowModDetail(folder));toast.Text="启用或停用前会重新核对文件及声明的前置模组。";
  }
  async void ChooseWorkshopZip()
