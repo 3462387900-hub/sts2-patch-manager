@@ -119,7 +119,7 @@ internal static class ModDependencyGraph
                     continue;
                 }
 
-                var (status, message) = CheckVersion(dependency, prerequisite);
+                var (status, message, _) = CheckVersion(dependency, prerequisite);
                 edges.Add(new ModDependencyEdge(
                     dependent, dependency.Id, prerequisite.Name, prerequisite,
                     status, message, item.FromPatchRule));
@@ -169,37 +169,41 @@ internal static class ModDependencyGraph
             activeIssues);
     }
 
-    internal static (ModDependencyStatus Status, string Message) CheckVersion(
+    internal static (ModDependencyStatus Status, string Message, string? FailedBound) CheckVersion(
         ModDependency dependency,
         ManagedMod prerequisite)
     {
         bool hasMinimum = !string.IsNullOrWhiteSpace(dependency.Minimum);
         bool hasMaximum = !string.IsNullOrWhiteSpace(dependency.Maximum);
         if (!hasMinimum && !hasMaximum)
-            return (ModDependencyStatus.Satisfied, "前置已安装并启用；清单未声明版本范围。");
+            return (ModDependencyStatus.Satisfied, "前置已安装并启用；清单未声明版本范围。", null);
 
         if (!TryVersion(prerequisite.Version, out var actual))
             return (ModDependencyStatus.VersionUnknown,
-                "前置已安装并启用，但版本号无法解析，不能确认是否满足要求。");
+                "前置已安装并启用，但版本号无法解析，不能确认是否满足要求。", null);
 
         Version? minimum = null;
         Version? maximum = null;
-        if ((hasMinimum && !TryVersion(dependency.Minimum, out minimum)) ||
-            (hasMaximum && !TryVersion(dependency.Maximum, out maximum)) ||
-            (minimum is not null && maximum is not null && minimum > maximum))
+        if (hasMinimum && !TryVersion(dependency.Minimum, out minimum))
             return (ModDependencyStatus.InvalidConstraint,
-                "依赖清单中的最低 / 最高版本约束无效。");
+                "依赖清单中的最低版本约束无效。", "最低 " + dependency.Minimum);
+        if (hasMaximum && !TryVersion(dependency.Maximum, out maximum))
+            return (ModDependencyStatus.InvalidConstraint,
+                "依赖清单中的最高版本约束无效。", "最高 " + dependency.Maximum);
+        if (minimum is not null && maximum is not null && minimum > maximum)
+            return (ModDependencyStatus.InvalidConstraint,
+                "依赖清单中的最低版本高于最高版本。", "最低 " + dependency.Minimum);
 
         if (minimum is not null && actual < minimum)
             return (ModDependencyStatus.VersionMismatch,
-                $"前置版本过低：当前 {prerequisite.Version}，最低要求 {dependency.Minimum}。");
+                $"前置版本过低：当前 {prerequisite.Version}，最低要求 {dependency.Minimum}。", "最低 " + dependency.Minimum);
 
         if (maximum is not null && actual > maximum)
             return (ModDependencyStatus.VersionMismatch,
-                $"前置版本过高：当前 {prerequisite.Version}，最高允许 {dependency.Maximum}。");
+                $"前置版本过高：当前 {prerequisite.Version}，最高允许 {dependency.Maximum}。", "最高 " + dependency.Maximum);
 
         return (ModDependencyStatus.Satisfied,
-            "前置已安装并启用，版本满足声明范围。");
+            "前置已安装并启用，版本满足声明范围。", null);
     }
 
     static bool TryVersion(string? value, out Version version)
