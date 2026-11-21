@@ -85,10 +85,10 @@ THIRD-PARTY-NOTICES.md     # 第三方声明
 
 ## 文档入口
 
-- [文档索引](docs/README.md)
-- [管理器自动发布指南](docs/发布指南.md)
-- [补丁发布指南](docs/补丁发布指南.md)
-- [尖塔补给站接口验证记录](docs/尖塔补给站接口验证.md)
+- [文档索引](https://github.com/3462387900-hub/sts2-patch-manager/blob/main/docs/README.md)
+- [管理器自动发布指南](https://github.com/3462387900-hub/sts2-patch-manager/blob/main/docs/发布指南.md)
+- [补丁发布指南](https://github.com/3462387900-hub/sts2-patch-manager/blob/main/docs/补丁发布指南.md)
+- [尖塔补给站接口验证记录](https://github.com/3462387900-hub/sts2-patch-manager/blob/main/docs/尖塔补给站接口验证.md)
 
 ## 开发与验证
 
