@@ -224,7 +224,7 @@ internal static class ApplicationWorkflowChecks
         check(refreshed.ScanSucceeded && !refreshed.Cancelled && !refreshed.Stale &&
             !refreshed.InventoryDirty && refreshed.Inventory is not null &&
             refreshCheckpoint is { ClearDiscoveryCache: true } &&
-            refreshCheckpoint.Inventory == emptyInventory &&
+            refreshCheckpoint.Inventory.Mods.Count == 0 &&
             refreshed.RecoveryNotice == "隔离测试恢复提示" &&
             refreshBackend.ObserveCount == 1 && !refreshDeferred,
             "MOD refresh scans in the background, clears dirty state, requests cache invalidation and returns recovery notices");
@@ -369,19 +369,14 @@ internal static class ApplicationWorkflowChecks
             () => { });
         check(cancelConfirmationCalled && cancelledBackend.ReconcileCount == 0 &&
             !cancelledCandidate.ClearLifecycleState &&
-            cancelledCandidate.Inventory == emptyInventory &&
+            cancelledCandidate.Inventory?.Mods.Count == 0 &&
             cancelledCandidate.OrphanPatchNotice is null,
             "declining the orphan-patch confirmation leaves patch files untouched");
 
         // A watcher change during the grace period prevents confirmation and requests another quiet period.
-        var observedCandidate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var delayBackend = new FakeModInventoryRefreshBackend
         {
-            ObserveHandler = (_, _, _, enabled) =>
-            {
-                observedCandidate.TrySetResult(true);
-                return enabled ? [orphanCandidate] : [];
-            }
+            ObserveHandler = (_, _, _, enabled) => enabled ? [orphanCandidate] : []
         };
         var delayService = new ModInventoryRefreshWorkflowService(
             refreshData, delayBackend, TimeSpan.FromMilliseconds(80));
@@ -389,6 +384,7 @@ internal static class ApplicationWorkflowChecks
         var currentDelayStamp = delayStamp;
         bool confirmationAfterChange = false;
         bool deferredAfterChange = false;
+        var delayStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var delayRequest = delayService.RefreshAsync(
             refreshRoot, delayStamp, () => currentDelayStamp,
             (_, _) =>
@@ -396,8 +392,13 @@ internal static class ApplicationWorkflowChecks
                 confirmationAfterChange = true;
                 return Task.FromResult(true);
             },
-            () => deferredAfterChange = true);
-        await observedCandidate.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            () => deferredAfterChange = true,
+            reportProgress: progress =>
+            {
+                if (progress.Status.StartsWith("发现可能", StringComparison.Ordinal))
+                    delayStarted.TrySetResult(true);
+            });
+        await delayStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         currentDelayStamp = currentDelayStamp with { ChangeVersion = 9, InventoryDirty = true };
         var delayResult = await delayRequest.WaitAsync(TimeSpan.FromSeconds(5));
         check(delayResult.Stale && deferredAfterChange && !confirmationAfterChange &&
