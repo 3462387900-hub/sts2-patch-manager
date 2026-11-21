@@ -138,6 +138,7 @@ public partial class MainWindow
             if (gameRoot == selectedInstallRoot)
                 toast.Text = "创建快照失败：" + error.Message;
         }
+        }
         finally
         {
             transactionWriting = false;
@@ -269,6 +270,8 @@ public partial class MainWindow
             return;
         }
 
+        try
+        {
         var result = workflowResult.Restore;
         InvalidateLifecycle("MOD 环境已恢复，修复补丁健康结果需要重新扫描。");
         report = null;
