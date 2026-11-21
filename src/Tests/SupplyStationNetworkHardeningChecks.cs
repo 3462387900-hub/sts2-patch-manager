@@ -143,7 +143,7 @@ internal static class SupplyStationNetworkHardeningChecks
                 ? Json(Descriptor(Cdn)) : Json(Token(Cdn))),
             dnsResolver: (host, _) => Task.FromResult(new[] { IPAddress.Parse("192.168.1.1") })))
         {
-            await Throws<InvalidDataException>(() => client.ProbeManifestAsync(AppId, ItemId));
+            await Throws<HttpRequestException>(() => client.ProbeManifestAsync(AppId, ItemId));
             check(true, "resolved private IP rejected without real DNS or CDN access");
         }
 
