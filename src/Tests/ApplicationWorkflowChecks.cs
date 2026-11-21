@@ -460,6 +460,92 @@ internal static class ApplicationWorkflowChecks
             partialResult.Items.Single(item => item.Name == "Partial B").State == "失败",
             "batch workflow continues independent items after one failure and returns per-item partial results");
 
+        // MOD dependency diagnostics: graph inputs are in-memory fixtures and all paths stay under the test temp root.
+        var dependencyDiagnostics = new ModDependencyDiagnosticsService();
+        var dependencyBase = ToggleFixture(
+            "fixture.dependency.base", "Dependency Base", Path.Combine(toggleRoot, "dependency-base"), false);
+        var dependencyMiddle = ToggleFixture(
+            "fixture.dependency.middle", "Dependency Middle", Path.Combine(toggleRoot, "dependency-middle"),
+            false, new ModDependency(dependencyBase.Id));
+        var dependencyTop = ToggleFixture(
+            "fixture.dependency.top", "Dependency Top", Path.Combine(toggleRoot, "dependency-top"),
+            false, new ModDependency(dependencyMiddle.Id));
+        var dependencyInventory = new ModInventory(
+            [dependencyBase, dependencyMiddle, dependencyTop], []);
+        var dependencyReport = dependencyDiagnostics.Analyze(dependencyInventory);
+        var dependencyEnableOrder = dependencyDiagnostics.CreateToggleOrder(
+            dependencyInventory, [dependencyTop, dependencyMiddle, dependencyBase], true, dependencyReport);
+        var dependencyDisableOrder = dependencyDiagnostics.CreateToggleOrder(
+            dependencyInventory, [dependencyBase, dependencyMiddle, dependencyTop], false, dependencyReport);
+        check(dependencyReport.Cycles.Length == 0 &&
+            dependencyEnableOrder.Steps.Select(step => step.Mod.Name)
+                .SequenceEqual(["Dependency Base", "Dependency Middle", "Dependency Top"]) &&
+            dependencyDisableOrder.Steps.Select(step => step.Mod.Name)
+                .SequenceEqual(["Dependency Top", "Dependency Middle", "Dependency Base"]) &&
+            dependencyEnableOrder.Steps.Any(step => step.Explanation.Contains("前置项", StringComparison.Ordinal)) &&
+            dependencyDisableOrder.Steps.Any(step => step.Explanation.Contains("依赖它的项目", StringComparison.Ordinal)),
+            "dependency diagnostics resolve a multi-level graph, return prerequisite-first enable order, dependent-first disable order and explanations");
+
+        var cycleA = ToggleFixture(
+            "fixture.dependency.cycle.a", "Cycle A", Path.Combine(toggleRoot, "cycle-a"), false,
+            new ModDependency("fixture.dependency.cycle.b"));
+        var cycleB = ToggleFixture(
+            "fixture.dependency.cycle.b", "Cycle B", Path.Combine(toggleRoot, "cycle-b"), false,
+            new ModDependency("fixture.dependency.cycle.a"));
+        var cycleInventory = new ModInventory([cycleA, cycleB], []);
+        var cycleReport = dependencyDiagnostics.Analyze(cycleInventory);
+        var cycleOrder = dependencyDiagnostics.CreateToggleOrder(
+            cycleInventory, [cycleA, cycleB], enable: true, cycleReport);
+        check(cycleReport.Cycles.Length == 1 &&
+            cycleReport.Cycles[0].ModIds.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .SetEquals([cycleA.Id, cycleB.Id]) &&
+            cycleReport.Edges.All(edge => edge.IsCycle) &&
+            cycleOrder.Steps.Count == 0 &&
+            cycleOrder.CyclicFolders.SetEquals([cycleA.Folder, cycleB.Folder]),
+            "dependency diagnostics report strongly connected MOD cycles and exclude them from toggle order");
+
+        var missingDependent = ToggleFixture(
+            "fixture.dependency.missing", "Missing Dependent", Path.Combine(toggleRoot, "missing-dependent"),
+            false, new ModDependency("fixture.dependency.not-installed"));
+        var disabledPrerequisite = ToggleFixture(
+            "fixture.dependency.disabled-base", "Disabled Base", Path.Combine(toggleRoot, "disabled-base"), false);
+        var disabledDependent = ToggleFixture(
+            "fixture.dependency.disabled-child", "Disabled Dependent", Path.Combine(toggleRoot, "disabled-dependent"),
+            false, new ModDependency(disabledPrerequisite.Id));
+        var missingInventory = new ModInventory(
+            [missingDependent, disabledPrerequisite, disabledDependent], []);
+        var missingReport = dependencyDiagnostics.Analyze(missingInventory);
+        check(missingReport.Edges.Any(edge =>
+                edge.Dependent.Id == missingDependent.Id && edge.Status == ModDependencyStatus.Missing) &&
+            missingReport.Edges.Any(edge =>
+                edge.Dependent.Id == disabledDependent.Id &&
+                edge.Status == ModDependencyStatus.DisabledPrerequisite &&
+                edge.Prerequisite?.Id == disabledPrerequisite.Id),
+            "dependency diagnostics distinguish an uninstalled prerequisite from a prerequisite that is installed but disabled");
+
+        var versionPrerequisite = ToggleFixture(
+            "fixture.dependency.version-base", "Version Base", Path.Combine(toggleRoot, "version-base"), true) with
+            { Version = "1.5.0" };
+        var versionMismatch = ToggleFixture(
+            "fixture.dependency.version-low", "Version Mismatch", Path.Combine(toggleRoot, "version-mismatch"),
+            false, new ModDependency(versionPrerequisite.Id, "2.0.0", "3.0.0"));
+        var versionSatisfied = ToggleFixture(
+            "fixture.dependency.version-ok", "Version Satisfied", Path.Combine(toggleRoot, "version-satisfied"),
+            false, new ModDependency(versionPrerequisite.Id, "1.0.0", "2.0.0"));
+        var versionInventory = new ModInventory(
+            [versionPrerequisite, versionMismatch, versionSatisfied], []);
+        var versionReport = dependencyDiagnostics.Analyze(versionInventory);
+        var mismatchReadiness = dependencyDiagnostics.DiagnoseToggle(toggleRoot, versionMismatch, versionInventory);
+        var satisfiedReadiness = dependencyDiagnostics.DiagnoseToggle(toggleRoot, versionSatisfied, versionInventory);
+        check(versionReport.Edges.Any(edge =>
+                edge.Dependent.Id == versionMismatch.Id && edge.Status == ModDependencyStatus.VersionMismatch) &&
+            versionReport.Edges.Any(edge =>
+                edge.Dependent.Id == versionSatisfied.Id && edge.Status == ModDependencyStatus.Satisfied) &&
+            !mismatchReadiness.CanProceed &&
+            mismatchReadiness.Kind == ModToggleBlockKind.Dependency &&
+            satisfiedReadiness.CanProceed && satisfiedReadiness.Message is null,
+            "dependency diagnostics share Domain version parsing for mismatched and compatible prerequisite ranges");
+
         // MOD inventory refresh: all backends below are fake and all paths are temporary.
         string refreshRoot = Path.Combine(home, "refresh-game");
         string refreshRoot2 = Path.Combine(home, "refresh-game-switched");
