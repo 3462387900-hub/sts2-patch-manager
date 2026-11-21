@@ -239,13 +239,14 @@ internal sealed class ModDependencyDiagnosticsService
     public ModTogglePreflightDiagnostic DiagnoseToggle(
         string root,
         ManagedMod mod,
-        ModInventory inventory)
+        ModInventory inventory,
+        ModDependencyDiagnosticsReport? diagnostics = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         ArgumentNullException.ThrowIfNull(mod);
         ArgumentNullException.ThrowIfNull(inventory);
 
-        var report = Analyze(inventory);
+        var report = diagnostics ?? Analyze(inventory);
         int relatedEnabledDependents = report.Edges
             .Where(edge => edge.DependencyId.Equals(mod.Id, StringComparison.OrdinalIgnoreCase) &&
                 edge.Dependent.Enabled)
