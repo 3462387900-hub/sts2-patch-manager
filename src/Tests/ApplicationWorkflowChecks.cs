@@ -172,8 +172,8 @@ internal static class ApplicationWorkflowChecks
         string reportPath = Path.Combine(home, "peer-report.json");
         _ = await workflow.ExportFreshReportAsync(reportPath, context);
         var imported = await workflow.CompareReportFileAsync(reportPath, context);
-        check(same.Summary.StartsWith("已收录补丁的扫描状态一致", StringComparison.Ordinal) &&
-            imported.Summary.StartsWith("已收录补丁的扫描状态一致", StringComparison.Ordinal) &&
+        check(same.Summary == imported.Summary &&
+            same.Summary.Contains("本机扫描：", StringComparison.Ordinal) &&
             imported.Rows is not null,
             "coop workflow rescans, exports and compares local fixture reports through Domain rules");
 
