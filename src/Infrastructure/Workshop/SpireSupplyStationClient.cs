@@ -714,7 +714,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
         Endpoint initialEndpoint,
         string path,
         CancellationToken cancellationToken,
-        long? expectedLength = null)
+        long? expectedLength = null,
+        RequestBudget? budget = null)
     {
         const int maxRedirects = 5;
         const int maxResponseBytes = 64 * 1024 * 1024;
@@ -727,14 +728,20 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
         var currentEndpoint = initialEndpoint;
         var currentOrigin = NormalizeCdnOrigin(currentEndpoint.Origin);
-        string tokenQuery = await GetCachedCdnTokenAsync(request, currentEndpoint, cancellationToken);
+        string tokenQuery = await GetCachedCdnTokenAsync(
+            request, currentEndpoint, cancellationToken, budget: budget);
         Uri currentUri = BuildCdnUri(currentOrigin, path, tokenQuery);
         bool refreshedAfterAuthorizationFailure = false;
 
         for (int redirectCount = 0; redirectCount <= maxRedirects; redirectCount++)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(60));
+            timeout.CancelAfter(cdnTimeout);
+            try
+            {
+            await ValidateResolvedCdnHostAsync(currentUri.Host, timeout.Token);
+            ThrowIfRateLimited();
+            budget?.Charge();
 
             using var cdnRequest = new HttpRequestMessage(HttpMethod.Get, currentUri);
             cdnRequest.Headers.Accept.ParseAdd("*/*");
@@ -771,13 +778,17 @@ internal sealed class SpireSupplyStationClient : IDisposable
                 continue;
             }
 
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                throw RegisterRateLimit(response);
             if (((int)response.StatusCode is 401 or 403) && !refreshedAfterAuthorizationFailure)
             {
                 tokenQuery = await GetCachedCdnTokenAsync(
                     request,
                     currentEndpoint,
                     cancellationToken,
-                    refresh: true);
+                    refresh: true,
+                    rejectedQuery: tokenQuery,
+                    budget: budget);
                 currentUri = new UriBuilder(currentUri) { Query = tokenQuery }.Uri;
                 refreshedAfterAuthorizationFailure = true;
                 redirectCount--;
@@ -809,6 +820,11 @@ internal sealed class SpireSupplyStationClient : IDisposable
             if (expectedLength is long requiredLength && output.Length != requiredLength)
                 throw new InvalidDataException("Steam CDN 返回的内容长度与 Manifest 声明不一致。");
             return output.ToArray();
+            }
+            catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException("Steam CDN 请求超时（默认 60 秒）。", error);
+            }
         }
 
         throw new HttpRequestException("Steam CDN 内容请求重试次数已用尽。");
@@ -830,9 +846,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
     static void ValidateCdnUri(Uri uri, IReadOnlyDictionary<string, Endpoint> allowedEndpoints)
     {
         bool supportedTransport = uri.Scheme == Uri.UriSchemeHttps && uri.Port == 443;
-        bool trustedHost =
-            allowedEndpoints.ContainsKey(uri.Host) ||
-            IsTrustedSteamCdnRedirectHost(uri.Host);
+        bool trustedHost = IsTrustedSteamCdnRedirectHost(uri.Host) && !IsClearlyUnsafeHost(uri.Host);
         var reasons = new List<string>();
         if (!supportedTransport)
             reasons.Add("只允许 HTTPS 默认端口 443（禁止 HTTPS 降级到 HTTP）");
@@ -846,6 +860,71 @@ internal sealed class SpireSupplyStationClient : IDisposable
         if (reasons.Count != 0)
             throw new InvalidDataException(
                 $"Steam CDN 重定向目标校验失败：{uri.Scheme}://{uri.Host}:{uri.Port} （{string.Join("；", reasons)}）。");
+    }
+
+    static bool IsClearlyUnsafeHost(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+        IPAddress.TryParse(host, out _);
+
+    static bool IsUnsafeAddress(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        if (IPAddress.IsLoopback(address) || address.Equals(IPAddress.Any) ||
+            address.Equals(IPAddress.None) || address.Equals(IPAddress.IPv6Any) ||
+            address.Equals(IPAddress.IPv6None) || address.IsIPv6LinkLocal ||
+            address.IsIPv6SiteLocal || address.IsIPv6Multicast) return true;
+        byte[] ip = address.GetAddressBytes();
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+        {
+            int a = ip[0], b = ip[1];
+            return a == 0 || a == 10 || a == 127 || a >= 224 ||
+                (a == 100 && b >= 64 && b <= 127) || (a == 169 && b == 254) ||
+                (a == 172 && b >= 16 && b <= 31) ||
+                (a == 192 && (b == 168 || b == 0)) ||
+                (a == 198 && (b == 18 || b == 19));
+        }
+        return address.AddressFamily != AddressFamily.InterNetworkV6 || (ip[0] & 0xFE) == 0xFC;
+    }
+
+    async Task ValidateResolvedCdnHostAsync(string host, CancellationToken token)
+    {
+        // Mock handlers bypass real DNS unless a fake resolver is explicitly supplied.
+        if (dnsResolver is null) return;
+        IPAddress[] addresses;
+        try { addresses = await dnsResolver(host, token); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (System.Net.Sockets.SocketException e)
+        { throw new HttpRequestException("Steam CDN DNS 解析失败。", e); }
+        if (addresses.Length == 0 || addresses.Any(IsUnsafeAddress))
+            throw new InvalidDataException("Steam CDN DNS 指向内网或非公网 IP，已拒绝访问。");
+    }
+
+    void ThrowIfRateLimited()
+    {
+        if (rateLimits.TryGetValue("*", out var value) && value.Until > DateTimeOffset.UtcNow)
+            throw new SupplyStationRateLimitException(
+                "补给站或 Steam CDN 正在限流；需遵守 Retry-After 冷却。",
+                value.Until - DateTimeOffset.UtcNow);
+    }
+
+    SupplyStationRateLimitException RegisterRateLimit(HttpResponseMessage response)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var current = rateLimits.GetOrAdd("*", _ => new RateLimitWindow(now, 0));
+        TimeSpan? delta = response.Headers.RetryAfter?.Delta;
+        if (delta is null && response.Headers.RetryAfter?.Date is DateTimeOffset date)
+            delta = date - now;
+        TimeSpan delay = delta is > TimeSpan.Zero ? delta.Value :
+            TimeSpan.FromMilliseconds(Math.Min(30000, 500 * (1 << Math.Min(current.Count, 6))) +
+                Random.Shared.Next(100, 400));
+        rateLimits.AddOrUpdate("*", _ => new RateLimitWindow(now + delay, 1),
+            (_, old) => new RateLimitWindow(
+                old.Until > now + delay ? old.Until : now + delay,
+                Math.Min(old.Count + 1, 7)));
+        return new SupplyStationRateLimitException(
+            "补给站或 Steam CDN 返回 HTTP 429，已停止当前 Workshop 请求。", delay);
     }
 
     static bool IsTrustedSteamCdnRedirectHost(string host)
@@ -884,66 +963,56 @@ internal sealed class SpireSupplyStationClient : IDisposable
         return string.Join(" -> ", parts);
     }
 
-    async Task<T> GetJsonAsync<T>(Uri uri, CancellationToken cancellationToken)
+    async Task<T> GetJsonAsync<T>(Uri uri, CancellationToken cancellationToken, RequestBudget? budget = null)
         where T : class
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(20));
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.Accept.ParseAdd("application/json");
-        using var response = await client.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            timeout.Token);
-
-        if (response.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect or
-            HttpStatusCode.RedirectMethod or HttpStatusCode.TemporaryRedirect or
-            HttpStatusCode.PermanentRedirect)
-            throw new InvalidDataException("尖塔补给站返回了重定向；已按安全策略拒绝跟随。");
-
-        if ((int)response.StatusCode is 403 or 429)
-            throw new InvalidOperationException(
-                "尖塔补给站暂时拒绝请求（HTTP " + (int)response.StatusCode + "）。");
-
-        if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException(
-                "尖塔补给站请求失败（HTTP " + (int)response.StatusCode + "）。");
-
-        var finalUri = response.RequestMessage?.RequestUri;
-        if (finalUri is null ||
-            finalUri.Scheme != Uri.UriSchemeHttps ||
-            !finalUri.Host.Equals(ApiHost, StringComparison.OrdinalIgnoreCase) ||
-            finalUri.Port != 443)
-            throw new InvalidDataException("接口响应来源与固定下载站地址不一致。");
-
-        if (response.Content.Headers.ContentLength is long length && length > MaxJsonBytes)
-            throw new InvalidDataException("尖塔补给站响应超过 1 MiB 限制。");
-
-        await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
-        using var output = new MemoryStream();
-        var buffer = new byte[8192];
-        int read;
-        while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), timeout.Token)) > 0)
-        {
-            if (output.Length + read > MaxJsonBytes)
-                throw new InvalidDataException("尖塔补给站响应超过 1 MiB 限制。");
-            await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
-        }
-
+        timeout.CancelAfter(apiTimeout);
         try
         {
-            return JsonSerializer.Deserialize<T>(output.ToArray(), JsonOptions)
-                ?? throw new InvalidDataException("尖塔补给站返回了空 JSON 对象。");
+            ThrowIfRateLimited();
+            budget?.Charge();
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.Accept.ParseAdd("application/json");
+            using var response = await client.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+
+            if (response.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect or
+                HttpStatusCode.RedirectMethod or HttpStatusCode.TemporaryRedirect or
+                HttpStatusCode.PermanentRedirect)
+                throw new InvalidDataException("尖塔补给站返回重定向，已拒绝跟随。");
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                throw RegisterRateLimit(response);
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+                throw new InvalidOperationException("尖塔补给站暂时拒绝请求（HTTP 403）。");
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException("尖塔补给站请求失败（HTTP " + (int)response.StatusCode + "）。");
+            var finalUri = response.RequestMessage?.RequestUri;
+            if (finalUri is null || finalUri.Scheme != Uri.UriSchemeHttps ||
+                !finalUri.Host.Equals(ApiHost, StringComparison.OrdinalIgnoreCase) || finalUri.Port != 443)
+                throw new InvalidDataException("接口响应来源与固定下载站地址不一致。");
+            if (response.Content.Headers.ContentLength is long length && length > MaxJsonBytes)
+                throw new InvalidDataException("尖塔补给站响应超过 1 MiB 限制。");
+            await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var output = new MemoryStream();
+            var buffer = new byte[8192];
+            int read;
+            while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), timeout.Token)) > 0)
+            {
+                if (output.Length + read > MaxJsonBytes)
+                    throw new InvalidDataException("尖塔补给站响应超过 1 MiB 限制。");
+                await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
+            }
+            try
+            {
+                return JsonSerializer.Deserialize<T>(output.ToArray(), JsonOptions)
+                    ?? throw new InvalidDataException("尖塔补给站返回了空 JSON 对象。");
+            }
+            catch (JsonException error)
+            { throw new InvalidDataException("尖塔补给站返回的 JSON 格式无效。", error); }
         }
-        catch (JsonException error)
-        {
-            throw new InvalidDataException("尖塔补给站返回的 JSON 格式无效。", error);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException("尖塔补给站请求超时。");
-        }
+        catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
+        { throw new TimeoutException("尖塔补给站请求超时（默认 20 秒）。", error); }
     }
 
     static Uri BuildApiUri(
@@ -1044,8 +1113,12 @@ internal sealed class SpireSupplyStationClient : IDisposable
             throw new InvalidDataException("UGC 下载描述中的 Depot Key 格式无效。", error);
         }
 
-        if (depotKey.Length != 32)
-            throw new InvalidDataException("UGC 下载描述中的 Depot Key 长度无效。");
+        try
+        {
+            if (depotKey.Length != 32)
+                throw new InvalidDataException("UGC 下载描述中的 Depot Key 长度无效。");
+        }
+        finally { CryptographicOperations.ZeroMemory(depotKey); }
 
         if (descriptor.Endpoints.Count is < 1 or > 16)
             throw new InvalidDataException("UGC 下载描述没有提供有效的 CDN 节点。");
@@ -1095,6 +1168,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
             origin.Fragment.Length != 0)
             throw new InvalidDataException("尖塔补给站返回了无效的 CDN 节点地址。");
 
+        if (IsClearlyUnsafeHost(origin.Host) || !IsTrustedSteamCdnRedirectHost(origin.Host))
+            throw new InvalidDataException("CDN 初始节点主机不在可信 Steam CDN 列表中，或为本地/内网地址。");
         return new UriBuilder(origin)
         {
             Scheme = Uri.UriSchemeHttps,
