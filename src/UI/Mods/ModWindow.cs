@@ -493,7 +493,7 @@ public partial class MainWindow
    if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)||watchVersion!=modChangeVersion)
    {
     modInventoryDirty=true;modStatus="扫描期间目录发生变化，正在准备重新刷新。";
-    modWatchDebounce?.Stop();modWatchDebounce?.Start();
+    modFileWatcher.DeferQuietPeriod();
     return;
    }
    if(modInventoryDirty)githubDiscovery?.ClearCache();
@@ -516,7 +516,7 @@ public partial class MainWindow
       {
        modInventoryDirty=true;
        modStatus="扫描期间 MOD 环境再次发生变化，已取消自动停用并安排复查。";
-       modWatchDebounce?.Stop();modWatchDebounce?.Start();
+       modFileWatcher.DeferQuietPeriod();
        return;
       }
       if(OrphanPatchAutoStop.Enabled(installer.DataRoot))
