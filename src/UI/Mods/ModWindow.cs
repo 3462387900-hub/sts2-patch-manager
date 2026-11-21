@@ -515,9 +515,8 @@ public partial class MainWindow
     checkpoint=>
     {
      if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
-     modInventory=checkpoint.Inventory;
-     modInventoryDirty=false;
-     modStatus=checkpoint.Status;
+     // Cache invalidation is safe here; the inventory itself is not published
+     // until the watcher version is atomically rechecked below.
      if(checkpoint.ClearDiscoveryCache)githubDiscovery?.ClearCache();
     },
     progress=>
@@ -530,9 +529,23 @@ public partial class MainWindow
    if(result.Cancelled)return;
    if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
 
-   if(result.Inventory!=null)modInventory=result.Inventory;
-   modInventoryDirty=result.InventoryDirty;
-   modStatus=result.Status;
+   bool inventoryPublished=false;
+   if(!result.Stale)
+   {
+    inventoryPublished=modFileWatcher.TryRunIfCurrent(root,initialStamp.ChangeVersion,()=>
+    {
+     if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+     if(result.ScanSucceeded&&result.Inventory!=null)modInventory=result.Inventory;
+     modInventoryDirty=result.InventoryDirty;
+     modStatus=result.Status;
+    });
+   }
+   if(!inventoryPublished)
+   {
+    modInventoryDirty=true;
+    modStatus=result.Status;
+    modFileWatcher.DeferQuietPeriod();
+   }
 
    if(result.OrphanPatchNotice!=null)
    {
