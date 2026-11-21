@@ -28,7 +28,8 @@ internal sealed record ModToggleBatchReview(
 
 internal sealed record ModToggleBatchStep(
     ManagedMod Mod,
-    bool PreviewDeferred);
+    bool PreviewDeferred,
+    string OrderExplanation = "");
 
 internal sealed record ModToggleBatchPreview(
     string Root,
@@ -83,10 +84,15 @@ internal sealed class ModToggleWorkflowService
     sealed record Candidate(int SelectionIndex, ManagedMod Mod);
 
     readonly IModToggleWorkflowBackend backend;
+    readonly ModDependencyDiagnosticsService dependencyDiagnostics;
 
-    public ModToggleWorkflowService(IModToggleWorkflowBackend? backend = null)
+    public ModToggleWorkflowService(
+        IModToggleWorkflowBackend? backend = null,
+        ModDependencyDiagnosticsService? dependencyDiagnostics = null)
     {
         this.backend = backend ?? new DomainModToggleWorkflowBackend();
+        this.dependencyDiagnostics = dependencyDiagnostics ??
+            new ModDependencyDiagnosticsService(this.backend.BlockReason);
     }
 
     public Task<ModTogglePlan> PreviewAsync(
@@ -228,15 +234,17 @@ internal sealed class ModToggleWorkflowService
         if (cancellationToken.IsCancellationRequested)
             return CancelledPreview(normalizedRoot, enable, selected, reviews);
 
-        var graph = ModDependencyGraph.Analyze(inventory);
-        var cycleIds = graph.Cycles
-            .SelectMany(cycle => cycle.ModIds)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var graph = dependencyDiagnostics.Analyze(inventory);
+        var order = dependencyDiagnostics.CreateToggleOrder(
+            inventory,
+            candidates.Select(candidate => candidate.Mod).ToArray(),
+            enable,
+            graph);
 
         var remaining = new List<Candidate>();
         foreach (var candidate in candidates)
         {
-            if (cycleIds.Contains(candidate.Mod.Id))
+            if (order.CyclicFolders.Contains(candidate.Mod.Folder))
                 reviews[candidate.SelectionIndex] = Review(
                     candidate.SelectionIndex, candidate.Mod, "跳过",
                     "此模组参与循环依赖，无法安全确定启停顺序。");
@@ -244,66 +252,16 @@ internal sealed class ModToggleWorkflowService
                 remaining.Add(candidate);
         }
 
-        // Dependency edges point from dependent to prerequisite. Enabling reverses
-        // them (prerequisite first); disabling keeps them (dependent first).
         var candidateByFolder = remaining.ToDictionary(
             candidate => candidate.Mod.Folder,
             StringComparer.OrdinalIgnoreCase);
-        var outgoing = remaining.ToDictionary(
-            candidate => candidate.Mod.Folder,
-            _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+        var orderByFolder = order.Steps.ToDictionary(
+            step => step.Mod.Folder,
             StringComparer.OrdinalIgnoreCase);
-        var indegree = remaining.ToDictionary(
-            candidate => candidate.Mod.Folder,
-            _ => 0,
-            StringComparer.OrdinalIgnoreCase);
-
-        foreach (var edge in graph.Edges)
-        {
-            if (edge.Prerequisite is null ||
-                !candidateByFolder.ContainsKey(edge.Dependent.Folder) ||
-                !candidateByFolder.ContainsKey(edge.Prerequisite.Folder))
-                continue;
-
-            string from = enable ? edge.Prerequisite.Folder : edge.Dependent.Folder;
-            string to = enable ? edge.Dependent.Folder : edge.Prerequisite.Folder;
-            if (outgoing[from].Add(to))
-                indegree[to]++;
-        }
-
-        var ordered = new List<Candidate>();
-        var ready = remaining
-            .Where(candidate => indegree[candidate.Mod.Folder] == 0)
-            .OrderBy(candidate => candidate.SelectionIndex)
+        var ordered = order.Steps
+            .Where(step => candidateByFolder.ContainsKey(step.Mod.Folder))
+            .Select(step => candidateByFolder[step.Mod.Folder])
             .ToList();
-
-        while (ready.Count > 0)
-        {
-            if (cancellationToken.IsCancellationRequested)
-                return CancelledPreview(normalizedRoot, enable, selected, reviews);
-            Candidate next = ready[0];
-            ready.RemoveAt(0);
-            ordered.Add(next);
-
-            foreach (string dependentFolder in outgoing[next.Mod.Folder])
-            {
-                indegree[dependentFolder]--;
-                if (indegree[dependentFolder] == 0)
-                {
-                    ready.Add(candidateByFolder[dependentFolder]);
-                    ready.Sort((left, right) => left.SelectionIndex.CompareTo(right.SelectionIndex));
-                }
-            }
-        }
-
-        var orderedFolders = ordered
-            .Select(candidate => candidate.Mod.Folder)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var candidate in remaining.Where(candidate => !orderedFolders.Contains(candidate.Mod.Folder)))
-            reviews[candidate.SelectionIndex] = Review(
-                candidate.SelectionIndex, candidate.Mod, "跳过",
-                "选中项之间存在循环依赖，无法生成安全的批量启停顺序。");
 
         var projectedMods = inventory.Mods.ToList();
         var execution = new List<ModToggleBatchStep>();
@@ -328,7 +286,9 @@ internal sealed class ModToggleWorkflowService
             string? blockReason;
             try
             {
-                blockReason = backend.BlockReason(normalizedRoot, projectedMod, projectedInventory);
+                blockReason = dependencyDiagnostics
+                    .DiagnoseToggle(normalizedRoot, projectedMod, projectedInventory)
+                    .Message;
             }
             catch (Exception error)
             {
@@ -366,8 +326,8 @@ internal sealed class ModToggleWorkflowService
             bool deferred = false;
             if (previewError is not null)
             {
-                deferred = IsDependencyBlock(previewError.Message) &&
-                    HasEarlierRelatedDependency(candidate.Mod, graph, processedFolders, enable);
+                deferred = dependencyDiagnostics.IsDependencyBlockMessage(previewError.Message) &&
+                    dependencyDiagnostics.HasEarlierRelatedDependency(candidate.Mod, graph, processedFolders, enable);
 
                 if (!deferred)
                 {
@@ -377,7 +337,8 @@ internal sealed class ModToggleWorkflowService
                 }
             }
 
-            execution.Add(new(candidate.Mod, deferred));
+            string orderExplanation = orderByFolder[candidate.Mod.Folder].Explanation;
+            execution.Add(new(candidate.Mod, deferred, orderExplanation));
             processedFolders.Add(candidate.Mod.Folder);
             projectedMods[projectedIndex] = projectedMod with { Enabled = enable };
 
@@ -385,9 +346,10 @@ internal sealed class ModToggleWorkflowService
                 candidate.SelectionIndex,
                 candidate.Mod,
                 deferred ? "需复核" : "可处理",
-                deferred
+                (deferred
                     ? "依赖项已排在前序步骤；前置操作完成后会再次预览并核对文件，再决定是否执行。"
-                    : "预览与依赖检查通过；写入前仍会重新预览，防止文件或清单变化。");
+                    : "预览与依赖检查通过；写入前仍会重新预览，防止文件或清单变化。") +
+                " " + orderExplanation);
 
             reportProgress?.Invoke(new(
                 "已完成预览 " + (execution.Count + reviews.Count(review => review?.State == "跳过")) +
@@ -623,29 +585,6 @@ internal sealed class ModToggleWorkflowService
     static ModToggleBatchReview Review(
         int index, ManagedMod mod, string state, string explanation) =>
         new(index, mod.Folder, mod.Name, state, explanation);
-
-    static bool IsDependencyBlock(string message) =>
-        message.StartsWith("请先启用前置模组：", StringComparison.Ordinal) ||
-        message.StartsWith("这些启用项依赖它，请先停用依赖项：", StringComparison.Ordinal);
-
-    static bool HasEarlierRelatedDependency(
-        ManagedMod mod,
-        ModDependencyGraphReport graph,
-        IReadOnlySet<string> processedFolders,
-        bool enable)
-    {
-        if (enable)
-        {
-            return graph.Edges.Any(edge =>
-                edge.Dependent.Folder.Equals(mod.Folder, StringComparison.OrdinalIgnoreCase) &&
-                edge.Prerequisite is not null &&
-                processedFolders.Contains(edge.Prerequisite.Folder));
-        }
-
-        return graph.Edges.Any(edge =>
-            edge.Prerequisite?.Folder.Equals(mod.Folder, StringComparison.OrdinalIgnoreCase) == true &&
-            processedFolders.Contains(edge.Dependent.Folder));
-    }
 
     static ModToggleBatchPreview CancelledPreview(
         string root,
