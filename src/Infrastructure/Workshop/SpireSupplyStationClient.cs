@@ -214,7 +214,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
     {
         ValidateRequest(appId, publishedFileId);
         var request = new WorkshopRequest(appId, publishedFileId);
-        var descriptor = await ResolveDescriptorAsync(request, cancellationToken);
+        var budget = new RequestBudget(12);
+        var descriptor = await ResolveDescriptorAsync(request, cancellationToken, budget);
 
         return new SupplyStationContentIdentity(
             appId,
@@ -248,7 +249,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
                 .ToArray();
 
             // Validate one authorized CDN token without requesting a manifest or content chunk.
-            _ = await GetCdnTokenAsync(request, descriptor.Endpoints[0], cancellationToken);
+            _ = await GetCdnTokenAsync(request, descriptor.Endpoints[0], cancellationToken, budget: budget);
             tokenValidated = true;
         }
 
@@ -291,28 +292,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
             throw new InvalidDataException("UGC 下载描述缺少有效的 Manifest、Depot 或请求码。");
 
         string path = $"depot/{descriptor.DepotId.Value}/manifest/{manifestId}/5/{requestCode}";
-        byte[]? archiveBytes = null;
-        Exception? lastCdnError = null;
-        foreach (var endpoint in descriptor.Endpoints)
-        {
-            try
-            {
-                archiveBytes = await GetCdnBytesAsync(request, descriptor, endpoint, path, cancellationToken);
-                break;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception error) when (error is HttpRequestException or InvalidDataException or
-                                          InvalidOperationException or TimeoutException)
-            {
-                lastCdnError = error;
-            }
-        }
-
-        if (archiveBytes is null)
-            throw new HttpRequestException("所有授权 CDN 节点均无法提供 Manifest。", lastCdnError);
+        byte[] archiveBytes = await GetCdnBytesFromAnyEndpointAsync(
+            request, descriptor, path, expectedLength: null, cancellationToken, budget);
 
         var manifest = SteamDepotManifestParser.ParseZip(archiveBytes);
 
@@ -359,13 +340,14 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
         string manifestPath = $"depot/{descriptor.DepotId.Value}/manifest/{manifestId}/5/{requestCode}";
         byte[] manifestArchive = await GetCdnBytesFromAnyEndpointAsync(
-            request, descriptor, manifestPath, expectedLength: null, cancellationToken);
+            request, descriptor, manifestPath, expectedLength: null, cancellationToken, budget);
         var manifest = SteamDepotManifestParser.ParseZipDetailed(manifestArchive);
         if (manifest.Summary.DepotId != descriptor.DepotId.Value ||
             manifest.Summary.ManifestId != manifestId)
             throw new InvalidDataException("Steam CDN 返回的 Manifest 身份与尖塔补给站下载描述不一致。");
 
         var chunks = manifest.UniqueChunks();
+        budget.AllowChunks(chunks.Count);
         if (chunks.Count == 0)
             throw new InvalidDataException("Steam Manifest 不包含任何可下载 Chunk。");
 
@@ -417,12 +399,15 @@ internal sealed class SpireSupplyStationClient : IDisposable
                                 descriptor,
                                 $"depot/{descriptor.DepotId.Value}/chunk/{chunk.Id}",
                                 chunk.CompressedLength,
-                                token);
+                                token,
+                                budget);
                         }
                         catch (OperationCanceledException) when (token.IsCancellationRequested)
                         {
                             throw;
                         }
+                        catch (SupplyStationRateLimitException) { throw; }
+                        catch (SupplyStationBudgetExceededException) { throw; }
                         catch (Exception error) when (error is HttpRequestException or InvalidDataException or
                                                       InvalidOperationException or TimeoutException or IOException)
                         {
@@ -560,7 +545,7 @@ internal sealed class SpireSupplyStationClient : IDisposable
         {
             string manifestPath = $"depot/{descriptor.DepotId.Value}/manifest/{manifestId}/5/{requestCode}";
             byte[] manifestArchive = await GetCdnBytesFromAnyEndpointAsync(
-                request, descriptor, manifestPath, expectedLength: null, cancellationToken);
+                request, descriptor, manifestPath, expectedLength: null, cancellationToken, budget);
             var encryptedManifest = SteamDepotManifestParser.ParseZipDetailed(manifestArchive);
             if (encryptedManifest.Summary.DepotId != descriptor.DepotId.Value ||
                 encryptedManifest.Summary.ManifestId != manifestId)
@@ -597,7 +582,8 @@ internal sealed class SpireSupplyStationClient : IDisposable
         Descriptor descriptor,
         string path,
         long? expectedLength,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RequestBudget budget)
     {
         Exception? lastError = null;
         var failures = new List<string>();
@@ -607,12 +593,14 @@ internal sealed class SpireSupplyStationClient : IDisposable
             try
             {
                 return await GetCdnBytesAsync(
-                    request, descriptor, endpoint, path, cancellationToken, expectedLength);
+                    request, descriptor, endpoint, path, cancellationToken, expectedLength, budget);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
             }
+            catch (SupplyStationRateLimitException) { throw; }
+            catch (SupplyStationBudgetExceededException) { throw; }
             catch (Exception error) when (error is HttpRequestException or InvalidDataException or
                                           InvalidOperationException or TimeoutException or IOException)
             {
@@ -627,12 +615,13 @@ internal sealed class SpireSupplyStationClient : IDisposable
 
     async Task<Descriptor> ResolveDescriptorAsync(
         WorkshopRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RequestBudget? budget = null)
     {
-        var descriptor = await LoadDescriptorAsync(request, refresh: false, cancellationToken);
+        var descriptor = await LoadDescriptorAsync(request, refresh: false, cancellationToken, budget);
         if (descriptor.ExpiresAt <= DateTimeOffset.UtcNow)
         {
-            var refreshed = await LoadDescriptorAsync(request, refresh: true, cancellationToken);
+            var refreshed = await LoadDescriptorAsync(request, refresh: true, cancellationToken, budget);
             if (!SameContentIdentity(descriptor, refreshed))
                 throw new InvalidDataException(
                     "刷新下载授权时，下载站返回的 MOD 内容身份发生变化；请重新开始验证。");
@@ -648,11 +637,12 @@ internal sealed class SpireSupplyStationClient : IDisposable
     async Task<Descriptor> LoadDescriptorAsync(
         WorkshopRequest request,
         bool refresh,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RequestBudget? budget = null)
     {
         var descriptor = await GetJsonAsync<Descriptor>(
             BuildApiUri("descriptor", request, refresh: refresh),
-            cancellationToken);
+            cancellationToken, budget);
         ValidateDescriptor(descriptor, request);
         return descriptor;
     }
@@ -661,12 +651,13 @@ internal sealed class SpireSupplyStationClient : IDisposable
         WorkshopRequest request,
         Endpoint endpoint,
         CancellationToken cancellationToken,
-        bool refresh = false)
+        bool refresh = false,
+        RequestBudget? budget = null)
     {
         var expectedOrigin = NormalizeCdnOrigin(endpoint.Origin);
         var token = await GetJsonAsync<CdnToken>(
             BuildApiUri("cdn/token", request, host: expectedOrigin.Host, refresh: refresh),
-            cancellationToken);
+            cancellationToken, budget);
 
         var actualOrigin = NormalizeCdnOrigin(token.Origin);
         if (!SameOrigin(expectedOrigin, actualOrigin))
@@ -684,36 +675,35 @@ internal sealed class SpireSupplyStationClient : IDisposable
     }
 
     async Task<string> GetCachedCdnTokenAsync(
-        WorkshopRequest request,
-        Endpoint endpoint,
-        CancellationToken cancellationToken,
-        bool refresh = false)
+        WorkshopRequest request, Endpoint endpoint, CancellationToken cancellationToken,
+        bool refresh = false, string? rejectedQuery = null, RequestBudget? budget = null)
     {
         string host = NormalizeCdnOrigin(endpoint.Origin).Host;
-        string cacheKey = request.AppId.ToString(CultureInfo.InvariantCulture) + ":" +
+        string key = request.AppId.ToString(CultureInfo.InvariantCulture) + ":" +
             request.PublishedFileId.ToString(CultureInfo.InvariantCulture) + ":" + host;
-        if (!refresh &&
-            cdnTokenCache.TryGetValue(cacheKey, out var cached) &&
-            cached.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30))
-            return cached.Query;
-
-        var gate = cdnTokenLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+        bool Usable(CachedCdnToken token) => token.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30) &&
+            (!refresh || (rejectedQuery is not null && token.Query != rejectedQuery));
+        if (cdnTokenCache.TryGetValue(key, out var existing) && Usable(existing))
+            return existing.Query;
+        var gate = cdnTokenLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken);
         try
         {
-            if (!refresh &&
-                cdnTokenCache.TryGetValue(cacheKey, out cached) &&
-                cached.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30))
-                return cached.Query;
-
-            string query = await GetCdnTokenAsync(request, endpoint, cancellationToken, refresh);
-            cdnTokenCache[cacheKey] = new CachedCdnToken(query, ReadTokenExpiration(query));
+            if (cdnTokenCache.TryGetValue(key, out existing) && Usable(existing))
+                return existing.Query;
+            if (refresh && existing is not null &&
+                unchangedTokenRefreshes.TryGetValue(key, out var at) &&
+                DateTimeOffset.UtcNow - at < TimeSpan.FromMinutes(1))
+                return existing.Query;
+            string query = await GetCdnTokenAsync(request, endpoint, cancellationToken, refresh, budget);
+            if (refresh && query == rejectedQuery)
+                unchangedTokenRefreshes[key] = DateTimeOffset.UtcNow;
+            else
+                unchangedTokenRefreshes.TryRemove(key, out _);
+            cdnTokenCache[key] = new CachedCdnToken(query, ReadTokenExpiration(query));
             return query;
         }
-        finally
-        {
-            gate.Release();
-        }
+        finally { gate.Release(); }
     }
 
     sealed record CachedCdnToken(string Query, DateTimeOffset ExpiresAt);
