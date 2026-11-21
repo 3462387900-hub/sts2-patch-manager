@@ -300,6 +300,7 @@ public partial class MainWindow
                     ? "；恢复后的清单仍有 " + refreshed.Issues.Count + " 项问题，请查看模组管理。"
                     : "");
         }
+        }
         finally
         {
             transactionWriting = false;
