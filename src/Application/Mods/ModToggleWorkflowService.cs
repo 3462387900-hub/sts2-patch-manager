@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace SpirePatch;
 
 internal sealed record ModToggleWorkflowProgress(
