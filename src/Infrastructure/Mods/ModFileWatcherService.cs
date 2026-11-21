@@ -72,6 +72,31 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
     public event EventHandler<ModFileWatchQuietEventArgs>? QuietPeriodElapsed;
     public event EventHandler<ModFileWatchFailureEventArgs>? MonitoringFailed;
 
+    // Read-only synchronization points for Application workflows. These values are
+    // updated under the same lock as watcher events, before UI dispatch is required.
+    public string? CurrentRoot { get { lock (gate) return watchedRoot; } }
+    public int ChangeVersion { get { lock (gate) return changeVersion; } }
+
+    /// <summary>
+    /// Commits a small consumer-side state update while watcher notifications are
+    /// excluded by the same lock that protects ChangeVersion. This closes the gap
+    /// between an Application workflow's final version check and UI publication.
+    /// </summary>
+    public bool TryRunIfCurrent(string root, int version, Action action)
+    {
+        root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        lock (gate)
+        {
+            if (disposed || version != changeVersion)
+                return false;
+            if (watchedRoot is not null &&
+                !root.Equals(watchedRoot, StringComparison.OrdinalIgnoreCase))
+                return false;
+            action();
+            return true;
+        }
+    }
+
     public ModFileWatcherService(TimeSpan? debounceDelay = null)
     {
         this.debounceDelay = debounceDelay ?? TimeSpan.FromMilliseconds(850);
