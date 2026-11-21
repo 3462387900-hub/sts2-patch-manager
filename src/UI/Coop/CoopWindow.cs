@@ -34,8 +34,7 @@ public partial class MainWindow
  {
   if(demo||fresh.Report is null||fresh.Inventory is null)return;
   report=fresh.Report;states=report.Patches;
-  var catalog=sourceCurrent?onlineCatalog:null;
-  scannedCatalog=catalog?.Patches??Catalog.Bundled;
+  scannedCatalog=fresh.Definitions??Catalog.Bundled;
   modInventory=fresh.Inventory;
  }
 
