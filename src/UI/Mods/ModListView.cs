@@ -69,8 +69,19 @@ internal static class ModListView
   .ToArray();
 
  internal static int ColumnCount(double width)=>width>=1080?3:width>=700?2:1;
- internal static string BriefBlockReason(string reason)=>
-  reason.Length>78?"操作受限 · "+reason[..74]+"…":"操作受限 · "+reason;
+ internal static string BriefBlockReason(string reason)
+ {
+  // Legacy row fixtures may still construct a row from the original Domain
+  // message without supplying the structured readiness flags. Keep this as
+  // presentation-only shortening; live rows use Application diagnostics.
+  const string deps="这些启用项依赖它，请先停用依赖项：";
+  if(reason.StartsWith(deps,StringComparison.Ordinal))
+  {
+   int total=reason[deps.Length..].Split('、',StringSplitOptions.RemoveEmptyEntries).Length;
+   return $"被 {total} 个已启用 MOD 依赖";
+  }
+  return reason.Length>78?"操作受限 · "+reason[..74]+"…":"操作受限 · "+reason;
+ }
 
  internal static ListBox Create(Action<ModListRow> details,Action<ModListRow,Button> more)
  {
