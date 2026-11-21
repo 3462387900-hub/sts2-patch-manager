@@ -159,6 +159,8 @@ public sealed class BundleInstaller
   {
    var result=await Task.Run(()=>GameEnvironment.WithLock(root,()=>{
     if(GameEnvironment.Running(root))throw new InvalidOperationException("Close the game before installing or rolling back.");
+    // Revalidate the staged archive after acquiring the game-folder lock, immediately before planning or rollback.
+    VerifyStage(package);
     if(mode is "Preview" or "Install")
     {
      PatchRollbackManager.EnsureCanInstall(root);
