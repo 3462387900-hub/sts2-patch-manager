@@ -254,6 +254,26 @@ internal static class ApplicationWorkflowChecks
             raceDeferred && raceBackend.ObserveCount == 0,
             "MOD refresh rejects scan results when watcher version changes and defers the next quiet-period check");
 
+        // Publishing a scan result is atomic with the watcher's version lock.
+        using (var commitWatcher = new ModFileWatcherService(TimeSpan.FromMilliseconds(20)))
+        {
+            commitWatcher.Start(refreshRoot);
+            bool firstCommitRan = false;
+            bool staleCommitRan = false;
+            bool currentCommitRan = false;
+            bool firstCommit = commitWatcher.TryRunIfCurrent(
+                refreshRoot, 0, () => firstCommitRan = true);
+            commitWatcher.SimulateBufferOverflowForTests(refreshRoot);
+            bool staleCommit = commitWatcher.TryRunIfCurrent(
+                refreshRoot, 0, () => staleCommitRan = true);
+            bool currentCommit = commitWatcher.TryRunIfCurrent(
+                refreshRoot, 1, () => currentCommitRan = true);
+            check(firstCommit && firstCommitRan && !staleCommit && !staleCommitRan &&
+                currentCommit && currentCommitRan,
+                "inventory publication is atomic with watcher versions and rejects a stale commit");
+            commitWatcher.Stop();
+        }
+
         // A directory switch cancels a pending scan; the blocked fake scan cannot publish its result.
         var scanEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using (var releaseScan = new ManualResetEventSlim(false))
