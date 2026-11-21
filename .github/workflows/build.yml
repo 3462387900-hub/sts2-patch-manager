@@ -17,6 +17,9 @@ jobs:
       - name: Build and test without touching a game
         shell: pwsh
         run: ./scripts/打包.ps1 -BuildOnly
+      - name: Verify release index isolation and package notices
+        shell: pwsh
+        run: ./scripts/测试发布流程.ps1
       - name: Verify fixture helper in Windows PowerShell 5.1
         shell: powershell
         run: |

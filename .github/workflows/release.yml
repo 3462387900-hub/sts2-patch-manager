@@ -19,7 +19,7 @@ on:
 permissions:
   contents: write
 
-# 发布流程串行执行，避免多个版本同时争抢 manager-update.json。
+# 发布流程串行执行，避免多个版本同时争抢稳定版或 Beta 更新索引。
 concurrency:
   group: publish-release
   cancel-in-progress: false
@@ -72,10 +72,10 @@ jobs:
 
           $versionMatch = [regex]::Match(
             $rawVersion,
-            '^(?<base>(?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*))(?<suffix>-[0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?$'
+            '^(?<base>(?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*))(?<suffix>-beta[.](?<betaNumber>[1-9][0-9]{0,8}))?$'
           )
           if (!$versionMatch.Success) {
-            throw "版本号格式不正确：$rawVersion。请使用 0.14.4 或 0.14.4-beta.1 这样的格式。"
+            throw "版本号格式不正确：$rawVersion。仅支持 0.14.4 或 0.14.4-beta.1；不支持 -rc、-preview 等其他后缀。"
           }
 
           $baseVersion = $versionMatch.Groups['base'].Value
@@ -83,14 +83,16 @@ jobs:
           $hasPrerelease = ![string]::IsNullOrEmpty($suffix)
 
           if ($env:EVENT_NAME -eq 'workflow_dispatch' -and $requestedBeta -and !$hasPrerelease) {
-            throw "已勾选 Beta，但版本号没有 -beta.1、-rc.1 等预发布后缀。请修正版本号后重试。"
+            throw "已勾选 Beta，但版本号没有 -beta.N 后缀。请使用例如 0.14.4-beta.1 的格式。"
           }
 
           # 任何预发布后缀都强制进入 prerelease 流程，不能误发到稳定版渠道。
           $isBeta = $hasPrerelease
           if ($isBeta -and !$requestedBeta -and $env:EVENT_NAME -eq 'workflow_dispatch') {
-            Write-Warning "检测到预发布后缀；已自动忽略未勾选的 Beta 开关，强制按 Beta 发布。"
+            Write-Warning "检测到 -beta.N 后缀；已自动忽略未勾选的 Beta 开关，强制按 Beta 发布。"
           }
+          $channel = if ($isBeta) { 'Beta' } else { 'Stable' }
+          $informationalVersion = $rawVersion
 
           $tag = "v$rawVersion"
           $notesPath = "releases/$tag.md"
@@ -106,21 +108,22 @@ jobs:
           if ($projectVersion -ne $baseVersion) {
             throw "项目版本不匹配：SpirePatch.csproj 是 $projectVersion，发布版本要求 $baseVersion。"
           }
+          $projectInformationalVersion = [string]$project.Project.PropertyGroup.InformationalVersion
+          if ($projectInformationalVersion -cne $projectVersion) {
+            throw "SpirePatch.csproj 的 InformationalVersion 必须与 Version 相同。当前 Version=$projectVersion，InformationalVersion=$projectInformationalVersion。Beta 后缀由打包脚本在编译时注入。"
+          }
 
           $title = "尖塔修补站 $tag"
-          if ($isBeta -and $suffix -match '(?i)^-beta(?:[.](?<number>[0-9]+))?$') {
-            if ($Matches.number) {
-              $title = "尖塔修补站 v$baseVersion Beta $($Matches.number)"
-            }
-            else {
-              $title = "尖塔修补站 v$baseVersion Beta"
-            }
+          if ($isBeta) {
+            $title = "尖塔修补站 v$baseVersion Beta $($versionMatch.Groups['betaNumber'].Value)"
           }
 
           $assetName = "SpirePatch-$tag-win-x64.zip"
           @(
             "version=$baseVersion"
             "tag=$tag"
+            "channel=$channel"
+            "informational_version=$informationalVersion"
             "is_beta=$($isBeta.ToString().ToLowerInvariant())"
             "notes_path=$notesPath"
             "asset_name=$assetName"
@@ -134,7 +137,9 @@ jobs:
 
       - name: Build and run isolated checks
         shell: pwsh
-        run: ./scripts/打包.ps1 -BuildOnly -OutputRoot artifacts
+        env:
+          RELEASE_INFORMATIONAL_VERSION: ${{ steps.meta.outputs.informational_version }}
+        run: ./scripts/打包.ps1 -BuildOnly -OutputRoot artifacts -InformationalVersion $env:RELEASE_INFORMATIONAL_VERSION
 
       - name: Assemble self-contained release ZIP
         shell: pwsh
@@ -159,24 +164,25 @@ jobs:
           }
 
           Copy-Item README.md (Join-Path $app '使用说明.md')
-          Copy-Item 更新日志.md (Join-Path $app '更新日志.md')
-          Copy-Item 发布指南.md (Join-Path $app '发布指南.md')
-          Copy-Item 补丁发布指南.md (Join-Path $app '补丁发布指南.md')
+          Copy-Item -LiteralPath 'docs/发布指南.md' -Destination (Join-Path $app '发布指南.md')
+          Copy-Item -LiteralPath 'docs/补丁发布指南.md' -Destination (Join-Path $app '补丁发布指南.md')
           Copy-Item -LiteralPath $env:RELEASE_NOTES -Destination (Join-Path $app '本版更新内容.md')
-          Copy-Item 鸣谢与来源.md (Join-Path $app '鸣谢与来源.md')
-          Copy-Item THIRD-PARTY-NOTICES.md (Join-Path $app 'THIRD-PARTY-NOTICES.md')
+          Copy-Item -LiteralPath '鸣谢与来源.md' -Destination (Join-Path $app '鸣谢与来源.md')
+          Copy-Item -LiteralPath 'THIRD-PARTY-NOTICES.md' -Destination (Join-Path $app 'THIRD-PARTY-NOTICES.md')
 
           $thirdParty = Join-Path $app 'third_party'
           New-Item -ItemType Directory -Path $thirdParty -Force | Out-Null
-          Copy-Item third_party/WorkshopAndroidDownloader-LICENSE.txt (Join-Path $thirdParty 'WorkshopAndroidDownloader-LICENSE.txt')
-          Copy-Item third_party/SharpCompress-LICENSE.txt (Join-Path $thirdParty 'SharpCompress-LICENSE.txt')
+          Copy-Item -LiteralPath 'third_party/WorkshopAndroidDownloader-LICENSE.txt' -Destination (Join-Path $thirdParty 'WorkshopAndroidDownloader-LICENSE.txt')
+          Copy-Item -LiteralPath 'third_party/SharpCompress-LICENSE.txt' -Destination (Join-Path $thirdParty 'SharpCompress-LICENSE.txt')
 
+          ./scripts/验证发布声明.ps1 -Directory $app -SourceRoot (Get-Location).Path
           ./scripts/生成程序清单.ps1 -Directory $app
 
           $dir = Join-Path (Get-Location) 'release-output'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           $archive = Join-Path $dir $env:ASSET_NAME
           ./scripts/创建干净发布包.ps1 -ApplicationDirectory $app -ArchivePath $archive -Version $version
+          ./scripts/验证发布声明.ps1 -Directory $app -SourceRoot (Get-Location).Path -ArchivePath $archive
 
           $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $info = [ordered]@{
@@ -235,25 +241,22 @@ jobs:
             throw 'Uploaded asset checksum mismatch.'
           }
 
-      - name: Update stable manager index on main
-        if: ${{ steps.meta.outputs.is_beta != 'true' }}
+      - name: Update selected manager index on main
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_CHANNEL: ${{ steps.meta.outputs.channel }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $indexFile = if ($env:RELEASE_CHANNEL -eq 'Beta') { 'manager-beta-update.json' } else { 'manager-update.json' }
 
-          # Tag-triggered runs start detached. Reset/switch explicitly to the latest remote main.
           git fetch origin main
           if ($LASTEXITCODE -ne 0) { throw 'Could not fetch origin/main.' }
-
           git checkout -B main origin/main
           if ($LASTEXITCODE -ne 0) { throw 'Could not switch the worktree to origin/main.' }
-
           git branch --set-upstream-to=origin/main main
           if ($LASTEXITCODE -ne 0) { throw 'Could not set main tracking branch.' }
-
           git pull --ff-only origin main
           if ($LASTEXITCODE -ne 0) { throw 'Could not fast-forward local main.' }
 
@@ -261,21 +264,18 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
           function New-IndexCommit {
-            & ./scripts/更新版本索引.ps1 -Tag $env:RELEASE_TAG | Out-Host
+            & ./scripts/更新版本索引.ps1 -Tag $env:RELEASE_TAG -Channel $env:RELEASE_CHANNEL | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Index generation failed.' }
-
-            git add manager-update.json | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw 'Could not stage manager-update.json.' }
-
+            git add $indexFile | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Could not stage $indexFile." }
             git diff --cached --quiet
             $diffExit = $LASTEXITCODE
             if ($diffExit -eq 0) {
-              Write-Host 'manager-update.json already points to this release; no commit is needed.'
+              Write-Host "$indexFile already points to this release; no commit is needed."
               return $false
             }
-            if ($diffExit -ne 1) { throw 'Could not inspect the staged index diff.' }
-
-            git commit -m "chore: point manager update feed to $env:RELEASE_TAG" | Out-Host
+            if ($diffExit -ne 1) { throw "Could not inspect the staged $indexFile diff." }
+            git commit -m "chore: update $indexFile for $env:RELEASE_TAG" | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Index commit failed.' }
             return $true
           }
@@ -283,11 +283,8 @@ jobs:
           function Sync-IndexWithOriginMain {
             git fetch origin main | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Could not refresh origin/main before pushing the index.' }
-
             git rebase origin/main | Out-Host
             if ($LASTEXITCODE -eq 0) { return $true }
-
-            # If another main update changed the index concurrently, regenerate it on the newest main.
             git rebase --abort 2>$null | Out-Host
             git reset --hard origin/main | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Could not reset to the newest origin/main after a rebase conflict.' }
@@ -300,11 +297,10 @@ jobs:
             if ($hasIndexCommit) {
               git push origin HEAD:main | Out-Host
               if ($LASTEXITCODE -ne 0) {
-                # Retry once after rebasing on the latest main; never force-push.
                 $hasIndexCommit = Sync-IndexWithOriginMain
                 if ($hasIndexCommit) {
                   git push origin HEAD:main | Out-Host
-                  if ($LASTEXITCODE -ne 0) { throw 'Index push to main failed after retry.' }
+                  if ($LASTEXITCODE -ne 0) { throw "Index push to main failed after retry ($indexFile)." }
                 }
               }
             }

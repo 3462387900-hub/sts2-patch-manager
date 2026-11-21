@@ -6,7 +6,7 @@
 
 > 本项目并非 Mega Crit、Valve / Steam 或尖塔补给站的官方产品；不提供《杀戮尖塔 2》游戏本体，不随程序分发第三方 MOD。
 
-**[下载稳定版](https://github.com/3462387900-hub/sts2-patch-manager/releases/latest)** · **[下载 ATLAS 测试版](https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.6-beta.1)** · [所有版本与发布说明](https://github.com/3462387900-hub/sts2-patch-manager/releases) · [补丁数据仓库](https://github.com/3462387900-hub/sts2-patches)
+**[下载稳定版](https://github.com/3462387900-hub/sts2-patch-manager/releases/latest)** · **[下载 ATLAS 测试版](https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.7-beta.1)** · [所有版本与发布说明](https://github.com/3462387900-hub/sts2-patch-manager/releases) · [补丁数据仓库](https://github.com/3462387900-hub/sts2-patches)
 
 > **源码分支说明：** 默认 `main` 当前对应稳定版；ATLAS 原生 WPF 正在 [PR39](https://github.com/3462387900-hub/sts2-patch-manager/pull/39) 开发分支中，已独立发布可下载的 Beta 测试包。下表同时列出稳定版功能和已进入 Beta 的功能；尚未合并至 `main` 的 ATLAS 源码见测试分支。
 
@@ -40,7 +40,7 @@
 3. 首次启动后确认检测到的《杀戮尖塔 2》目录；如不正确，手动选择包含 `SlayTheSpire2.exe` 的文件夹。
 4. 在模组库查看已安装 MOD；在修复中心检查已收录补丁；下载或更新前先看预览和依赖提示。
 
-**想体验新版 ATLAS：** 在「检查更新」中选择「测试版 Beta」并主动检查，或直接下载 [v0.14.6 Beta 1](https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.6-beta.1)。该版本是**预发布测试版**，不会通过稳定版更新通道自动推送。测试前请备份 MOD 和管理器数据。
+**想体验新版 ATLAS：** 在「检查更新」中选择「测试版 Beta」并主动检查，或直接下载 [v0.14.6 Beta 1](https://github.com/3462387900-hub/sts2-patch-manager/releases/tag/v0.14.7-beta.1)。该版本是**预发布测试版**，不会通过稳定版更新通道自动推送。测试前请备份 MOD 和管理器数据。
 
 ## 文件安全与使用边界
 
@@ -77,7 +77,18 @@ docs/                      # 专题文档和实机验收清单
 third_party/               # 第三方许可证文本
 catalog-plan.json          # 已审核补丁安装方案
 patch-catalog.json         # 已收录补丁说明快照
+manager-update.json        # 稳定版客户端更新源
+manager-beta-update.json   # Beta 客户端更新源
+鸣谢与来源.md              # 来源授权与鸣谢
+THIRD-PARTY-NOTICES.md     # 第三方声明
 ```
+
+## 文档入口
+
+- [文档索引](docs/README.md)
+- [管理器自动发布指南](docs/发布指南.md)
+- [补丁发布指南](docs/补丁发布指南.md)
+- [尖塔补给站接口验证记录](docs/尖塔补给站接口验证.md)
 
 ## 开发与验证
 
