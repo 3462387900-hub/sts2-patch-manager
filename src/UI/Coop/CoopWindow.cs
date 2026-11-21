@@ -10,39 +10,82 @@ public partial class MainWindow
  JsonElement? coopPeer,coopLocal;
  List<CoopDifference>? coopRows;
  readonly HashSet<string> coopSelected=new(StringComparer.OrdinalIgnoreCase);
- CoopPlan? coopPlan;CoopOutcome? coopOutcome;
+ CoopPlan? coopPlan;PreparedPackage? coopPlanPackage;CoopOutcome? coopOutcome;
  Button? coopConfirmButton;
  string coopStatus="";
- void ClearCoop(){coopComparison=null;coopPeer=null;coopLocal=null;coopRows=null;coopSelected.Clear();coopPlan=null;coopOutcome=null;coopStatus="";}
+ CoopAlignmentWorkflowService? coopWorkflow;
+ CoopAlignmentWorkflowService CoopWorkflow=>coopWorkflow??=new CoopAlignmentWorkflowService(installer);
+
+ CoopAlignmentWorkflowContext CurrentCoopContext()
+ {
+  var catalog=sourceCurrent?onlineCatalog:null;
+  return new(selectedInstallRoot,demo,report,states,catalog?.Patches??Catalog.Bundled,catalog?.Commit);
+ }
+
+ void PrepareUiForCoopScan()
+ {
+  if(demo)return;
+  if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
+  // Invalidate the old snapshot before IO: failures must never reuse a previous success.
+  report=null;states=[];ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;
+ }
+
+ void ApplyCoopFreshReport(CoopWorkflowFreshReport fresh)
+ {
+  if(demo||fresh.Report is null||fresh.Inventory is null)return;
+  report=fresh.Report;states=report.Patches;
+  var catalog=sourceCurrent?onlineCatalog:null;
+  scannedCatalog=catalog?.Patches??Catalog.Bundled;
+  modInventory=fresh.Inventory;
+ }
+
+ void ApplyCoopComparison(CoopWorkflowComparison comparison)
+ {
+  ApplyCoopFreshReport(comparison.Fresh);
+  coopComparison=comparison.Summary;
+  coopRows=comparison.Rows?.ToList();
+  coopPeer=comparison.Peer;
+  coopLocal=comparison.Fresh.Snapshot;
+  toast.Text=demo?"演示清单仅用于查看，不执行真实处理。":"已与本机最新扫描比对。";
+ }
+
+ void ClearCoop()
+ {
+  coopComparison=null;coopPeer=null;coopLocal=null;coopRows=null;
+  coopSelected.Clear();coopPlan=null;coopPlanPackage=null;coopOutcome=null;coopStatus="";
+ }
+
  async Task<JsonElement> FreshReportAsync()
  {
   ClearCoop();
-  if(!demo){
-   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
-   string root=selectedInstallRoot;var catalog=sourceCurrent?onlineCatalog:null;
-   var definitions=catalog?.Patches??Catalog.Bundled;
-   // Invalidate the old snapshot before IO: failures must never reuse a previous success.
-   report=null;states=[];ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;
-   var fresh=await Task.Run(()=>CoopAlignment.Scan(root,definitions,catalog?.Commit));
-   report=fresh.Report;states=report.Patches;scannedCatalog=definitions;modInventory=fresh.Inventory;
-   return fresh.Snapshot;
-  }
-  return CoopReports.Create(report,states,demo);
+  PrepareUiForCoopScan();
+  var fresh=await CoopWorkflow.CreateFreshReportAsync(CurrentCoopContext());
+  ApplyCoopFreshReport(fresh);
+  return fresh.Snapshot;
  }
- internal async Task ExportFreshReportAsync(string path)=>CoopReports.Write(path,await FreshReportAsync());
+
+ internal async Task ExportFreshReportAsync(string path)
+ {
+  ClearCoop();
+  PrepareUiForCoopScan();
+  var fresh=await CoopWorkflow.ExportFreshReportAsync(path,CurrentCoopContext());
+  ApplyCoopFreshReport(fresh);
+ }
+
  internal async Task CompareFreshReportAsync(string path)
  {
   ClearCoop();
-  var peer=await Task.Run(()=>CoopReports.Read(path));
-  await SetCoopComparisonAsync(peer);
+  PrepareUiForCoopScan();
+  var comparison=await CoopWorkflow.CompareReportFileAsync(path,CurrentCoopContext());
+  ApplyCoopComparison(comparison);
  }
+
  async Task SetCoopComparisonAsync(JsonElement peer)
  {
-  var local=await FreshReportAsync();
-  coopComparison=CoopReports.Compare(local,peer);
-  if(!demo){var scan=report!;var inventory=modInventory!;coopRows=await Task.Run(()=>CoopPlanner.Analyze(local,peer,scan,inventory));}
-  coopPeer=peer;coopLocal=local;
-  toast.Text=demo?"演示清单仅用于查看，不执行真实处理。":"已与本机最新扫描比对。";
+  ClearCoop();
+  PrepareUiForCoopScan();
+  var comparison=await CoopWorkflow.CompareAsync(peer,CurrentCoopContext());
+  ApplyCoopComparison(comparison);
  }
  async Task RunReportActionAsync(Func<Task> action)
  {
