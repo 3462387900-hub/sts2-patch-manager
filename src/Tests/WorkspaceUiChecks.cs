@@ -100,7 +100,20 @@ public partial class MainWindow
    x.Property==Button.BackgroundProperty)).Value).Color.A<180,
    "selected filters use a subtle translucent fill rather than primary blue");
   gameCandidates=[new(first,"Steam 库（测试）"),new(second,"另一安装目录（测试）")];locateStatus="发现多个安装目录，请选择本次使用的一个。";ShowLocations();await Shot("01-选择定位结果");
-  await Click("使用此目录",true);Check(selectedInstallRoot==first&&modInventory?.Mods.Count==7&&folderLabel.Text==first,"directory choice is shared by mod management and global controls");Check(launchButton?.IsEnabled==true,"launch game button becomes available after directory selection");
+  await Click("使用此目录",true);
+  Check(selectedInstallRoot==first&&modInventory?.Mods.Count==7&&folderLabel.Text==first,
+   "directory choice is shared by mod management and global controls"+
+   "; selectedRoot="+(selectedInstallRoot??"<null>")+
+   "; expectedRoot="+first+
+   "; inventoryCount="+(modInventory?.Mods.Count.ToString()??"<null>")+
+   "; inventoryDirty="+modInventoryDirty+
+   "; status="+modStatus+
+   "; busy="+busy+
+   "; transactionWriting="+transactionWriting+
+   "; changeVersion="+modChangeVersion+
+   "; watcherRoot="+(modFileWatcher.CurrentRoot??"<null>")+
+   "; folderLabel="+folderLabel.Text);
+  Check(launchButton?.IsEnabled==true,"launch game button becomes available after directory selection");
   await Click("← 上一步");Check(currentVisit?.Key=="游戏目录"&&selectedInstallRoot==first,"back returns to directory results without undoing chosen game directory");await Click("使用此目录",true);
   Check(navButtons.Keys.Count==7&&navButtons.ContainsKey("修复补丁")&&navButtons.ContainsKey("更新中心")&&navButtons.ContainsKey("工具与设置"),
    "sidebar exposes seven destinations including new patch and MOD update workspaces");
