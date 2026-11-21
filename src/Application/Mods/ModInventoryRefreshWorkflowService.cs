@@ -139,7 +139,8 @@ internal sealed class ModInventoryRefreshWorkflowService
 
             var current = readCurrentStamp();
             return SameRoot(current.Root, root) &&
-                current.ChangeVersion == initialStamp.ChangeVersion;
+                current.ChangeVersion == initialStamp.ChangeVersion &&
+                current.InventoryDirty == initialStamp.InventoryDirty;
         }
 
         void DeferIfStillWatchingThisRoot()
