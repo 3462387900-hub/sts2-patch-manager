@@ -92,6 +92,39 @@ internal static class SupplyStationNetworkHardeningChecks
             check(cdnCalls == 1, "CDN 429 stops before attempting another endpoint");
         }
 
+        int refreshCalls = 0;
+        using (var client = new SpireSupplyStationClient(new Handler(async (request, token) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
+                return Json(Descriptor(Cdn));
+            if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
+            {
+                bool refresh = request.RequestUri.Query.Contains("refresh=true", StringComparison.Ordinal);
+                if (refresh) Interlocked.Increment(ref refreshCalls);
+                return Json(JsonSerializer.Serialize(new {
+                    origin = "https://" + Cdn,
+                    query = (refresh ? "token=fresh" : "token=stale") + "&expiration_time=4102444800"
+                }));
+            }
+            if (request.RequestUri.Query.Contains("token=stale", StringComparison.Ordinal))
+            {
+                await Task.Delay(25, token); // synchronize stale-token responses across concurrent callers
+                return new HttpResponseMessage(HttpStatusCode.Forbidden);
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new ByteArrayContent([1, 2, 3]) }; // locally invalid ZIP; no real CDN
+        })))
+        {
+            var concurrent = Enumerable.Range(0, 8).Select(async _ =>
+            {
+                try { await client.ProbeManifestAsync(AppId, ItemId); }
+                catch (InvalidDataException) { }
+                catch (HttpRequestException) { }
+            });
+            await Task.WhenAll(concurrent);
+            check(refreshCalls == 1, "eight concurrent 403 responses share one CDN token refresh");
+        }
+
         foreach (var bad in new[] { "localhost", "127.0.0.1", "10.0.0.5", "192.168.1.8", "evil.example" })
         {
             int tokenCalls = 0;
