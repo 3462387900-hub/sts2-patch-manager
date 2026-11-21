@@ -1,7 +1,19 @@
 namespace SpirePatch;
 
-internal sealed record GameEnvironmentDirectoryChangingEventArgs(string? PreviousRoot, string CurrentRoot) : EventArgs;
-internal sealed record GameEnvironmentDirectoryChangedEventArgs(string? PreviousRoot, string CurrentRoot) : EventArgs;
+internal sealed class GameEnvironmentDirectoryChangingEventArgs : EventArgs
+{
+    public string? PreviousRoot { get; }
+    public string CurrentRoot { get; }
+    public GameEnvironmentDirectoryChangingEventArgs(string? previousRoot, string currentRoot)
+    { PreviousRoot = previousRoot; CurrentRoot = currentRoot; }
+}
+internal sealed class GameEnvironmentDirectoryChangedEventArgs : EventArgs
+{
+    public string? PreviousRoot { get; }
+    public string CurrentRoot { get; }
+    public GameEnvironmentDirectoryChangedEventArgs(string? previousRoot, string currentRoot)
+    { PreviousRoot = previousRoot; CurrentRoot = currentRoot; }
+}
 internal sealed record GameEnvironmentSessionResult(
     string Root, bool Changed, string? PreferenceError);
 
