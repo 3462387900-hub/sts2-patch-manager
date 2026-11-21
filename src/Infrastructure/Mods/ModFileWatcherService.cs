@@ -2,13 +2,37 @@ using System.IO;
 
 namespace SpirePatch;
 
-internal sealed record ModFileChangeEventArgs(
-    string Root, bool Overflow, bool TreeChanged, int Version, bool FirstInBurst) : EventArgs;
+internal sealed class ModFileChangeEventArgs : EventArgs
+{
+    public string Root { get; }
+    public bool Overflow { get; }
+    public bool TreeChanged { get; }
+    public int Version { get; }
+    public bool FirstInBurst { get; }
+    public ModFileChangeEventArgs(string root, bool overflow, bool treeChanged, int version, bool firstInBurst)
+    {
+        Root = root; Overflow = overflow; TreeChanged = treeChanged; Version = version; FirstInBurst = firstInBurst;
+    }
+}
 
-internal sealed record ModFileWatchQuietEventArgs(
-    string Root, bool Overflow, bool TreeChanged, int Version) : EventArgs;
+internal sealed class ModFileWatchQuietEventArgs : EventArgs
+{
+    public string Root { get; }
+    public bool Overflow { get; }
+    public bool TreeChanged { get; }
+    public int Version { get; }
+    public ModFileWatchQuietEventArgs(string root, bool overflow, bool treeChanged, int version)
+    {
+        Root = root; Overflow = overflow; TreeChanged = treeChanged; Version = version;
+    }
+}
 
-internal sealed record ModFileWatchFailureEventArgs(string Root, string Message) : EventArgs;
+internal sealed class ModFileWatchFailureEventArgs : EventArgs
+{
+    public string Root { get; }
+    public string Message { get; }
+    public ModFileWatchFailureEventArgs(string root, string message) { Root = root; Message = message; }
+}
 
 internal sealed record ModFileWatchReconfigurationResult(bool Recreated, string? Error);
 
@@ -179,11 +203,11 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
             watcher.Filters.Add(ModManager.StorageName);
         }
 
-        watcher.Changed += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
+        watcher.Changed += (_, _) => QueueChange(root, overflow: false, treeChanged: onlyTopFolders);
         watcher.Created += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
         watcher.Deleted += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
         watcher.Renamed += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
-        watcher.Error += (_, _) => QueueChange(root, overflow: true, onlyTopFolders);
+        watcher.Error += (_, _) => QueueChange(root, overflow: true, treeChanged: onlyTopFolders);
 
         watchers.Add(watcher);
         watcher.EnableRaisingEvents = true;
