@@ -109,13 +109,14 @@ internal sealed class CoopAlignmentWorkflowService
         return new(scan.Report, scan.Inventory, scan.Snapshot);
     }
 
-    public async Task ExportFreshReportAsync(
+    public async Task<CoopWorkflowFreshReport> ExportFreshReportAsync(
         string path,
         CoopAlignmentWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         var fresh = await CreateFreshReportAsync(context, cancellationToken);
         await Task.Run(() => backend.WriteReport(path, fresh.Snapshot), cancellationToken);
+        return fresh;
     }
 
     public Task<JsonElement> ReadPeerReportAsync(
