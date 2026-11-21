@@ -140,6 +140,9 @@ jobs:
         env:
           RELEASE_INFORMATIONAL_VERSION: ${{ steps.meta.outputs.informational_version }}
         run: ./scripts/打包.ps1 -BuildOnly -OutputRoot artifacts -InformationalVersion $env:RELEASE_INFORMATIONAL_VERSION
+      - name: Verify release index isolation and package notices
+        shell: pwsh
+        run: ./scripts/测试发布流程.ps1
 
       - name: Assemble self-contained release ZIP
         shell: pwsh
