@@ -72,6 +72,11 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
     public event EventHandler<ModFileWatchQuietEventArgs>? QuietPeriodElapsed;
     public event EventHandler<ModFileWatchFailureEventArgs>? MonitoringFailed;
 
+    // Read-only synchronization points for Application workflows. These values are
+    // updated under the same lock as watcher events, before UI dispatch is required.
+    public string? CurrentRoot { get { lock (gate) return watchedRoot; } }
+    public int ChangeVersion { get { lock (gate) return changeVersion; } }
+
     public ModFileWatcherService(TimeSpan? debounceDelay = null)
     {
         this.debounceDelay = debounceDelay ?? TimeSpan.FromMilliseconds(850);
