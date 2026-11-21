@@ -27,17 +27,25 @@ if($release.draft -or $release.prerelease -ne $expectedPrerelease -or
     throw 'Release 的标签、草稿状态、预发布状态或更新说明与所选通道不匹配。'
 }
 if([string]::IsNullOrWhiteSpace([string]$release.published_at) -or
-   [string]::IsNullOrWhiteSpace([string]$release.html_url)){
-    throw 'Release 缺少发布时间或发布页地址。'
+   [string]::IsNullOrWhiteSpace([string]$release.html_url) -or
+   $release.body.Length -gt 60000){
+    throw 'Release 缺少发布时间、发布页地址，或更新说明超过客户端允许长度。'
+}
+$expectedReleaseUrl='https://github.com/'+$repository+'/releases/tag/'+$Tag
+if($release.html_url -cne $expectedReleaseUrl){
+    throw 'Release 发布页地址与固定管理器仓库/标签不一致。'
 }
 
 $expectedAsset='SpirePatch-'+$Tag+'-win-x64.zip'
 $assets=@($release.assets | Where-Object { $_.name -ceq $expectedAsset })
+$expectedDownloadUrl='https://github.com/'+$repository+'/releases/download/'+$Tag+'/'+$expectedAsset
+$assetApiPattern='^https://api\.github\.com/repos/3462387900-hub/sts2-patch-manager/releases/assets/[0-9]+$'
 if($assets.Count -ne 1 -or $assets[0].state -cne 'uploaded' -or
-   $assets[0].size -le 0 -or $assets[0].digest -cnotmatch '^sha256:[a-fA-F0-9]{64}$' -or
-   [string]::IsNullOrWhiteSpace([string]$assets[0].browser_download_url) -or
-   [string]::IsNullOrWhiteSpace([string]$assets[0].url)){
-    throw '当前通道的 Windows 更新附件尚未完整上传，或缺少有效 SHA256。'
+   $assets[0].size -le 0 -or $assets[0].size -gt 262144000 -or
+   $assets[0].digest -cnotmatch '^sha256:[a-fA-F0-9]{64}$' -or
+   $assets[0].browser_download_url -cne $expectedDownloadUrl -or
+   $assets[0].url -cnotmatch $assetApiPattern){
+    throw '当前通道的 Windows 更新附件与客户端要求不一致、尚未完整上传，或缺少有效 SHA256。'
 }
 
 # Keep this schema aligned with ManagerUpdates.ParseReleaseElement and UpdateChecks.Json.
