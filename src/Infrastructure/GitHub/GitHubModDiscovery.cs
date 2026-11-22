@@ -38,6 +38,14 @@ internal sealed class GitHubModDiscovery : IDisposable
  public void Dispose()=>client.Dispose();
  public GitHubSourceDiscoveryResult? Cached(ManagedMod mod)=>
   cache.TryGetValue(CacheKey(mod),out var entry)&&entry.Expires>DateTimeOffset.UtcNow?entry.Value:null;
+ public DateTimeOffset? CachedAt(ManagedMod mod)
+ {
+  if(!cache.TryGetValue(CacheKey(mod),out var entry)||entry.Expires<=DateTimeOffset.UtcNow)
+   return null;
+  TimeSpan lifetime=entry.Value.Candidates.Length>0
+   ?TimeSpan.FromHours(6):TimeSpan.FromMinutes(30);
+  return entry.Expires-lifetime;
+ }
  static string? Field(JsonElement root,string key)=>
   root.ValueKind==JsonValueKind.Object&&root.TryGetProperty(key,out var value)&&
   value.ValueKind==JsonValueKind.String?value.GetString():null;
