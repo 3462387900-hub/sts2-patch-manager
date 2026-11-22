@@ -333,6 +333,8 @@ public partial class MainWindow
     sources.Bind(result.ModId,workshopId);
     sources.RecordBaseline(result.ModId,workshopId,prepared.ManifestId,result.Version,prepared.PayloadSnapshot);
     WorkshopUpdates().Invalidate(result.ModId);
+    modSourceCheckWorkflow?.InvalidateAll();
+    modSourceCheckWorkflow?.InvalidateAll();
    }
    catch(Exception sourceError)
    {
@@ -531,7 +533,7 @@ public partial class MainWindow
    {
     var previous=GitHubModInstaller.Restore(root,mod,latest);
     string baselineNote="";
-    try{WorkshopSources().ClearBaseline(mod.Id);WorkshopUpdates().Invalidate(mod.Id);}
+    try{WorkshopSources().ClearBaseline(mod.Id);WorkshopUpdates().Invalidate(mod.Id);modSourceCheckWorkflow?.Invalidate(mod);}
     catch(Exception baselineError){baselineNote="（版本基线清理未完成："+baselineError.Message+"；下次检查会要求重新核验本地文件。）";}
     toast.Text="已恢复 MOD 备份；恢复前的版本保存在："+previous+baselineNote;
     InvalidateLifecycle("MOD 备份已恢复，现有修复补丁健康结果需要重新检查。");
@@ -578,7 +580,7 @@ public partial class MainWindow
      if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
      // Cache invalidation is safe here; the inventory itself is not published
      // until the watcher version is atomically rechecked below.
-     if(checkpoint.ClearDiscoveryCache)githubDiscovery?.ClearCache();
+     if(checkpoint.ClearDiscoveryCache){githubDiscovery?.ClearCache();modSourceCheckWorkflow?.InvalidateAll();}
     },
     progress=>
     {
@@ -2069,6 +2071,7 @@ public partial class MainWindow
    try
    {
     WorkshopSources().ClearBaseline(plan.ModId);
+    modSourceCheckWorkflow?.InvalidateAll();
     WorkshopUpdates().Invalidate(plan.ModId);
    }
    catch(Exception baselineError){baselineWarning="；版本基线未能重置："+baselineError.Message;}
