@@ -897,20 +897,20 @@ internal static class ApplicationWorkflowChecks
             "a superseded source check cannot overwrite the result published by a newer request");
 
         var cancelMod = SourceFixture("fixture.source.cancel", "Source Cancel");
-        var cancelBackend = new FakeModSourceCheckBackend();
-        cancelBackend.Set(cancelMod.Id, new ModSourceBackendSnapshot(
+        var sourceCancelBackend = new FakeModSourceCheckBackend();
+        sourceCancelBackend.Set(cancelMod.Id, new ModSourceBackendSnapshot(
             "fixture-owner/source-cancel", null, null, null, null, WorkshopBaselineState.Unbound));
         var cancelEntered = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCancelledCheck = new TaskCompletionSource<ModSourceBackendGitHubCheck>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        cancelBackend.GitHubCheckHandler = (mod, _) =>
+        sourceCancelBackend.GitHubCheckHandler = (mod, _) =>
         {
             cancelEntered.TrySetResult(true);
             return releaseCancelledCheck.Task;
         };
         var cancelWorkflow = new ModSourceCheckWorkflowService(
-            sourceGameRoot, cancelBackend, () => sourceClock);
+            sourceGameRoot, sourceCancelBackend, () => sourceClock);
         using (var userCancellation = new CancellationTokenSource())
         {
             var pendingCheck = cancelWorkflow.CheckGitHubAsync(
