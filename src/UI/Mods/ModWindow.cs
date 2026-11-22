@@ -2238,10 +2238,12 @@ public partial class MainWindow
    cancellation.Dispose();
    busy=false;
    transactionWriting=false;
-   if(!IsVisible)return;
-   if(refreshInventory)RefreshMods();
-   else if(showPreview&&session?.CurrentPreview!=null)ShowWorkshopZipConfirmation();
-   else ShowMods();
+   if(IsVisible)
+   {
+    if(refreshInventory)RefreshMods();
+    else if(showPreview&&session?.CurrentPreview!=null)ShowWorkshopZipConfirmation();
+    else ShowMods();
+   }
   }
  }
 
@@ -2450,12 +2452,14 @@ public partial class MainWindow
    cancellation.Dispose();
    busy=false;
    transactionWriting=false;
-   if(!IsVisible)return;
-   if(refreshInventory&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
-    RefreshMods();
-   else if(activeSession.CurrentPreview!=null)
-    ShowWorkshopZipConfirmation();
-   else ShowMods();
+   if(IsVisible)
+   {
+    if(refreshInventory&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+     RefreshMods();
+    else if(activeSession.CurrentPreview!=null)
+     ShowWorkshopZipConfirmation();
+    else ShowMods();
+   }
   }
  }
 
