@@ -189,6 +189,11 @@ internal sealed record ModSourceBackendSnapshot(
     WorkshopBaselineState WorkshopBaseline,
     DateTimeOffset? GitHubDiscoveryCheckedAt = null);
 
+internal interface IModSourceRuntimeCacheProbe
+{
+    (bool? GitHubCached, bool? WorkshopCached) ReadRuntimeCachePresence(string modId);
+}
+
 internal interface IModSourceCheckBackend
 {
     ModSourceBackendSnapshot Read(ManagedMod mod);
@@ -266,6 +271,45 @@ internal sealed class ModSourceCheckWorkflowService
         this.gameRoot = NormalizePath(gameRoot);
         this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
         this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// Reads only the existing in-memory GitHub/Workshop check caches.
+    /// It never starts a network request or publishes a new check result.
+    /// </summary>
+    public (bool? GitHubCached, bool? WorkshopCached) InspectRuntimeCache(string modId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modId);
+        var backendPresence = backend is IModSourceRuntimeCacheProbe probe
+            ? probe.ReadRuntimeCachePresence(modId)
+            : (GitHubCached: (bool?)null, WorkshopCached: (bool?)null);
+
+        lock (gate)
+        {
+            bool githubPublished = published.Any(pair =>
+                IsModKeyFor(pair.Key, modId) &&
+                (pair.Value.GitHubResult is not null ||
+                 pair.Value.GitHubFailure is not null ||
+                 pair.Value.DiscoveryResult is not null ||
+                 pair.Value.DiscoveryFailure is not null));
+            bool workshopPublished = published.Any(pair =>
+                IsModKeyFor(pair.Key, modId) &&
+                (pair.Value.WorkshopResult is not null ||
+                 pair.Value.WorkshopFailure is not null));
+
+            return (
+                githubPublished ? true : backendPresence.GitHubCached,
+                workshopPublished ? true : backendPresence.WorkshopCached);
+        }
+    }
+
+    static bool IsModKeyFor(string key, string modId)
+    {
+        // ModKey is game-root | folder | MOD ID | version | manifest path.
+        // Windows paths cannot contain '|', and the manifest parser restricts MOD IDs.
+        string[] parts = key.Split('|');
+        return parts.Length == 5 &&
+            parts[2].Equals(modId, StringComparison.OrdinalIgnoreCase);
     }
 
     public ModSourceCheckResult Inspect(ManagedMod mod)

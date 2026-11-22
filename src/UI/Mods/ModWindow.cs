@@ -1,7 +1,10 @@
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace SpirePatch;
 public partial class MainWindow
@@ -20,7 +23,15 @@ public partial class MainWindow
  bool modInventoryRefreshRunning;
  string? activeModInventoryRefreshRoot,pendingModInventoryRefreshRoot;
  ModTogglePlan? modTogglePreview;
- WorkshopZipPlan? zipImportPreview;
+ LocalZipUiWorkflowSession? localZipSession;
+ string? localZipSessionRoot;
+ CancellationTokenSource? localZipOperationCancellation;
+ LocalZipHistoricalBindingPolicy? localZipSelectedPolicy;
+ ComboBox? localZipPolicyPicker;
+ Button? localZipConfirmButton;
+ TextBlock? localZipProgressText;
+ string? localZipRecoveryNotice;
+ bool localZipRecoveryBlocked;
  string modSection="普通 MOD",modQuery="",modFilter="全部",modIssueFilter="所有状态",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
  string? selectedModDetailFolder;
@@ -42,6 +53,99 @@ public partial class MainWindow
    modSourceCheckRoot=selectedInstallRoot;
   }
   return modSourceCheckWorkflow;
+ }
+ LocalZipUiWorkflowSession LocalZipSession()
+ {
+  if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
+  if(localZipSession!=null&&
+   !string.Equals(localZipSessionRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+  {
+   localZipSession.ChangeRoot(selectedInstallRoot);
+   localZipSession=null;
+   localZipSessionRoot=null;
+  }
+  if(localZipSession==null)
+  {
+   var sourceChecks=ModSourceChecks();
+   var cacheProbe=new ModSourceWorkflowLocalZipCacheProbe(sourceChecks);
+   var archiveBackend=new LocalModZipArchiveBackend(cacheProbe.Inspect);
+   var previewWorkflow=new LocalModZipImportWorkflowService(
+    installer.DataRoot,archiveBackend,gameRunning:GameEnvironment.Running);
+   localZipSession=new LocalZipUiWorkflowSession(previewWorkflow,installer.DataRoot);
+   localZipSessionRoot=selectedInstallRoot;
+  }
+  return localZipSession;
+ }
+ void DiscardLocalZipPreview()
+ {
+  localZipSession?.DiscardPreview();
+  localZipSelectedPolicy=null;
+  localZipPolicyPicker=null;
+  localZipConfirmButton=null;
+  localZipProgressText=null;
+ }
+ void ReportLocalZipProgress(string root,LocalZipApplyProgress progress)
+ {
+  if(!Dispatcher.CheckAccess())
+  {
+   if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
+   Dispatcher.Invoke(()=>ReportLocalZipProgress(root,progress));
+   return;
+  }
+  if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+  transactionWriting=progress.TransactionWriting;
+  modStatus=progress.Message;
+  toast.Text=progress.Message;
+  if(localZipProgressText!=null)localZipProgressText.Text=progress.Message;
+  if(progress.TransactionWriting&&localZipConfirmButton!=null)
+   localZipConfirmButton.IsEnabled=false;
+ }
+ void InvalidateLocalZipCaches(string root,IEnumerable<string> modIds)
+ {
+  if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+  if(modSourceCheckRoot!=null&&modSourceCheckRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
+   modSourceCheckWorkflow?.InvalidateAll();
+  githubDiscovery?.ClearCache();
+  foreach(string id in modIds.Where(value=>!string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase))
+  {
+   if(githubModUpdates!=null&&githubRoot!=null&&githubRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
+    githubModUpdates.Invalidate(id);
+   workshopModUpdates?.Invalidate(id);
+  }
+ }
+ LocalZipUiInvalidationPlan HandleLocalZipRecoveryReport(
+  string root,LocalZipInstallRecoveryReport recovery)
+ {
+  var plan=LocalZipUiInvalidationPlan.ForRecovery(recovery);
+  string? summary=LocalZipUiResultPresenter.FormatRecoveryReport(
+   recovery,LocalZipSession().TransactionLogDirectory);
+  localZipRecoveryBlocked=recovery.HasPendingRecovery;
+  localZipRecoveryNotice=recovery.HasPendingRecovery?summary:null;
+  if(recovery.CompletedCount>0&&localZipSession?.CurrentPreview!=null)
+  {
+   try{DiscardLocalZipPreview();}
+   catch(Exception cleanupError)
+   {
+    localZipRecoveryBlocked=true;
+    localZipRecoveryNotice="事务已安全恢复，但旧预览暂存清理失败："+cleanupError.Message;
+   }
+  }
+  if(summary!=null)toast.Text=summary;
+  return plan;
+ }
+ void ApplyLocalZipInvalidationPlan(
+  string root,LocalZipUiInvalidationPlan plan,IEnumerable<string> modIds)
+ {
+  if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+  if(plan.InvalidateSourceCache)InvalidateLocalZipCaches(root,modIds);
+  if(plan.InvalidatePatchLifecycle)
+   InvalidateLifecycle("本地 ZIP MOD 已完成安装或安全恢复，现有修复补丁健康结果需要重新检查。");
+  if(plan.RefreshInventory)
+  {
+   report=null;states=[];ClearCoop();ClearSelection();
+   installPreview=null;lastInstallResult=null;modTogglePreview=null;
+   modInventoryDirty=true;
+  }
  }
  bool IsCurrentModSourceInventory(string root,ModInventory inventory)=>
   !modInventoryDirty&&
@@ -566,12 +670,20 @@ public partial class MainWindow
   modSourceCheckWorkflow?.CancelAll();
   modInventoryRefreshRunning=true;
   activeModInventoryRefreshRoot=root;
-  var initialStamp=new ModInventoryRefreshStamp(
-   root,Volatile.Read(ref modChangeVersion),modInventoryDirty);
-  busy=true;modTogglePreview=null;modStatus="正在读取模组清单…";
+  busy=true;modTogglePreview=null;modStatus="正在检查本地 ZIP 事务并读取模组清单…";
   if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
+   var localZipWorkflow=LocalZipSession();
+   var recovery=await Task.Run(()=>localZipWorkflow.RecoverPendingTransactions(
+    root,()=>modFileWatcher.DeferQuietPeriod(),
+    progress=>ReportLocalZipProgress(root,progress)));
+   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery);
+   ApplyLocalZipInvalidationPlan(root,recoveryPlan,
+    recovery.Items.Where(item=>item.Completed&&item.ModId!=null).Select(item=>item.ModId!));
+
+   var initialStamp=new ModInventoryRefreshStamp(
+    root,Volatile.Read(ref modChangeVersion),modInventoryDirty);
    var result=await ModInventoryRefresh.RefreshAsync(
     root,
     initialStamp,
@@ -1242,6 +1354,12 @@ public partial class MainWindow
    header.Children.Add(Card(V(T("自动补丁管理",13,ink,true),T(orphanPatchNotice,12,muted)),padding:10));
    Space(header,10);
   }
+  if(localZipRecoveryNotice!=null)
+  {
+   header.Children.Add(Card(V(T("本地 ZIP 事务需要处理",14,gold,true),
+    T(localZipRecoveryNotice,12,muted)),padding:12));
+   Space(header,10);
+  }
   var mods=modInventory?.Mods??[];
   chosenModFolders.RemoveWhere(path=>!mods.Any(m=>m.Folder.Equals(path,StringComparison.OrdinalIgnoreCase)));
   int fixCount=mods.Count(ModPresentation.IsIndependentPatch),normalCount=mods.Count-fixCount;
@@ -1566,6 +1684,12 @@ public partial class MainWindow
   if(orphanPatchNotice!=null)
   {
    header.Children.Add(Card(V(T("自动补丁管理",13,ink,true),T(orphanPatchNotice,12,muted)),padding:10));
+   Space(header,10);
+  }
+  if(localZipRecoveryNotice!=null)
+  {
+   header.Children.Add(Card(V(T("本地 ZIP 事务需要处理",14,gold,true),
+    T(localZipRecoveryNotice,12,muted)),padding:12));
    Space(header,10);
   }
   var mods=modInventory?.Mods??[];
@@ -2031,82 +2155,307 @@ public partial class MainWindow
  }
  async void ChooseWorkshopZip()
  {
-  if(busy||transactionWriting||selectedInstallRoot==null)return;
+  if(busy||transactionWriting||modUpdateCheckRunning||selectedInstallRoot==null)return;
   var dialog=new Microsoft.Win32.OpenFileDialog{
-   Title="选择已下载的 MOD ZIP（不会连接第三方下载服务）",
+   Title="选择已下载的 MOD ZIP（只读预检，不会连接第三方下载服务）",
    Filter="ZIP 压缩包 (*.zip)|*.zip",CheckFileExists=true,Multiselect=false};
   if(dialog.ShowDialog(this)!=true)return;
+
   string root=selectedInstallRoot,zip=dialog.FileName;
-  busy=true;zipImportPreview=null;
+  busy=true;
+  localZipOperationCancellation?.Cancel();
+  var cancellation=new CancellationTokenSource();
+  localZipOperationCancellation=cancellation;
+  bool refreshInventory=false,showPreview=false;
+  LocalZipUiWorkflowSession? session=null;
   try
   {
-   var plan=await Task.Run(()=>WorkshopZipImport.Preview(root,zip));
-   if(selectedInstallRoot!=root||modInventoryDirty)
-    throw new InvalidOperationException("游戏目录或 MOD 文件发生变化，请重新选择 ZIP。");
-   zipImportPreview=plan;ShowWorkshopZipConfirmation();
+   var activeSession=LocalZipSession();
+   session=activeSession;
+   var recovery=await Task.Run(()=>activeSession.RecoverPendingTransactions(
+    root,()=>modFileWatcher.DeferQuietPeriod(),
+    progress=>ReportLocalZipProgress(root,progress)));
+   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery);
+   ApplyLocalZipInvalidationPlan(root,recoveryPlan,
+    recovery.Items.Where(item=>item.Completed&&item.ModId!=null).Select(item=>item.ModId!));
+   refreshInventory=recoveryPlan.RefreshInventory;
+
+   if(recovery.HasPendingRecovery)
+   {
+    modStatus=localZipRecoveryNotice??"存在尚未完成的本地 ZIP 事务，请先处理恢复提示。";
+    toast.Text=modStatus;
+    return;
+   }
+   if(recovery.CompletedCount>0)
+   {
+    session.DiscardPreview();
+    modStatus="已安全完成上一笔本地 ZIP 事务，正在刷新 MOD 清单。请刷新完成后重新选择 ZIP。";
+    refreshInventory=true;
+    return;
+   }
+   if(modInventoryDirty)
+   {
+    modStatus="MOD 文件正在变化，暂不开始 ZIP 预览；请等待清单刷新完成后重试。";
+    refreshInventory=true;
+    return;
+   }
+
+   var previewResult=await activeSession.PreviewAsync(root,zip,cancellation.Token);
+   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)||
+      cancellation.IsCancellationRequested)
+   {
+    session.DiscardPreview();
+    modStatus="游戏目录已切换或预览已取消，暂存工作区已清理。";
+    return;
+   }
+   if(previewResult.Preview is null)
+   {
+    modStatus="ZIP 只读预检未通过："+(previewResult.Error??"未取得预览结果。");
+    if(previewResult.CleanupWarning!=null)modStatus+="；"+previewResult.CleanupWarning;
+    toast.Text=modStatus;
+    return;
+   }
+
+   localZipSelectedPolicy=previewResult.Preview.HistoricalSources.HasHistoricalEvidence
+    ?null:LocalZipHistoricalBindingPolicy.PreserveUnverified;
+   modStatus=previewResult.State==LocalZipPreviewState.Blocked
+    ?"只读预检完成，但发现安装阻断原因；不会提供覆盖入口。"
+    :"只读预检完成，尚未修改游戏目录。";
+   showPreview=true;
   }
-  catch(Exception e){toast.Text="ZIP 预检未通过："+e.Message;ShowMods();}
-  finally{busy=false;}
+  catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
+  {
+   modStatus="本地 ZIP 预览已取消。";
+  }
+  catch(Exception error)
+  {
+   modStatus="ZIP 只读预检未完成："+error.Message;
+  }
+  finally
+  {
+   if(ReferenceEquals(localZipOperationCancellation,cancellation))
+    localZipOperationCancellation=null;
+   cancellation.Dispose();
+   busy=false;
+   transactionWriting=false;
+   if(!IsVisible)return;
+   if(refreshInventory)RefreshMods();
+   else if(showPreview&&session?.CurrentPreview!=null)ShowWorkshopZipConfirmation();
+   else ShowMods();
+  }
  }
+
  void ShowWorkshopZipConfirmation()
  {
-  if(zipImportPreview==null){ShowMods();return;}
-  var plan=zipImportPreview;
-  var root=V(Header("IMPORT LOCAL MOD ZIP","确认导入 MOD",plan.ModName));
-  Space(root,18);
-  root.Children.Add(Card(V(
-   T("仅导入已有 ZIP，不会联网下载、不执行文件，也不会覆盖已存在的 MOD。",14,ink,true),
-   T("MOD ID："+plan.ModId+"\n文件数量："+plan.FileCount+
-    "\n解压总大小："+(plan.Bytes/1024d/1024d).ToString("F2")+" MiB"+
-    "\nZIP 来源："+plan.ZipPath+"\n目标目录："+plan.Destination,12,muted),
-   T("声明前置："+(plan.Dependencies.Length==0?"未声明":string.Join("、",plan.Dependencies)),12,muted),
-   T("来自浏览器或第三方站点的 ZIP 未经过 Steam 官方身份验证，需自行确认来源与兼容性。",12,gold),
-   H(Btn("确认导入",ApplyWorkshopZip,"Primary"),
-     Btn("取消",()=>{zipImportPreview=null;ShowMods();},"Ghost")))));
-  SetPage("模组管理",root,"mod-zip-confirm",ShowWorkshopZipConfirmation);
+  localZipPolicyPicker=null;
+  localZipConfirmButton=null;
+  localZipProgressText=null;
+  var preview=localZipSession?.CurrentPreview;
+  if(preview==null){ShowMods();return;}
+  var details=LocalZipConfirmationPresenter.Create(preview);
+  var pageRoot=V(Header("IMPORT LOCAL MOD ZIP","确认导入 MOD",details.ModName));
+  Space(pageRoot,16);
+
+  var summary=V(
+   T("仅允许全新安装；不会覆盖、替换或更新任何已有 MOD。",14,ink,true),
+   T("MOD 名称："+details.ModName+
+    "\nMOD ID："+details.ModId+
+    "\n版本："+details.Version+
+    "\n作者："+(string.IsNullOrWhiteSpace(details.Author)?"未声明":details.Author)+
+    "\n描述："+(string.IsNullOrWhiteSpace(details.Description)?"未声明":details.Description),12,muted),
+   T("文件数量："+details.FileCount+
+    "\n解压总大小："+(details.TotalBytes/1024d/1024d).ToString("F2")+" MiB"+
+    "\n原 ZIP 路径："+details.ZipPath+
+    "\n原 ZIP SHA-256："+details.ArchiveSha256+
+    "\n目标安装目录："+details.TargetDirectory+
+    "\n目录推导依据："+details.FolderNameReason,12,muted),
+   T("声明依赖："+(details.Dependencies.Count==0?"未声明":string.Join("、",details.Dependencies)),12,muted),
+   T(details.SourceWarning,12,gold),
+   T(details.RuntimeCacheNotice,11,muted));
+  pageRoot.Children.Add(Card(summary));
+  Space(pageRoot,10);
+
+  if(details.ConflictDetails.Count>0)
+  {
+   var conflict=V(T("安装被阻断 · 不提供覆盖入口",14,gold,true));
+   foreach(string reason in details.ConflictDetails)
+    conflict.Children.Add(T("• "+reason,12,muted));
+   pageRoot.Children.Add(Card(conflict,"#A03A2630",14));
+   Space(pageRoot,10);
+  }
+
+  if(details.HasHistoricalEvidence)
+  {
+   var history=V(T("发现历史来源证据",14,ink,true),
+    T("这些记录不会自动证明当前 ZIP 来自对应仓库或创意工坊。请明确选择如何处理。",12,gold));
+   foreach(string item in details.HistoricalEvidence)
+    history.Children.Add(T("• "+item,12,muted));
+   Space(history,8);
+   var picker=new ComboBox{MinHeight=34,MinWidth=360,HorizontalAlignment=HorizontalAlignment.Stretch};
+   foreach(var policy in details.AvailablePolicies)
+   {
+    string label=policy switch
+    {
+     LocalZipHistoricalBindingPolicy.PreserveUnverified=>"保留但标为未验证（PreserveUnverified）",
+     LocalZipHistoricalBindingPolicy.RequireManualReview=>"保留并要求人工复核（RequireManualReview）",
+     LocalZipHistoricalBindingPolicy.Unbind=>"显式解绑历史来源与基线（Unbind）",
+     _=>policy.ToString()
+    };
+    picker.Items.Add(new ComboBoxItem{Content=label,Tag=policy});
+   }
+   if(localZipSelectedPolicy is { } selected)
+    picker.SelectedItem=picker.Items.OfType<ComboBoxItem>()
+     .FirstOrDefault(item=>item.Tag is LocalZipHistoricalBindingPolicy value&&value==selected);
+   history.Children.Add(picker);
+   localZipPolicyPicker=picker;
+   pageRoot.Children.Add(Card(history));
+  }
+  else
+  {
+   localZipSelectedPolicy=LocalZipHistoricalBindingPolicy.PreserveUnverified;
+   pageRoot.Children.Add(Card(V(
+    T("未发现历史 GitHub / Workshop 绑定、版本基线或运行时检查缓存。",13,muted,true),
+    T("默认采用 PreserveUnverified；不会为本地 ZIP 建立或授予任何来源信任。",12,muted))));
+  }
+
+  Space(pageRoot,10);
+  localZipProgressText=T(string.IsNullOrWhiteSpace(modStatus)?"预览完成，尚未修改游戏目录。":modStatus,12,muted);
+  pageRoot.Children.Add(localZipProgressText);
+  Space(pageRoot,12);
+  var confirm=Btn("确认全新安装",ApplyWorkshopZip,"Primary");
+  confirm.IsEnabled=details.CanConfirm&&
+   (!details.HasHistoricalEvidence||localZipSelectedPolicy.HasValue)&&
+   !localZipRecoveryBlocked&&!busy&&!transactionWriting&&!modInventoryDirty;
+  localZipConfirmButton=confirm;
+  if(localZipPolicyPicker!=null)
+  {
+   localZipPolicyPicker.SelectionChanged+=(_,_) =>
+   {
+    localZipSelectedPolicy=(localZipPolicyPicker.SelectedItem as ComboBoxItem)?.Tag
+     is LocalZipHistoricalBindingPolicy policy?policy:null;
+    if(localZipConfirmButton!=null)
+     localZipConfirmButton.IsEnabled=details.CanConfirm&&
+      localZipSelectedPolicy.HasValue&&!localZipRecoveryBlocked&&!busy&&!transactionWriting&&!modInventoryDirty;
+   };
+  }
+  var cancel=Btn("取消",CancelLocalZipImport,"Ghost");
+  pageRoot.Children.Add(H(confirm,cancel));
+  if(!details.CanConfirm)
+   pageRoot.Children.Add(T("存在阻断冲突，确认安装按钮已禁用。请先处理现有 MOD 或目录问题。",12,gold));
+  if(localZipRecoveryBlocked&&localZipRecoveryNotice!=null)
+   pageRoot.Children.Add(T(localZipRecoveryNotice,12,gold));
+
+  SetPage("模组管理",pageRoot,"mod-zip-confirm",ShowWorkshopZipConfirmation);
  }
- async void ApplyWorkshopZip()
+
+ void CancelLocalZipImport()
  {
-  if(busy||transactionWriting||zipImportPreview==null||selectedInstallRoot!=zipImportPreview.Root)return;
-  var plan=zipImportPreview;zipImportPreview=null;busy=true;transactionWriting=true;
-  bool imported=false;
+  if(busy||transactionWriting)return;
   try
   {
-   var safety=await Task.Run(()=>ModEnvironmentSnapshots.Create(
-    plan.Root,installer.DataRoot,"本地 ZIP 导入前自动保护"));
-   await Task.Run(()=>WorkshopZipImport.Apply(plan));
-   imported=true;
-   string baselineWarning="";
-   try
-   {
-    WorkshopSources().ClearBaseline(plan.ModId);
-    modSourceCheckWorkflow?.InvalidateAll();
-    WorkshopUpdates().Invalidate(plan.ModId);
-   }
-   catch(Exception baselineError){baselineWarning="；版本基线未能重置："+baselineError.Message;}
-   InvalidateLifecycle("导入了新的 MOD，请重新检查补丁健康状态。");
-   report=null;states=[];ClearCoop();ClearSelection();installPreview=null;lastInstallResult=null;modTogglePreview=null;
-   modInventoryDirty=true;
-   try
-   {
-    modInventory=await Task.Run(()=>ModManager.Scan(plan.Root));
-    modInventoryDirty=false;
-    modStatus="成功导入 "+plan.ModName+"；请检查依赖与游戏兼容性。";
-    toast.Text=modStatus+"；导入前环境快照："+safety.Id+baselineWarning;
-   }
-   catch(Exception scanError)
-   {
-    modStatus="ZIP 已写入，但刷新 MOD 清单失败："+scanError.Message;
-    toast.Text=modStatus+"；导入前环境快照："+safety.Id;
-   }
+   DiscardLocalZipPreview();
+   modStatus="已取消本地 ZIP 导入，隔离暂存工作区已清理；未触碰游戏目录。";
+   toast.Text=modStatus;
+   ShowMods();
   }
-  catch(Exception e)
+  catch(Exception error)
   {
-   modInventoryDirty=imported;
-   modStatus=imported?"ZIP 已导入，但后续处理失败："+e.Message:"MOD 导入未完成："+e.Message;
+   modStatus="本地 ZIP 暂存清理失败，工作区仍保留供核对："+error.Message;
+   toast.Text=modStatus;
+   ShowWorkshopZipConfirmation();
+  }
+ }
+
+ async void ApplyWorkshopZip()
+ {
+  var activeSession=localZipSession;
+  var preview=activeSession?.CurrentPreview;
+  if(busy||transactionWriting||modUpdateCheckRunning||activeSession==null||preview==null||
+     selectedInstallRoot==null||
+     !selectedInstallRoot.Equals(preview.GameRoot,StringComparison.OrdinalIgnoreCase))return;
+  if(!preview.CanInstallNew||localZipRecoveryBlocked)
+  {
+   toast.Text=localZipRecoveryNotice??"预览存在阻断冲突或待恢复事务，不能安装。";
+   return;
+  }
+  LocalZipHistoricalBindingPolicy? selectedPolicy=localZipSelectedPolicy;
+  if(preview.HistoricalSources.HasHistoricalEvidence&&!selectedPolicy.HasValue)
+  {
+   toast.Text="存在历史来源证据，请先明确选择处理策略。";
+   return;
+  }
+  selectedPolicy??=LocalZipHistoricalBindingPolicy.PreserveUnverified;
+
+  string root=preview.GameRoot;
+  busy=true;
+  if(localZipConfirmButton!=null)localZipConfirmButton.IsEnabled=false;
+  localZipOperationCancellation?.Cancel();
+  var cancellation=new CancellationTokenSource();
+  localZipOperationCancellation=cancellation;
+  bool refreshInventory=false;
+  var affectedIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase){preview.Package.ModId};
+  try
+  {
+   var result=await activeSession.ApplyAsync(
+    (confirmation,token)=>Task.FromResult(new LocalZipApplyDecision(
+     currentVisit?.Key=="mod-zip-confirm"&&
+     root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
+     !modInventoryDirty&&
+     confirmation.Preview.Token.Equals(preview.Token,StringComparison.Ordinal)&&
+     confirmation.Preview.CanInstallNew&&
+     (!confirmation.HistoricalSources.HasHistoricalEvidence||localZipSelectedPolicy.HasValue),
+     selectedPolicy.Value)),
+    ()=>modFileWatcher.DeferQuietPeriod(),
+    progress=>ReportLocalZipProgress(root,progress),
+    cancellation.Token);
+
+   var plan=LocalZipUiInvalidationPlan.ForApply(result);
+   modStatus=LocalZipUiResultPresenter.FormatApplyResult(result);
+   toast.Text=modStatus;
+
+   if(result.RecoveryState==LocalZipInstallRecoveryState.PendingRecovery)
+   {
+    var recovery=await Task.Run(()=>activeSession.RecoverPendingTransactions(
+     root,()=>modFileWatcher.DeferQuietPeriod(),
+     progress=>ReportLocalZipProgress(root,progress)));
+    var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery);
+    plan=new LocalZipUiInvalidationPlan(
+     plan.RefreshInventory||recoveryPlan.RefreshInventory,
+     plan.InvalidateSourceCache||recoveryPlan.InvalidateSourceCache,
+     plan.InvalidatePatchLifecycle||recoveryPlan.InvalidatePatchLifecycle);
+    foreach(string id in recovery.Items.Where(item=>item.Completed&&item.ModId!=null)
+     .Select(item=>item.ModId!))affectedIds.Add(id);
+    if(recovery.CompletedCount>0&&activeSession.CurrentPreview!=null)
+     activeSession.DiscardPreview();
+    if(recovery.HasPendingRecovery&&localZipRecoveryNotice!=null)
+     modStatus+="\n"+localZipRecoveryNotice;
+    else if(recovery.CompletedCount>0)
+     modStatus+="\n事务恢复检查已安全完成。";
+   }
+
+   ApplyLocalZipInvalidationPlan(root,plan,affectedIds);
+   refreshInventory=plan.RefreshInventory;
    toast.Text=modStatus;
   }
-  finally{busy=false;transactionWriting=false;ShowMods();}
+  catch(Exception error)
+  {
+   modStatus="本地 ZIP 安装流程异常："+error.Message;
+   toast.Text=modStatus;
+  }
+  finally
+  {
+   if(ReferenceEquals(localZipOperationCancellation,cancellation))
+    localZipOperationCancellation=null;
+   cancellation.Dispose();
+   busy=false;
+   transactionWriting=false;
+   if(!IsVisible)return;
+   if(refreshInventory&&root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+    RefreshMods();
+   else if(activeSession.CurrentPreview!=null)
+    ShowWorkshopZipConfirmation();
+   else ShowMods();
+  }
  }
 
  async void PrepareModToggle(ManagedMod mod)

@@ -10,7 +10,7 @@ namespace SpirePatch;
 /// source-check contract. This adapter does not bind sources, download packages,
 /// install updates, or write MOD files.
 /// </summary>
-internal sealed class InfrastructureModSourceCheckBackend : IModSourceCheckBackend
+internal sealed class InfrastructureModSourceCheckBackend : IModSourceCheckBackend, IModSourceRuntimeCacheProbe
 {
     readonly GitHubModUpdates githubUpdates;
     readonly GitHubModDiscovery githubDiscovery;
@@ -28,6 +28,10 @@ internal sealed class InfrastructureModSourceCheckBackend : IModSourceCheckBacke
         this.workshopSources = workshopSources ?? throw new ArgumentNullException(nameof(workshopSources));
         this.workshopUpdates = workshopUpdates ?? throw new ArgumentNullException(nameof(workshopUpdates));
     }
+
+    public (bool? GitHubCached, bool? WorkshopCached) ReadRuntimeCachePresence(string modId) =>
+        (githubUpdates.Cached(modId) is not null || githubDiscovery.HasCachedForModId(modId),
+         workshopUpdates.Cached(modId) is not null);
 
     public ModSourceBackendSnapshot Read(ManagedMod mod)
     {

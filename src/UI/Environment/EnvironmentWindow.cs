@@ -16,7 +16,17 @@ public partial class MainWindow
    if(environmentSession!=null)return environmentSession;
    EnsureModWatcherEvents();
    environmentSession=new GameEnvironmentSessionService(SettingsPath,modFileWatcher,selectedInstallRoot);
-   environmentSession.DirectoryChanging+=(_,_)=>{CancelModUpdateCheck();modInventoryRefresh?.Cancel();};
+   environmentSession.DirectoryChanging+=(_,e)=>
+   {
+    CancelModUpdateCheck();
+    modInventoryRefresh?.Cancel();
+    localZipOperationCancellation?.Cancel();
+    DiscardLocalZipPreview();
+    localZipSession=null;
+    localZipSessionRoot=null;
+    localZipRecoveryBlocked=false;
+    localZipRecoveryNotice=null;
+   };
    environmentSession.DirectoryChanged+=(_,e)=>
    {
     selectedInstallRoot=e.CurrentRoot;
