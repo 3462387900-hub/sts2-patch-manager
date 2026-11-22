@@ -318,7 +318,7 @@ internal sealed class LocalModZipArchiveBackend : ILocalModZipImportBackend
         string head = segment.Split('.')[0].ToUpperInvariant();
         if (head is "CON" or "PRN" or "AUX" or "NUL" ||
             (head.Length == 4 && (head.StartsWith("COM", StringComparison.Ordinal) ||
-            head.StartsWith("LPT", StringComparison.Ordinal)) && head[3] is >= '1' and <= '9')
+            head.StartsWith("LPT", StringComparison.Ordinal)) && head[3] is >= '1' and <= '9'))
             throw new InvalidDataException("ZIP 包含 Windows 保留设备名：" + segment);
     }
 
