@@ -109,12 +109,12 @@ internal static class ModUpdateApplyWorkflowChecks
             var preview=Preview(service,f);
             string expectedUpdated=Fingerprint(f.Payload);
             var result=await service.ApplyAsync(service.Confirm(preview,true));
-            string backupRoot=Path.Combine(root,"isolated-backups");
+            string successBackupRoot=Path.Combine(root,"isolated-backups");
             bool resultOk=result.Success && result.Confirmed && !result.RolledBack;
             bool hashesMatch=Fingerprint(f.Target)==expectedUpdated;
             bool stagingClean=!Directory.Exists(f.Stage);
-            bool backupClean=!Directory.Exists(backupRoot) ||
-                !Directory.EnumerateFileSystemEntries(backupRoot).Any();
+            bool backupClean=!Directory.Exists(successBackupRoot) ||
+                !Directory.EnumerateFileSystemEntries(successBackupRoot).Any();
             bool watcherTransitions=writingStarts==1 && writingEnds==1 && !watcherWriting;
             bool quietPeriodNotified=quietDefers>=2;
             check(resultOk && hashesMatch && stagingClean && backupClean &&
