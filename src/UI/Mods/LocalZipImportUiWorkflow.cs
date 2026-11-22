@@ -8,19 +8,24 @@ using System.Threading.Tasks;
 
 namespace SpirePatch;
 
+internal interface ILocalZipRuntimeCacheProbe
+{
+    (bool? GitHubCached, bool? WorkshopCached) Inspect(string modId);
+}
+
 /// <summary>
 /// Read-only adapter from the existing source-check workflow to the local ZIP
 /// preview cache probe. InspectRuntimeCache never starts a network operation.
 /// </summary>
-internal sealed class ModSourceWorkflowLocalZipCacheProbe
+internal sealed class ModSourceWorkflowLocalZipCacheProbe : ILocalZipRuntimeCacheProbe
 {
-    readonly ModSourceCheckWorkflowService sourceChecks;
+    readonly Func<ModSourceCheckWorkflowService> sourceChecks;
 
-    public ModSourceWorkflowLocalZipCacheProbe(ModSourceCheckWorkflowService sourceChecks) =>
+    public ModSourceWorkflowLocalZipCacheProbe(Func<ModSourceCheckWorkflowService> sourceChecks) =>
         this.sourceChecks = sourceChecks ?? throw new ArgumentNullException(nameof(sourceChecks));
 
     public (bool? GitHubCached, bool? WorkshopCached) Inspect(string modId) =>
-        sourceChecks.InspectRuntimeCache(modId);
+        sourceChecks().InspectRuntimeCache(modId);
 }
 
 internal sealed record LocalZipConfirmationPresentation(

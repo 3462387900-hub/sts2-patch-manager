@@ -64,7 +64,6 @@ internal sealed class GitHubModUpdates : IDisposable
  }
  public string? Repository(string id)=>bindings.GetValueOrDefault(id);
  public GitHubModResult? Cached(string id)=>checks.GetValueOrDefault(id);
- public void Invalidate(string modId)=>checks.Remove(modId);
  public int BindingCount=>bindings.Count;
  public void Bind(string modId,string repositoryInput)
  {

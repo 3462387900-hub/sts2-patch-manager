@@ -131,7 +131,7 @@ internal static class LocalZipUiWorkflowChecks
         var sourceChecks = new ModSourceCheckWorkflowService(
             cacheRoot, new RuntimeCacheBackend(true, false));
         int probeCalls = 0;
-        var cacheProbe = new ModSourceWorkflowLocalZipCacheProbe(sourceChecks);
+        var cacheProbe = new ModSourceWorkflowLocalZipCacheProbe(() => sourceChecks);
         var cacheBackend = new LocalModZipArchiveBackend(modId =>
         {
             probeCalls++;
@@ -183,9 +183,16 @@ internal static class LocalZipUiWorkflowChecks
             presentation.FolderNameReason.Length > 0 && presentation.Dependencies.Count == 1,
             "confirmation presentation includes package identity, author, version, file count, ZIP hash, target reasoning and dependencies");
         string conflictWorkspace = conflictPreview.Package.WorkspaceDirectory;
-        conflictSession.DiscardPreview();
-        check(!Directory.Exists(conflictWorkspace),
-            "cancelling a blocked confirmation discards its isolated staging workspace");
+        var blockedApply = await conflictSession.ApplyAsync(
+            (_, _) => Task.FromResult(new LocalZipApplyDecision(
+                true, LocalZipHistoricalBindingPolicy.PreserveUnverified)),
+            () => { });
+        check(!blockedApply.Success &&
+            blockedApply.FailureKind == LocalZipApplyFailureKind.InvalidPreview &&
+            !Directory.Exists(conflictWorkspace) &&
+            HasNoInvalidation(LocalZipUiInvalidationPlan.ForApply(blockedApply)) &&
+            LocalZipUiResultPresenter.FormatApplyResult(blockedApply).Contains("InvalidPreview", StringComparison.Ordinal),
+            "a blocked preview is rejected before commit, reports the blocking failure and emits no success invalidation");
 
         // Directory switching and selecting a replacement ZIP both discard the prior
         // preview workspace; neither action emits installation invalidation signals.
@@ -242,6 +249,44 @@ internal static class LocalZipUiWorkflowChecks
         check(applyPlan.RefreshInventory && applyPlan.InvalidateSourceCache &&
             applyPlan.InvalidatePatchLifecycle,
             "only a verified successful installation requests inventory, source-cache and patch-lifecycle invalidation");
+
+        var completedRecovery = new LocalZipInstallRecoveryReport(
+            1, 1, 0, 0,
+            Array.AsReadOnly(new[]
+            {
+                new LocalZipInstallRecoveryItem(
+                    "recovered-transaction", "Completed", true, false, false, false, null)
+            }));
+        var completedRecoveryPlan = LocalZipUiInvalidationPlan.ForRecovery(completedRecovery);
+        check(completedRecoveryPlan.RefreshInventory &&
+            completedRecoveryPlan.InvalidateSourceCache &&
+            completedRecoveryPlan.InvalidatePatchLifecycle,
+            "only a structured safe-completion recovery result requests inventory, source-cache and patch-lifecycle invalidation");
+
+        // A pre-commit filesystem preparation failure must be visible and must not
+        // request any post-install refresh or lifecycle invalidation.
+        string failedRoot = Fixture(parent, "failed-game");
+        string failedData = Path.Combine(parent, "failed-data");
+        var failedBackend = new LocalModZipInstallTransactionBackend(
+            failedData, _ => false,
+            faultInjector: (point, detail) =>
+                point == LocalZipInstallFaultPoint.CopyFile
+                    ? new IOException("fixture preparation copy failure")
+                    : null);
+        var failedSession = CreateSession(parent, failedData, _ => (false, false), failedBackend);
+        await failedSession.PreviewAsync(failedRoot, CreateZip(parent));
+        var failed = await failedSession.ApplyAsync(
+            (_, _) => Task.FromResult(new LocalZipApplyDecision(
+                true, LocalZipHistoricalBindingPolicy.PreserveUnverified)),
+            () => { });
+        string failedMessage = LocalZipUiResultPresenter.FormatApplyResult(failed);
+        check(!failed.Success &&
+            failed.FailureKind == LocalZipApplyFailureKind.PreparationFailed &&
+            failedMessage.Contains("PreparationFailed", StringComparison.Ordinal) &&
+            failedMessage.Contains("fixture preparation copy failure", StringComparison.Ordinal) &&
+            (failed.TargetDirectory is null || !Directory.Exists(failed.TargetDirectory)) &&
+            HasNoInvalidation(LocalZipUiInvalidationPlan.ForApply(failed)),
+            "pre-commit preparation failure is shown to the user and does not trigger install-success invalidation");
 
         // A historical binding policy selected by the confirmation callback is passed
         // unchanged to batch 9. PreserveUnverified never upgrades source trust.
@@ -395,6 +440,7 @@ internal static class LocalZipUiWorkflowChecks
         historySession.DiscardPreview();
         reviewSession.DiscardPreview();
         partialSession.DiscardPreview();
+        failedSession.DiscardPreview();
         if (Directory.Exists(parent)) Directory.Delete(parent, recursive: true);
     }
 }

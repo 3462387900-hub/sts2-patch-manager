@@ -66,8 +66,7 @@ public partial class MainWindow
   }
   if(localZipSession==null)
   {
-   var sourceChecks=ModSourceChecks();
-   var cacheProbe=new ModSourceWorkflowLocalZipCacheProbe(sourceChecks);
+   var cacheProbe=new ModSourceWorkflowLocalZipCacheProbe(ModSourceChecks);
    var archiveBackend=new LocalModZipArchiveBackend(cacheProbe.Inspect);
    var previewWorkflow=new LocalModZipImportWorkflowService(
     installer.DataRoot,archiveBackend,gameRunning:GameEnvironment.Running);
@@ -100,44 +99,63 @@ public partial class MainWindow
   if(progress.TransactionWriting&&localZipConfirmButton!=null)
    localZipConfirmButton.IsEnabled=false;
  }
- void InvalidateLocalZipCaches(string root,IEnumerable<string> modIds)
+ void InvalidateLocalZipCaches(string root)
  {
   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
   if(modSourceCheckRoot!=null&&modSourceCheckRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
-   modSourceCheckWorkflow?.InvalidateAll();
-  githubDiscovery?.ClearCache();
-  foreach(string id in modIds.Where(value=>!string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase))
   {
-   if(githubModUpdates!=null&&githubRoot!=null&&githubRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
-    githubModUpdates.Invalidate(id);
-   workshopModUpdates?.Invalidate(id);
+   modSourceCheckWorkflow?.CancelAll();
+   modSourceCheckWorkflow=null;
+   modSourceCheckRoot=null;
+  }
+  githubDiscovery?.ClearCache();
+  if(githubRoot!=null&&githubRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
+  {
+   githubModUpdates?.Dispose();
+   githubModUpdates=null;
+   githubRoot=null;
+  }
+  if(workshopSourceRoot!=null&&workshopSourceRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
+  {
+   workshopModSources=null;
+   workshopSourceRoot=null;
+  }
+  if(workshopUpdatesRoot!=null&&workshopUpdatesRoot.Equals(root,StringComparison.OrdinalIgnoreCase))
+  {
+   workshopModUpdates=null;
+   workshopUpdatesRoot=null;
   }
  }
  LocalZipUiInvalidationPlan HandleLocalZipRecoveryReport(
-  string root,LocalZipInstallRecoveryReport recovery)
+  string root,LocalZipInstallRecoveryReport recovery,string transactionLogDirectory)
  {
   var plan=LocalZipUiInvalidationPlan.ForRecovery(recovery);
+  if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return plan;
   string? summary=LocalZipUiResultPresenter.FormatRecoveryReport(
-   recovery,LocalZipSession().TransactionLogDirectory);
+   recovery,transactionLogDirectory);
   localZipRecoveryBlocked=recovery.HasPendingRecovery;
   localZipRecoveryNotice=recovery.HasPendingRecovery?summary:null;
-  if(recovery.CompletedCount>0&&localZipSession?.CurrentPreview!=null)
+  if((recovery.HasPendingRecovery||recovery.CompletedCount>0)&&
+   localZipSessionRoot!=null&&
+   localZipSessionRoot.Equals(root,StringComparison.OrdinalIgnoreCase)&&
+   localZipSession?.CurrentPreview!=null)
   {
    try{DiscardLocalZipPreview();}
    catch(Exception cleanupError)
    {
     localZipRecoveryBlocked=true;
-    localZipRecoveryNotice="事务已安全恢复，但旧预览暂存清理失败："+cleanupError.Message;
+    localZipRecoveryNotice="恢复检查已发现事务状态变化，但旧预览暂存清理失败："+cleanupError.Message;
    }
   }
   if(summary!=null)toast.Text=summary;
+  else if(localZipRecoveryNotice!=null)toast.Text=localZipRecoveryNotice;
   return plan;
  }
  void ApplyLocalZipInvalidationPlan(
-  string root,LocalZipUiInvalidationPlan plan,IEnumerable<string> modIds)
+  string root,LocalZipUiInvalidationPlan plan)
  {
   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
-  if(plan.InvalidateSourceCache)InvalidateLocalZipCaches(root,modIds);
+  if(plan.InvalidateSourceCache)InvalidateLocalZipCaches(root);
   if(plan.InvalidatePatchLifecycle)
    InvalidateLifecycle("本地 ZIP MOD 已完成安装或安全恢复，现有修复补丁健康结果需要重新检查。");
   if(plan.RefreshInventory)
@@ -678,9 +696,8 @@ public partial class MainWindow
    var recovery=await Task.Run(()=>localZipWorkflow.RecoverPendingTransactions(
     root,()=>modFileWatcher.DeferQuietPeriod(),
     progress=>ReportLocalZipProgress(root,progress)));
-   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery);
-   ApplyLocalZipInvalidationPlan(root,recoveryPlan,
-    recovery.Items.Where(item=>item.Completed&&item.ModId!=null).Select(item=>item.ModId!));
+   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery,localZipWorkflow.TransactionLogDirectory);
+   ApplyLocalZipInvalidationPlan(root,recoveryPlan);
 
    var initialStamp=new ModInventoryRefreshStamp(
     root,Volatile.Read(ref modChangeVersion),modInventoryDirty);
@@ -2175,9 +2192,10 @@ public partial class MainWindow
    var recovery=await Task.Run(()=>activeSession.RecoverPendingTransactions(
     root,()=>modFileWatcher.DeferQuietPeriod(),
     progress=>ReportLocalZipProgress(root,progress)));
-   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery);
-   ApplyLocalZipInvalidationPlan(root,recoveryPlan,
-    recovery.Items.Where(item=>item.Completed&&item.ModId!=null).Select(item=>item.ModId!));
+   if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)||
+      cancellation.IsCancellationRequested)return;
+   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery,activeSession.TransactionLogDirectory);
+   ApplyLocalZipInvalidationPlan(root,recoveryPlan);
    refreshInventory=recoveryPlan.RefreshInventory;
 
    if(recovery.HasPendingRecovery)
@@ -2195,7 +2213,8 @@ public partial class MainWindow
    }
    if(modInventoryDirty)
    {
-    modStatus="MOD 文件正在变化，暂不开始 ZIP 预览；请等待清单刷新完成后重试。";
+    activeSession.DiscardPreview();
+    modStatus="MOD 文件正在变化，已清理旧 ZIP 预览；请等待清单刷新完成后重新选择。";
     refreshInventory=true;
     return;
    }
@@ -2376,6 +2395,13 @@ public partial class MainWindow
   if(busy||transactionWriting||modUpdateCheckRunning||activeSession==null||preview==null||
      selectedInstallRoot==null||
      !selectedInstallRoot.Equals(preview.GameRoot,StringComparison.OrdinalIgnoreCase))return;
+  if(modInventoryDirty)
+  {
+   activeSession.DiscardPreview();
+   toast.Text="MOD 文件在预览后发生变化，旧预览已清理；请刷新清单并重新选择 ZIP。";
+   ShowMods();
+   return;
+  }
   if(!preview.CanInstallNew||localZipRecoveryBlocked)
   {
    toast.Text=localZipRecoveryNotice??"预览存在阻断冲突或待恢复事务，不能安装。";
@@ -2396,7 +2422,6 @@ public partial class MainWindow
   var cancellation=new CancellationTokenSource();
   localZipOperationCancellation=cancellation;
   bool refreshInventory=false;
-  var affectedIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase){preview.Package.ModId};
   try
   {
    var result=await activeSession.ApplyAsync(
@@ -2421,13 +2446,12 @@ public partial class MainWindow
     var recovery=await Task.Run(()=>activeSession.RecoverPendingTransactions(
      root,()=>modFileWatcher.DeferQuietPeriod(),
      progress=>ReportLocalZipProgress(root,progress)));
-    var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery);
+    if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+    var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery,activeSession.TransactionLogDirectory);
     plan=new LocalZipUiInvalidationPlan(
      plan.RefreshInventory||recoveryPlan.RefreshInventory,
      plan.InvalidateSourceCache||recoveryPlan.InvalidateSourceCache,
      plan.InvalidatePatchLifecycle||recoveryPlan.InvalidatePatchLifecycle);
-    foreach(string id in recovery.Items.Where(item=>item.Completed&&item.ModId!=null)
-     .Select(item=>item.ModId!))affectedIds.Add(id);
     if(recovery.CompletedCount>0&&activeSession.CurrentPreview!=null)
      activeSession.DiscardPreview();
     if(recovery.HasPendingRecovery&&localZipRecoveryNotice!=null)
@@ -2436,7 +2460,7 @@ public partial class MainWindow
      modStatus+="\n事务恢复检查已安全完成。";
    }
 
-   ApplyLocalZipInvalidationPlan(root,plan,affectedIds);
+   ApplyLocalZipInvalidationPlan(root,plan);
    refreshInventory=plan.RefreshInventory;
    toast.Text=modStatus;
   }
