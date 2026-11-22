@@ -24,6 +24,34 @@ public partial class MainWindow
  string modSection="普通 MOD",modQuery="",modFilter="全部",modIssueFilter="所有状态",modStatus="读取模组清单，管理本地模组的启用和停用。";
  ListBox? activeModList;
  string? selectedModDetailFolder;
+ ModSourceCheckWorkflowService? modSourceCheckWorkflow;
+ string? modSourceCheckRoot;
+ ModSourceCheckWorkflowService ModSourceChecks()
+ {
+  if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
+  if(modSourceCheckWorkflow!=null&&
+   !string.Equals(modSourceCheckRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+   modSourceCheckWorkflow.CancelAll();
+  if(modSourceCheckWorkflow==null||
+   !string.Equals(modSourceCheckRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
+  {
+   modSourceCheckWorkflow=new ModSourceCheckWorkflowService(
+    selectedInstallRoot,
+    new InfrastructureModSourceCheckBackend(
+     GitHubUpdates(),Discovery(),WorkshopSources(),WorkshopUpdates()));
+   modSourceCheckRoot=selectedInstallRoot;
+  }
+  return modSourceCheckWorkflow;
+ }
+ bool IsCurrentModSourceScope(string root,ModInventory inventory,ManagedMod mod)=>
+  !modInventoryDirty&&
+  root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
+  ReferenceEquals(inventory,modInventory)&&
+  modInventory?.Mods.Any(item=>
+   item.Folder.Equals(mod.Folder,StringComparison.OrdinalIgnoreCase)&&
+   item.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)&&
+   item.Version.Equals(mod.Version,StringComparison.Ordinal))==true;
+
  GitHubModUpdates? githubModUpdates;
  GitHubModDiscovery? githubDiscovery;
  GitHubModDiscovery Discovery()=>githubDiscovery??=new GitHubModDiscovery();
@@ -500,6 +528,7 @@ public partial class MainWindow
   }
   if(selectedInstallRoot==null){LocateGame();return;}
   string root=selectedInstallRoot;
+  modSourceCheckWorkflow?.CancelAll();
   modInventoryRefreshRunning=true;
   activeModInventoryRefreshRoot=root;
   var initialStamp=new ModInventoryRefreshStamp(
