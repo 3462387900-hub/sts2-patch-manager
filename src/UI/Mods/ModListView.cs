@@ -13,7 +13,8 @@ internal sealed record ModListRow(
  string DependencyText="",
  bool DependencyIssue=false,
  bool IsDependencyProtection=false,
- int RelatedEnabledDependents=0)
+ int RelatedEnabledDependents=0,
+ bool HasUpdate=false)
 {
  public bool Selected{get;set;}
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
@@ -52,17 +53,33 @@ internal static class ModListView
     readiness.IsDependencyProtection,readiness.RelatedEnabledDependentCount);
   }).OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
 
+ internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,
+  Func<ManagedMod,ModSourceCheckResult> sourceCheck,
+  Func<ManagedMod,string>? dependency,
+  Func<ManagedMod,bool>? dependencyIssue,
+  Func<ManagedMod,ModTogglePreflightDiagnostic> toggleDiagnostic)=>
+  inventory.Mods.Select(mod=>{
+   var readiness=toggleDiagnostic(mod);
+   var source=sourceCheck(mod);
+   return new ModListRow(mod,
+    ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
+    readiness.Message,source.SummaryText,
+    dependency?.Invoke(mod)??"未分析",dependencyIssue?.Invoke(mod)??false,
+    readiness.IsDependencyProtection,readiness.RelatedEnabledDependentCount,
+    source.HasUpdate);
+  }).OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+
  // State (enabled/disabled) and attention filters compose instead of competing.
  // Preserve the original four-argument API for existing callers.
  internal static ModListRow[] Filter(IReadOnlyList<ModListRow> rows,string section,string state,string query,
   string attention="所有状态")=>
   rows.Where(row=>row.IsFix==(section=="修复补丁")&&
    (state=="全部"||(state=="启用"&&row.Mod.Enabled)||(state=="停用"&&!row.Mod.Enabled)||
-   (state=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
+   (state=="有更新"&&row.HasUpdate)||
    (state=="有问题"&&row.BlockReason!=null)||
    (state=="依赖异常"&&row.DependencyIssue))&&
    (attention=="所有状态"||
-    (attention=="有更新"&&row.GitHubText.Contains("有更新",StringComparison.Ordinal))||
+    (attention=="有更新"&&row.HasUpdate)||
     (attention=="有问题"&&row.BlockReason!=null)||
     (attention=="依赖异常"&&row.DependencyIssue))&&
    (row.Mod.Name+" "+row.Mod.Id+" "+row.Mod.Author).Contains(query,StringComparison.OrdinalIgnoreCase))
