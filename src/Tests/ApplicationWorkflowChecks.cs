@@ -657,7 +657,8 @@ internal static class ApplicationWorkflowChecks
                 new ModSourceBackendDiscoveryCandidate("other-owner/similar-candidate",
                     "仓库名称相似；尚未核验 MOD ID", 42, false)
             ], "存在待确认候选"),
-            null, null, WorkshopBaselineState.Unbound));
+            null, null, WorkshopBaselineState.Unbound,
+            DateTimeOffset.UtcNow));
         sourceRecognitionBackend.Set(sourceUnknownMod.Id, new ModSourceBackendSnapshot(
             null, null, null, null, null, WorkshopBaselineState.Unbound));
         var sourceRecognition = new ModSourceCheckWorkflowService(
