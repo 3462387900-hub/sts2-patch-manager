@@ -82,15 +82,15 @@ internal static class ApplicationWorkflowChecks
         public int DownloadCount { get; private set; }
         public int InstallCount { get; private set; }
 
-        public Func<ManagedMod, CancellationToken, Task<GitHubSourceDiscoveryResult>> DiscoveryHandler { get; set; } =
-            (mod, _) => Task.FromResult(new GitHubSourceDiscoveryResult(
+        public Func<ManagedMod, CancellationToken, Task<ModSourceBackendDiscoveryResult>> DiscoveryHandler { get; set; } =
+            (mod, _) => Task.FromResult(new ModSourceBackendDiscoveryResult(
                 mod.Id, [], "模拟未找到来源"));
-        public Func<ManagedMod, CancellationToken, Task<GitHubModResult>> GitHubCheckHandler { get; set; } =
-            (mod, _) => Task.FromResult(new GitHubModResult(
+        public Func<ManagedMod, CancellationToken, Task<ModSourceBackendGitHubCheck>> GitHubCheckHandler { get; set; } =
+            (mod, _) => Task.FromResult(new ModSourceBackendGitHubCheck(
                 "fixture/" + mod.Id, mod.Version, "2.0.0", "https://github.com/fixture/repo/releases/tag/2.0.0",
                 "有更新", "模拟发现更新", DateTimeOffset.UtcNow));
-        public Func<ManagedMod, ulong, CancellationToken, Task<WorkshopModUpdateResult>> WorkshopCheckHandler { get; set; } =
-            (mod, workshopId, _) => Task.FromResult(new WorkshopModUpdateResult(
+        public Func<ManagedMod, ulong, CancellationToken, Task<ModSourceBackendWorkshopCheck>> WorkshopCheckHandler { get; set; } =
+            (mod, workshopId, _) => Task.FromResult(new ModSourceBackendWorkshopCheck(
                 workshopId, mod.Version, "Fixture Workshop", "2.0.0", "200",
                 "有更新", "模拟发现创意工坊更新", DateTimeOffset.UtcNow));
 
@@ -110,21 +110,21 @@ internal static class ApplicationWorkflowChecks
                         null, null, null, null, null, WorkshopBaselineState.Unbound);
         }
 
-        public Task<GitHubSourceDiscoveryResult> DiscoverGitHubAsync(
+        public Task<ModSourceBackendDiscoveryResult> DiscoverGitHubAsync(
             ManagedMod mod, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref discoveryCount);
             return DiscoveryHandler(mod, cancellationToken);
         }
 
-        public Task<GitHubModResult> CheckGitHubAsync(
+        public Task<ModSourceBackendGitHubCheck> CheckGitHubAsync(
             ManagedMod mod, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref githubCheckCount);
             return GitHubCheckHandler(mod, cancellationToken);
         }
 
-        public Task<WorkshopModUpdateResult> CheckWorkshopAsync(
+        public Task<ModSourceBackendWorkshopCheck> CheckWorkshopAsync(
             ManagedMod mod, ulong workshopId, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref workshopCheckCount);
@@ -650,11 +650,11 @@ internal static class ApplicationWorkflowChecks
             WorkshopBaselineState.Current));
         sourceRecognitionBackend.Set(sourceCandidateMod.Id, new ModSourceBackendSnapshot(
             null, null,
-            new GitHubSourceDiscoveryResult(sourceCandidateMod.Id,
+            new ModSourceBackendDiscoveryResult(sourceCandidateMod.Id,
             [
-                new GitHubSourceCandidate("fixture-owner/source-candidate",
+                new ModSourceBackendDiscoveryCandidate("fixture-owner/source-candidate",
                     "MOD 清单声明的 GitHub 来源：github_url", 100, true),
-                new GitHubSourceCandidate("other-owner/similar-candidate",
+                new ModSourceBackendDiscoveryCandidate("other-owner/similar-candidate",
                     "仓库名称相似；尚未核验 MOD ID", 42, false)
             ], "存在待确认候选"),
             null, null, WorkshopBaselineState.Unbound));
@@ -692,21 +692,21 @@ internal static class ApplicationWorkflowChecks
         var cacheBackend = new FakeModSourceCheckBackend();
         cacheBackend.Set(cacheMod.Id, new ModSourceBackendSnapshot(
             "fixture-owner/source-cache",
-            new GitHubModResult("fixture-owner/source-cache", cacheMod.Version, "2.0.0",
+            new ModSourceBackendGitHubCheck("fixture-owner/source-cache", cacheMod.Version, "2.0.0",
                 "https://github.com/fixture-owner/source-cache/releases/tag/2.0.0",
                 "有更新", "缓存中的更新", sourceClock.AddMinutes(-10)),
             null,
             76561198000000002UL,
-            new WorkshopModUpdateResult(76561198000000002UL, cacheMod.Version,
+            new ModSourceBackendWorkshopCheck(76561198000000002UL, cacheMod.Version,
                 "Source Cache", "1.0.0", "200", "已是最新",
                 "缓存中的创意工坊结果", sourceClock.AddMinutes(-5)),
             WorkshopBaselineState.Current));
         cacheBackend.GitHubCheckHandler = (mod, _) => Task.FromResult(
-            new GitHubModResult("fixture-owner/source-cache", mod.Version, "2.1.0",
+            new ModSourceBackendGitHubCheck("fixture-owner/source-cache", mod.Version, "2.1.0",
                 "https://github.com/fixture-owner/source-cache/releases/tag/2.1.0",
                 "已是最新", "刷新后的 GitHub 结果", sourceClock));
         cacheBackend.WorkshopCheckHandler = (mod, id, _) => Task.FromResult(
-            new WorkshopModUpdateResult(id, mod.Version, "Source Cache", "2.0.0", "201",
+            new ModSourceBackendWorkshopCheck(id, mod.Version, "Source Cache", "2.0.0", "201",
                 "有更新", "刷新后的 Workshop 结果", sourceClock));
         var cacheWorkflow = new ModSourceCheckWorkflowService(
             sourceGameRoot, cacheBackend, () => sourceClock);
@@ -746,9 +746,9 @@ internal static class ApplicationWorkflowChecks
         discoveryCacheBackend.DiscoveryHandler = (mod, _) =>
         {
             Interlocked.Increment(ref discoveryCalls);
-            return Task.FromResult(new GitHubSourceDiscoveryResult(
+            return Task.FromResult(new ModSourceBackendDiscoveryResult(
                 mod.Id,
-                [new GitHubSourceCandidate("fixture-owner/discovery-cache",
+                [new ModSourceBackendDiscoveryCandidate("fixture-owner/discovery-cache",
                     "仓库 MOD ID 已核验", 98, true)],
                 "模拟来源候选"));
         };
@@ -779,9 +779,9 @@ internal static class ApplicationWorkflowChecks
             "fixture-owner/source-latest", null, null, null, null, WorkshopBaselineState.Unbound));
         outcomeBackend.GitHubCheckHandler = (mod, _) => Task.FromResult(
             mod.Id == updateMod.Id
-                ? new GitHubModResult("fixture-owner/source-update", mod.Version, "2.0.0", "",
+                ? new ModSourceBackendGitHubCheck("fixture-owner/source-update", mod.Version, "2.0.0", "",
                     "有更新", "发现更高版本", sourceClock)
-                : new GitHubModResult("fixture-owner/source-latest", mod.Version, "1.0.0", "",
+                : new ModSourceBackendGitHubCheck("fixture-owner/source-latest", mod.Version, "1.0.0", "",
                     "已是最新", "本地版本已是最新", sourceClock));
         var outcomeWorkflow = new ModSourceCheckWorkflowService(
             sourceGameRoot, outcomeBackend, () => sourceClock);
@@ -800,7 +800,7 @@ internal static class ApplicationWorkflowChecks
         var failureBackend = new FakeModSourceCheckBackend();
         failureBackend.Set(failureMod.Id, new ModSourceBackendSnapshot(
             "fixture-owner/source-failure",
-            new GitHubModResult("fixture-owner/source-failure", failureMod.Version, "2.0.0", "",
+            new ModSourceBackendGitHubCheck("fixture-owner/source-failure", failureMod.Version, "2.0.0", "",
                 "有更新", "上一次成功结果", sourceClock),
             null, null, null, WorkshopBaselineState.Unbound));
         failureBackend.GitHubCheckHandler = (_, _) =>
@@ -834,7 +834,7 @@ internal static class ApplicationWorkflowChecks
         invalidSourceBackend.Set(invalidSourceMod.Id, new ModSourceBackendSnapshot(
             "fixture-owner/deleted-source", null, null, null, null, WorkshopBaselineState.Unbound));
         invalidSourceBackend.GitHubCheckHandler = (mod, _) => Task.FromResult(
-            new GitHubModResult("fixture-owner/deleted-source", mod.Version, "", "",
+            new ModSourceBackendGitHubCheck("fixture-owner/deleted-source", mod.Version, "", "",
                 "无法检测", "仓库不存在或没有正式 Release", sourceClock));
         var invalidSourceWorkflow = new ModSourceCheckWorkflowService(
             sourceGameRoot, invalidSourceBackend, () => sourceClock);
@@ -865,7 +865,7 @@ internal static class ApplicationWorkflowChecks
             "fixture-owner/source-concurrent", null, null, null, null, WorkshopBaselineState.Unbound));
         var firstCheckEntered = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        var releaseFirstCheck = new TaskCompletionSource<GitHubModResult>(
+        var releaseFirstCheck = new TaskCompletionSource<ModSourceBackendGitHubCheck>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         int concurrentCalls = 0;
         concurrentBackend.GitHubCheckHandler = (mod, _) =>
@@ -877,7 +877,7 @@ internal static class ApplicationWorkflowChecks
                 // Deliberately ignores cancellation to prove that a late backend result cannot publish.
                 return releaseFirstCheck.Task;
             }
-            return Task.FromResult(new GitHubModResult(
+            return Task.FromResult(new ModSourceBackendGitHubCheck(
                 "fixture-owner/source-concurrent", mod.Version, "3.0.0", "",
                 "有更新", "较新的并发请求", sourceClock));
         };
@@ -886,7 +886,7 @@ internal static class ApplicationWorkflowChecks
         var firstCheck = concurrentWorkflow.CheckGitHubAsync(concurrentMod, force: true);
         await firstCheckEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var secondCheck = await concurrentWorkflow.CheckGitHubAsync(concurrentMod, force: true);
-        releaseFirstCheck.TrySetResult(new GitHubModResult(
+        releaseFirstCheck.TrySetResult(new ModSourceBackendGitHubCheck(
             "fixture-owner/source-concurrent", concurrentMod.Version, "2.0.0", "",
             "有更新", "较早的并发请求", sourceClock));
         var firstCheckResult = await firstCheck.WaitAsync(TimeSpan.FromSeconds(5));
@@ -902,7 +902,7 @@ internal static class ApplicationWorkflowChecks
             "fixture-owner/source-cancel", null, null, null, null, WorkshopBaselineState.Unbound));
         var cancelEntered = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        var releaseCancelledCheck = new TaskCompletionSource<GitHubModResult>(
+        var releaseCancelledCheck = new TaskCompletionSource<ModSourceBackendGitHubCheck>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         cancelBackend.GitHubCheckHandler = (mod, _) =>
         {
@@ -917,7 +917,7 @@ internal static class ApplicationWorkflowChecks
                 cancelMod, force: true, cancellationToken: userCancellation.Token);
             await cancelEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             userCancellation.Cancel();
-            releaseCancelledCheck.TrySetResult(new GitHubModResult(
+            releaseCancelledCheck.TrySetResult(new ModSourceBackendGitHubCheck(
                 "fixture-owner/source-cancel", cancelMod.Version, "9.0.0", "",
                 "有更新", "不应发布的取消结果", sourceClock));
             var cancelledCheck = await pendingCheck.WaitAsync(TimeSpan.FromSeconds(5));
@@ -933,8 +933,8 @@ internal static class ApplicationWorkflowChecks
         readOnlyBackend.Set(sourceCandidateMod.Id, new ModSourceBackendSnapshot(
             null, null, null, null, null, WorkshopBaselineState.Unbound));
         readOnlyBackend.DiscoveryHandler = (mod, _) => Task.FromResult(
-            new GitHubSourceDiscoveryResult(mod.Id,
-                [new GitHubSourceCandidate("fixture-owner/source-candidate",
+            new ModSourceBackendDiscoveryResult(mod.Id,
+                [new ModSourceBackendDiscoveryCandidate("fixture-owner/source-candidate",
                     "仓库 MOD ID 已核验", 98, true)],
                 "模拟候选来源"));
         var readOnlyWorkflow = new ModSourceCheckWorkflowService(
