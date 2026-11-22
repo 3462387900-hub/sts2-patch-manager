@@ -186,7 +186,8 @@ internal sealed record ModSourceBackendSnapshot(
     ModSourceBackendDiscoveryResult? GitHubDiscoveryCached,
     ulong? WorkshopId,
     ModSourceBackendWorkshopCheck? WorkshopCached,
-    WorkshopBaselineState WorkshopBaseline);
+    WorkshopBaselineState WorkshopBaseline,
+    DateTimeOffset? GitHubDiscoveryCheckedAt = null);
 
 internal interface IModSourceCheckBackend
 {
@@ -282,11 +283,15 @@ internal sealed class ModSourceCheckWorkflowService
             : snapshot.GitHubCached;
         Failure? githubFailure = githubMatches ? state.GitHubFailure : null;
         ModSourceBackendDiscoveryResult? discoveryResult = githubMatches
-            ? state.DiscoveryResult ?? snapshot.GitHubDiscoveryCached
-            : snapshot.GitHubDiscoveryCached;
-        DateTimeOffset? discoveryCheckedAt = githubMatches
+            ? state.DiscoveryResult ?? (snapshot.GitHubDiscoveryCheckedAt.HasValue
+                ? snapshot.GitHubDiscoveryCached
+                : null)
+            : snapshot.GitHubDiscoveryCheckedAt.HasValue
+                ? snapshot.GitHubDiscoveryCached
+                : null;
+        DateTimeOffset? discoveryCheckedAt = githubMatches && state.DiscoveryResult is not null
             ? state.DiscoveryCheckedAt
-            : null;
+            : snapshot.GitHubDiscoveryCheckedAt;
         Failure? discoveryFailure = githubMatches ? state.DiscoveryFailure : null;
 
         ModSourceBackendWorkshopCheck? workshopResult = workshopMatches
@@ -515,12 +520,11 @@ internal sealed class ModSourceCheckWorkflowService
                 GitHubFailure: IsGitHubFailure(snapshot.GitHubCached)
                     ? FailureFromMessage(snapshot.GitHubCached!.Message, snapshot.GitHubCached.CheckedAt)
                     : null,
-                DiscoveryResult: snapshot.GitHubDiscoveryCached is { Retryable: false }
+                DiscoveryResult: snapshot.GitHubDiscoveryCached is { Retryable: false } &&
+                    snapshot.GitHubDiscoveryCheckedAt.HasValue
                     ? snapshot.GitHubDiscoveryCached
                     : null,
-                DiscoveryCheckedAt: snapshot.GitHubDiscoveryCached is { Retryable: false }
-                    ? utcNow()
-                    : null,
+                DiscoveryCheckedAt: snapshot.GitHubDiscoveryCheckedAt,
                 DiscoveryFailure: snapshot.GitHubDiscoveryCached is { Retryable: true }
                     ? FailureFromMessage(snapshot.GitHubDiscoveryCached.Note, utcNow())
                     : null,
