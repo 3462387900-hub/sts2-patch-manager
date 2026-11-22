@@ -94,6 +94,7 @@ public partial class MainWindow
   split.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(300)});
   var left=new StackPanel();var right=new StackPanel();
   split.Children.Add(left);Grid.SetColumn(right,2);split.Children.Add(right);
+  root.Children.Add(split);
 
   void Select(ManagedMod mod)
   {
