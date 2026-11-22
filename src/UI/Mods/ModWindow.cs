@@ -225,11 +225,12 @@ public partial class MainWindow
  void BindGitHubMod(ManagedMod mod)
  {
   var updates=GitHubUpdates();
+  string? currentRepository=ModSourceChecks().Inspect(mod).GitHub.Identifier;
   var dialog=new Window{Title="关联 GitHub 仓库 · "+mod.Name,Owner=this,Width=550,Height=225,
    WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
   var body=new StackPanel{Margin=new Thickness(18)};
   body.Children.Add(T("输入公开 GitHub 仓库地址（检测正式 Release，并支持校验后安装）：",13,muted));
-  var input=new TextBox{Text=updates.Repository(mod.Id)??"",Margin=new Thickness(0,12,0,12)};
+  var input=new TextBox{Text=currentRepository??"",Margin=new Thickness(0,12,0,12)};
   body.Children.Add(input);
   var hint=T("示例：https://github.com/作者/仓库。绑定按 MOD ID 保存，不改变模组文件。",11,muted);
   body.Children.Add(hint);
@@ -246,7 +247,9 @@ public partial class MainWindow
   ulong workshopId=presetWorkshopId??0;
   if(!presetWorkshopId.HasValue)
   {
-   ulong? savedId=target==null?null:WorkshopSources().Get(target.Id);
+   ulong? savedId=target!=null&&
+    ulong.TryParse(ModSourceChecks().Inspect(target).Workshop.Identifier,out ulong parsedWorkshopId)
+     ?parsedWorkshopId:null;
    var dialog=new Window{Title="从尖塔补给站下载 MOD",Owner=this,Width=560,Height=245,
     MinWidth=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
    var body=new StackPanel{Margin=new Thickness(18)};
