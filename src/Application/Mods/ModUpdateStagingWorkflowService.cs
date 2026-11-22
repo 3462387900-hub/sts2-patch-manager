@@ -126,6 +126,14 @@ internal sealed record ModUpdateStagingResult(
     DateTimeOffset CompletedAt)
 {
     internal bool ValidationPassed => State == ModUpdateStagingState.Succeeded;
+
+    // Full immutable file hashes are retained separately from the compact change list.
+    // The apply workflow uses them to detect any post-preview target or staging mutation.
+    internal IReadOnlyDictionary<string, string> CurrentFileHashes { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    internal IReadOnlyDictionary<string, string> StagedFileHashes { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class ModUpdateStagingWorkflowService
@@ -294,7 +302,17 @@ internal sealed class ModUpdateStagingWorkflowService
                 ModUpdateStagingFailureKind.None,
                 null,
                 null,
-                utcNow());
+                utcNow())
+            {
+                CurrentFileHashes = currentFiles.ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value.Sha256,
+                    StringComparer.OrdinalIgnoreCase),
+                StagedFileHashes = stagedFiles.ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value.Sha256,
+                    StringComparer.OrdinalIgnoreCase)
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
