@@ -1886,7 +1886,7 @@ public partial class MainWindow
     Space(root,5);
     root.Children.Add(T("创意工坊状态："+workshop.Status+" · "+workshop.Message,11,
      workshop.CanUpdate?gold:muted));
-    if(workshop.RemoteManifestId?.Length>0)
+    if(!string.IsNullOrWhiteSpace(workshop.RemoteManifestId))
      root.Children.Add(T("远端 Manifest："+workshop.RemoteManifestId,10,muted));
     if(workshop.CheckedAt.HasValue)
      root.Children.Add(T("检查于 "+workshop.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),10,muted));
@@ -1927,6 +1927,8 @@ public partial class MainWindow
     if(!string.IsNullOrWhiteSpace(github.Url))
      root.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(github.Url),"Ghost"));
    }
+   else if(github.State==ModSourceCheckState.Failed)
+    root.Children.Add(T("GitHub 检查失败："+github.Message,12,gold));
    else if(github.IsBound)root.Children.Add(T("尚未检查该仓库。",12,muted));
 
    if(!github.IsBound&&github.Candidates.Count>0)
