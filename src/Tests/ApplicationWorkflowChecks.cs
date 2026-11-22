@@ -1302,5 +1302,6 @@ internal static class ApplicationWorkflowChecks
             "coop workflow preserves a middle-step failure, does not continue later steps and still performs a fresh comparison");
         await ModUpdateStagingWorkflowChecks.RunAsync(home, check);
         await ModUpdateApplyWorkflowChecks.RunAsync(home, check);
+        await LocalModZipImportWorkflowChecks.RunAsync(home, check);
     }
 }
