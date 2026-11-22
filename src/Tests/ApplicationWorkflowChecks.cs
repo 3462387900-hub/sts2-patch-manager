@@ -621,6 +621,309 @@ internal static class ApplicationWorkflowChecks
             satisfiedReadiness.CanProceed && satisfiedReadiness.Message is null,
             "dependency diagnostics share Domain version parsing for mismatched and compatible prerequisite ranges");
 
+        // MOD source checks: every backend is fake and every fixture stays inside this workflow's temp root.
+        string sourceGameRoot = Path.Combine(home, "source-check-game");
+        Directory.CreateDirectory(sourceGameRoot);
+        File.WriteAllText(Path.Combine(sourceGameRoot, "SlayTheSpire2.exe"), "source-check-fixture");
+
+        ManagedMod SourceFixture(string id, string name)
+        {
+            string folder = Path.Combine(sourceGameRoot, "mods", name);
+            Directory.CreateDirectory(folder);
+            string manifest = Path.Combine(folder, "mod_manifest.json");
+            File.WriteAllText(manifest, JsonSerializer.Serialize(new
+            {
+                id, name, version = "1.0.0", author = "fixture", has_dll = true
+            }));
+            File.WriteAllText(Path.Combine(folder, name + ".dll"), "fixture payload");
+            return new ManagedMod(
+                id, name, "1.0.0", "fixture", "fixture description",
+                folder, manifest, true, []);
+        }
+
+        var sourceBoundMod = SourceFixture("fixture.source.bound", "Source Bound");
+        var sourceCandidateMod = SourceFixture("fixture.source.candidate", "Source Candidate");
+        var sourceUnknownMod = SourceFixture("fixture.source.unknown", "Source Unknown");
+        var sourceRecognitionBackend = new FakeModSourceCheckBackend();
+        sourceRecognitionBackend.Set(sourceBoundMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-bound", null, null, 76561198000000001UL, null,
+            WorkshopBaselineState.Current));
+        sourceRecognitionBackend.Set(sourceCandidateMod.Id, new ModSourceBackendSnapshot(
+            null, null,
+            new GitHubSourceDiscoveryResult(sourceCandidateMod.Id,
+            [
+                new GitHubSourceCandidate("fixture-owner/source-candidate",
+                    "MOD 清单声明的 GitHub 来源：github_url", 100, true),
+                new GitHubSourceCandidate("other-owner/similar-candidate",
+                    "仓库名称相似；尚未核验 MOD ID", 42, false)
+            ], "存在待确认候选"),
+            null, null, WorkshopBaselineState.Unbound));
+        sourceRecognitionBackend.Set(sourceUnknownMod.Id, new ModSourceBackendSnapshot(
+            null, null, null, null, null, WorkshopBaselineState.Unbound));
+        var sourceRecognition = new ModSourceCheckWorkflowService(
+            sourceGameRoot, sourceRecognitionBackend);
+        var boundSnapshot = sourceRecognition.Inspect(sourceBoundMod);
+        var candidateSnapshot = sourceRecognition.Inspect(sourceCandidateMod);
+        var unknownSnapshot = sourceRecognition.Inspect(sourceUnknownMod);
+        check(boundSnapshot.GitHub.IsBound &&
+            boundSnapshot.GitHub.Identifier == "fixture-owner/source-bound" &&
+            boundSnapshot.GitHub.Trust == ModSourceTrustLevel.UserConfirmed &&
+            boundSnapshot.Workshop.IsBound &&
+            boundSnapshot.Workshop.Identifier == "76561198000000001" &&
+            boundSnapshot.Workshop.Trust == ModSourceTrustLevel.UserConfirmed &&
+            candidateSnapshot.GitHub.State == ModSourceCheckState.CandidatesFound &&
+            candidateSnapshot.GitHub.Candidates.Any(item =>
+                item.Trust == ModSourceTrustLevel.ManifestDeclared) &&
+            candidateSnapshot.GitHub.Candidates.Any(item =>
+                item.Trust == ModSourceTrustLevel.UnverifiedCandidate) &&
+            unknownSnapshot.GitHub.State == ModSourceCheckState.Unbound &&
+            unknownSnapshot.GitHub.Trust == ModSourceTrustLevel.Unbound &&
+            unknownSnapshot.Workshop.State == ModSourceCheckState.Unbound,
+            "source diagnostics distinguish confirmed GitHub/Workshop bindings, declared and unverified GitHub candidates, and unknown sources");
+
+        DateTimeOffset sourceClock = new(2026, 11, 22, 12, 0, 0, TimeSpan.Zero);
+        var cacheMod = SourceFixture("fixture.source.cache", "Source Cache");
+        var cacheBackend = new FakeModSourceCheckBackend();
+        cacheBackend.Set(cacheMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-cache",
+            new GitHubModResult("fixture-owner/source-cache", cacheMod.Version, "2.0.0",
+                "https://github.com/fixture-owner/source-cache/releases/tag/2.0.0",
+                "有更新", "缓存中的更新", sourceClock.AddMinutes(-10)),
+            null,
+            76561198000000002UL,
+            new WorkshopModUpdateResult(76561198000000002UL, cacheMod.Version,
+                "Source Cache", "1.0.0", "200", "已是最新",
+                "缓存中的创意工坊结果", sourceClock.AddMinutes(-5)),
+            WorkshopBaselineState.Current));
+        cacheBackend.GitHubCheckHandler = (mod, _) => Task.FromResult(
+            new GitHubModResult("fixture-owner/source-cache", mod.Version, "2.1.0",
+                "https://github.com/fixture-owner/source-cache/releases/tag/2.1.0",
+                "已是最新", "刷新后的 GitHub 结果", sourceClock));
+        cacheBackend.WorkshopCheckHandler = (mod, id, _) => Task.FromResult(
+            new WorkshopModUpdateResult(id, mod.Version, "Source Cache", "2.0.0", "201",
+                "有更新", "刷新后的 Workshop 结果", sourceClock));
+        var cacheWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, cacheBackend, () => sourceClock);
+        var cachedSnapshot = cacheWorkflow.Inspect(cacheMod);
+        var cachedGitHub = await cacheWorkflow.CheckGitHubAsync(cacheMod);
+        var cachedWorkshop = await cacheWorkflow.CheckWorkshopAsync(cacheMod);
+        check(cachedSnapshot.GitHub.CacheState == ModSourceCacheState.Fresh &&
+            cachedSnapshot.GitHub.CacheHit &&
+            cachedSnapshot.Workshop.CacheState == ModSourceCacheState.Fresh &&
+            cachedSnapshot.Workshop.CacheHit &&
+            cachedGitHub.GitHub.CacheHit && cachedWorkshop.Workshop.CacheHit &&
+            cacheBackend.GitHubCheckCount == 0 && cacheBackend.WorkshopCheckCount == 0,
+            "fresh local GitHub and Workshop results are reused without a network check");
+
+        sourceClock = sourceClock.AddMinutes(31);
+        var expiredSnapshot = cacheWorkflow.Inspect(cacheMod);
+        var refreshedGitHub = await cacheWorkflow.CheckGitHubAsync(cacheMod);
+        var refreshedWorkshop = await cacheWorkflow.CheckWorkshopAsync(cacheMod);
+        check(expiredSnapshot.GitHub.CacheState == ModSourceCacheState.Expired &&
+            expiredSnapshot.Workshop.CacheState == ModSourceCacheState.Expired &&
+            !refreshedGitHub.GitHub.CacheHit &&
+            refreshedGitHub.GitHub.Status == "已是最新" &&
+            !refreshedWorkshop.Workshop.CacheHit &&
+            refreshedWorkshop.Workshop.Status == "有更新" &&
+            cacheBackend.GitHubCheckCount == 1 && cacheBackend.WorkshopCheckCount == 1,
+            "expired local results are rechecked and replaced with the new read-only result");
+        var cacheHitAfterRefresh = await cacheWorkflow.CheckGitHubAsync(cacheMod);
+        var forcedRefresh = await cacheWorkflow.CheckGitHubAsync(cacheMod, force: true);
+        check(cacheHitAfterRefresh.GitHub.CacheHit &&
+            !forcedRefresh.GitHub.CacheHit &&
+            cacheBackend.GitHubCheckCount == 2,
+            "an explicit force refresh bypasses a fresh local cache while ordinary checks continue to reuse it");
+
+        var updateMod = SourceFixture("fixture.source.update", "Source Update");
+        var latestMod = SourceFixture("fixture.source.latest", "Source Latest");
+        var outcomeBackend = new FakeModSourceCheckBackend();
+        outcomeBackend.Set(updateMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-update", null, null, null, null, WorkshopBaselineState.Unbound));
+        outcomeBackend.Set(latestMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-latest", null, null, null, null, WorkshopBaselineState.Unbound));
+        outcomeBackend.GitHubCheckHandler = (mod, _) => Task.FromResult(
+            mod.Id == updateMod.Id
+                ? new GitHubModResult("fixture-owner/source-update", mod.Version, "2.0.0", "",
+                    "有更新", "发现更高版本", sourceClock)
+                : new GitHubModResult("fixture-owner/source-latest", mod.Version, "1.0.0", "",
+                    "已是最新", "本地版本已是最新", sourceClock));
+        var outcomeWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, outcomeBackend, () => sourceClock);
+        var updateOutcome = await outcomeWorkflow.CheckGitHubAsync(updateMod, force: true);
+        var latestOutcome = await outcomeWorkflow.CheckGitHubAsync(latestMod, force: true);
+        check(updateOutcome.GitHub.State == ModSourceCheckState.UpdateAvailable &&
+            updateOutcome.GitHub.CanUpdate &&
+            updateOutcome.GitHub.LocalVersion == updateMod.Version &&
+            updateOutcome.GitHub.LatestVersion == "2.0.0" &&
+            latestOutcome.GitHub.State == ModSourceCheckState.UpToDate &&
+            !latestOutcome.GitHub.CanUpdate &&
+            latestOutcome.GitHub.LatestVersion == "1.0.0",
+            "source check results distinguish an available newer version from an already-current MOD");
+
+        var failureMod = SourceFixture("fixture.source.failure", "Source Failure");
+        var failureBackend = new FakeModSourceCheckBackend();
+        failureBackend.Set(failureMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-failure",
+            new GitHubModResult("fixture-owner/source-failure", failureMod.Version, "2.0.0", "",
+                "有更新", "上一次成功结果", sourceClock),
+            null, null, null, WorkshopBaselineState.Unbound));
+        failureBackend.GitHubCheckHandler = (_, _) =>
+            throw new System.Net.Http.HttpRequestException("模拟网络异常");
+        var failureWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, failureBackend, () => sourceClock);
+        var networkFailure = await failureWorkflow.CheckGitHubAsync(failureMod, force: true);
+        check(networkFailure.GitHub.State == ModSourceCheckState.Failed &&
+            networkFailure.GitHub.FailureKind == ModSourceFailureKind.Network &&
+            networkFailure.GitHub.FailureReason?.Contains("模拟网络异常", StringComparison.Ordinal) == true &&
+            networkFailure.GitHub.LatestVersion == "2.0.0" &&
+            !networkFailure.GitHub.CanUpdate,
+            "network failure is returned as structured diagnostics without replacing the last successful version");
+
+        var timeoutMod = SourceFixture("fixture.source.timeout", "Source Timeout");
+        var timeoutBackend = new FakeModSourceCheckBackend();
+        timeoutBackend.Set(timeoutMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-timeout", null, null, null, null, WorkshopBaselineState.Unbound));
+        timeoutBackend.GitHubCheckHandler = (_, _) =>
+            throw new TimeoutException("模拟请求超时");
+        var timeoutWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, timeoutBackend, () => sourceClock);
+        var timeoutOutcome = await timeoutWorkflow.CheckGitHubAsync(timeoutMod, force: true);
+        check(timeoutOutcome.GitHub.State == ModSourceCheckState.Failed &&
+            timeoutOutcome.GitHub.FailureKind == ModSourceFailureKind.Timeout &&
+            timeoutOutcome.GitHub.FailureReason?.Contains("模拟请求超时", StringComparison.Ordinal) == true,
+            "timeout failures are structured and do not escape the Application workflow");
+
+        var invalidSourceMod = SourceFixture("fixture.source.invalid", "Source Invalid");
+        var invalidSourceBackend = new FakeModSourceCheckBackend();
+        invalidSourceBackend.Set(invalidSourceMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/deleted-source", null, null, null, null, WorkshopBaselineState.Unbound));
+        invalidSourceBackend.GitHubCheckHandler = (mod, _) => Task.FromResult(
+            new GitHubModResult("fixture-owner/deleted-source", mod.Version, "", "",
+                "无法检测", "仓库不存在或没有正式 Release", sourceClock));
+        var invalidSourceWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, invalidSourceBackend, () => sourceClock);
+        var invalidSourceOutcome = await invalidSourceWorkflow.CheckGitHubAsync(
+            invalidSourceMod, force: true);
+        check(invalidSourceOutcome.GitHub.State == ModSourceCheckState.Failed &&
+            invalidSourceOutcome.GitHub.FailureReason?.Contains("仓库不存在", StringComparison.Ordinal) == true,
+            "an invalid or unavailable source returns a structured failure instead of crashing");
+
+        var workshopFailureMod = SourceFixture("fixture.source.workshop-failure", "Workshop Failure");
+        var workshopFailureBackend = new FakeModSourceCheckBackend();
+        workshopFailureBackend.Set(workshopFailureMod.Id, new ModSourceBackendSnapshot(
+            null, null, null, 76561198000000003UL, null, WorkshopBaselineState.Current));
+        workshopFailureBackend.WorkshopCheckHandler = (_, _, _) =>
+            throw new TimeoutException("模拟创意工坊超时");
+        var workshopFailureWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, workshopFailureBackend, () => sourceClock);
+        var workshopFailure = await workshopFailureWorkflow.CheckWorkshopAsync(
+            workshopFailureMod, force: true);
+        check(workshopFailure.Workshop.State == ModSourceCheckState.Failed &&
+            workshopFailure.Workshop.FailureKind == ModSourceFailureKind.Timeout &&
+            workshopFailure.Workshop.FailureReason?.Contains("模拟创意工坊超时", StringComparison.Ordinal) == true,
+            "Workshop failures are returned through the same structured error model");
+
+        var concurrentMod = SourceFixture("fixture.source.concurrent", "Source Concurrent");
+        var concurrentBackend = new FakeModSourceCheckBackend();
+        concurrentBackend.Set(concurrentMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-concurrent", null, null, null, null, WorkshopBaselineState.Unbound));
+        var firstCheckEntered = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstCheck = new TaskCompletionSource<GitHubModResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        int concurrentCalls = 0;
+        concurrentBackend.GitHubCheckHandler = (mod, _) =>
+        {
+            int call = Interlocked.Increment(ref concurrentCalls);
+            if (call == 1)
+            {
+                firstCheckEntered.TrySetResult(true);
+                // Deliberately ignores cancellation to prove that a late backend result cannot publish.
+                return releaseFirstCheck.Task;
+            }
+            return Task.FromResult(new GitHubModResult(
+                "fixture-owner/source-concurrent", mod.Version, "3.0.0", "",
+                "有更新", "较新的并发请求", sourceClock));
+        };
+        var concurrentWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, concurrentBackend, () => sourceClock);
+        var firstCheck = concurrentWorkflow.CheckGitHubAsync(concurrentMod, force: true);
+        await firstCheckEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var secondCheck = await concurrentWorkflow.CheckGitHubAsync(concurrentMod, force: true);
+        releaseFirstCheck.TrySetResult(new GitHubModResult(
+            "fixture-owner/source-concurrent", concurrentMod.Version, "2.0.0", "",
+            "有更新", "较早的并发请求", sourceClock));
+        var firstCheckResult = await firstCheck.WaitAsync(TimeSpan.FromSeconds(5));
+        var concurrentFinal = concurrentWorkflow.Inspect(concurrentMod);
+        check(secondCheck.GitHub.LatestVersion == "3.0.0" &&
+            (firstCheckResult.Cancelled || firstCheckResult.IsStale) &&
+            concurrentFinal.GitHub.LatestVersion == "3.0.0",
+            "a superseded source check cannot overwrite the result published by a newer request");
+
+        var cancelMod = SourceFixture("fixture.source.cancel", "Source Cancel");
+        var cancelBackend = new FakeModSourceCheckBackend();
+        cancelBackend.Set(cancelMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-cancel", null, null, null, null, WorkshopBaselineState.Unbound));
+        var cancelEntered = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCancelledCheck = new TaskCompletionSource<GitHubModResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        cancelBackend.GitHubCheckHandler = (mod, _) =>
+        {
+            cancelEntered.TrySetResult(true);
+            return releaseCancelledCheck.Task;
+        };
+        var cancelWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, cancelBackend, () => sourceClock);
+        using (var userCancellation = new CancellationTokenSource())
+        {
+            var pendingCheck = cancelWorkflow.CheckGitHubAsync(
+                cancelMod, force: true, cancellationToken: userCancellation.Token);
+            await cancelEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            userCancellation.Cancel();
+            releaseCancelledCheck.TrySetResult(new GitHubModResult(
+                "fixture-owner/source-cancel", cancelMod.Version, "9.0.0", "",
+                "有更新", "不应发布的取消结果", sourceClock));
+            var cancelledCheck = await pendingCheck.WaitAsync(TimeSpan.FromSeconds(5));
+            check(cancelledCheck.Cancelled &&
+                cancelWorkflow.Inspect(cancelMod).GitHub.State == ModSourceCheckState.NotChecked,
+                "cancelling a source check leaves the previously published source state unchanged");
+        }
+
+        var readOnlyBackend = new FakeModSourceCheckBackend();
+        readOnlyBackend.Set(sourceBoundMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-bound", null, null, 76561198000000001UL, null,
+            WorkshopBaselineState.Current));
+        readOnlyBackend.Set(sourceCandidateMod.Id, new ModSourceBackendSnapshot(
+            null, null, null, null, null, WorkshopBaselineState.Unbound));
+        readOnlyBackend.DiscoveryHandler = (mod, _) => Task.FromResult(
+            new GitHubSourceDiscoveryResult(mod.Id,
+                [new GitHubSourceCandidate("fixture-owner/source-candidate",
+                    "仓库 MOD ID 已核验", 98, true)],
+                "模拟候选来源"));
+        var readOnlyWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, readOnlyBackend, () => sourceClock);
+        var beforeReadOnlyFiles = Directory.GetFiles(
+                sourceGameRoot, "*", SearchOption.AllDirectories)
+            .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
+            .Select(file => Path.GetRelativePath(sourceGameRoot, file) + "|" + File.ReadAllText(file))
+            .ToArray();
+        _ = await readOnlyWorkflow.DiscoverGitHubAsync(sourceCandidateMod, force: true);
+        var readOnlyBatch = await readOnlyWorkflow.CheckAllAsync(
+            [sourceBoundMod, sourceCandidateMod, sourceUnknownMod], force: true);
+        var afterReadOnlyFiles = Directory.GetFiles(
+                sourceGameRoot, "*", SearchOption.AllDirectories)
+            .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
+            .Select(file => Path.GetRelativePath(sourceGameRoot, file) + "|" + File.ReadAllText(file))
+            .ToArray();
+        check(readOnlyBatch.GitHubChecked == 1 &&
+            readOnlyBatch.WorkshopChecked == 1 &&
+            beforeReadOnlyFiles.SequenceEqual(afterReadOnlyFiles) &&
+            readOnlyBackend.FileWriteCount == 0 &&
+            readOnlyBackend.DownloadCount == 0 &&
+            readOnlyBackend.InstallCount == 0,
+            "source discovery and update checks use only fake backends and leave every fixture file unchanged without download or install calls");
+
         // MOD inventory refresh: all backends below are fake and all paths are temporary.
         string refreshRoot = Path.Combine(home, "refresh-game");
         string refreshRoot2 = Path.Combine(home, "refresh-game-switched");
