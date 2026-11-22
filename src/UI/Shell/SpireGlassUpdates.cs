@@ -3,14 +3,17 @@ using System.Windows.Controls;
 
 namespace SpirePatch;
 
-// Spire Glass update workspace: GitHub and Workshop sources share one read-only update overview.
+// MOD update workspace renders the structured, read-only Application source diagnostics.
 public partial class MainWindow
 {
- // Read-only MOD update checks are independent of file-transaction `busy`.
- // Checking never holds the global navigation lock.
  bool modUpdateCheckRunning;
  CancellationTokenSource? modUpdateCheckCancellation;
- void CancelModUpdateCheck()=>modUpdateCheckCancellation?.Cancel();
+
+ void CancelModUpdateCheck()
+ {
+  modUpdateCheckCancellation?.Cancel();
+  modSourceCheckWorkflow?.CancelAll();
+ }
 
  void ShowModUpdatesCenter()
  {
@@ -55,14 +58,14 @@ public partial class MainWindow
     Btn("开始扫描",RefreshMods,"Primary"))));
    SetPage("更新中心",root,restore:ShowModUpdatesCenter);return;
   }
-  var updates=GitHubUpdates();
-  var workshopSources=WorkshopSources();
-  var workshopUpdates=WorkshopUpdates();
-  var normal=modInventory.Mods.Where(m=>!ModPresentation.IsIndependentPatch(m)).ToArray();
-  int githubAvailable=normal.Count(m=>updates.Cached(m.Id)?.Status=="有更新");
-  int workshopAvailable=normal.Count(m=>workshopUpdates.Cached(m.Id)?.Status=="有更新");
-  int workshopReview=normal.Count(m=>workshopUpdates.Cached(m.Id)?.Status is "待首次核验" or "本地文件已变化");
-  int workshopBound=normal.Count(m=>workshopSources.Get(m.Id)!=null);
+
+  var sourceChecks=ModSourceChecks();
+  var normal=modInventory.Mods.Where(mod=>!ModPresentation.IsIndependentPatch(mod)).ToArray();
+  var entries=normal.Select(mod=>(Mod:mod,Source:sourceChecks.Inspect(mod))).ToArray();
+  int githubAvailable=entries.Count(item=>item.Source.GitHub.CanUpdate);
+  int workshopAvailable=entries.Count(item=>item.Source.Workshop.CanUpdate);
+  int workshopReview=entries.Count(item=>item.Source.Workshop.NeedsReview);
+  int workshopBound=entries.Count(item=>item.Source.Workshop.IsBound);
   var stats=new WrapPanel{Margin=new Thickness(0,0,0,14)};
   foreach(var (value,label) in new[]{
    (normal.Length.ToString(),"普通 MOD"),
@@ -91,61 +94,65 @@ public partial class MainWindow
   split.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(300)});
   var left=new StackPanel();var right=new StackPanel();
   split.Children.Add(left);Grid.SetColumn(right,2);split.Children.Add(right);
+
   void Select(ManagedMod mod)
   {
    right.Children.Clear();
-   var repo=updates.Repository(mod.Id);var githubInfo=updates.Cached(mod.Id);
-   ulong? workshopId=workshopSources.Get(mod.Id);
-   var workshopInfo=workshopUpdates.Cached(mod.Id);
+   var source=sourceChecks.Inspect(mod);
+   var github=source.GitHub;
+   var workshop=source.Workshop;
    var detail=V(T(mod.Name,17,ink,true),T("本地版本 "+mod.Version+" · "+mod.Author,12,muted));
    Space(detail,12);
    detail.Children.Add(T("GitHub 更新检测",14,ink,true));Space(detail,6);
-   detail.Children.Add(T(repo==null?"尚未关联 GitHub 仓库":"已关联："+repo,12,muted));
+   detail.Children.Add(T(!github.IsBound?"尚未关联 GitHub 仓库":"已关联："+github.Identifier,12,muted));
    Space(detail,6);
-   detail.Children.Add(T(githubInfo==null?"尚未检查 GitHub 正式版本":
-    githubInfo.Status+(githubInfo.LatestVersion.Length>0?" · 最新 "+githubInfo.LatestVersion:""),13,
-    githubInfo?.Status=="有更新"?gold:muted));
-   if(githubInfo!=null){Space(detail,5);detail.Children.Add(T(githubInfo.Message,11,muted));}
-   Space(detail,9);
-   var bind=Btn(repo==null?"关联 GitHub 来源":"管理 GitHub 来源",()=>BindGitHubMod(mod),"Ghost");
+   detail.Children.Add(T(github.Status+
+    (github.LatestVersion.Length>0?" · 最新 "+github.LatestVersion:""),13,
+    github.CanUpdate?gold:muted));
+   if(github.Message.Length>0){Space(detail,5);detail.Children.Add(T(github.Message,11,muted));}
+   if(github.CheckedAt.HasValue)
+   {
+    Space(detail,4);
+    detail.Children.Add(T("检查于 "+github.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),10,muted));
+   }
+   var bind=Btn(github.IsBound?"管理 GitHub 来源":"关联 GitHub 来源",()=>BindGitHubMod(mod),"Ghost");
    bind.Margin=new Thickness(0,0,0,7);detail.Children.Add(bind);
    var check=Btn("检查 GitHub",()=>CheckGitHubMod(mod),"Ghost");
-   check.IsEnabled=repo!=null&&!busy;check.Margin=new Thickness(0,0,0,7);
+   check.IsEnabled=github.IsBound&&!busy;check.Margin=new Thickness(0,0,0,7);
    detail.Children.Add(check);
    var install=Btn("下载并更新 GitHub MOD",()=>UpdateGitHubMod(mod),"Ghost");
-   install.IsEnabled=mod.Enabled&&!busy&&!modInventoryDirty&&githubInfo?.Status=="有更新";
+   install.IsEnabled=mod.Enabled&&!busy&&!modInventoryDirty&&github.CanUpdate;
    install.Margin=new Thickness(0,0,0,7);detail.Children.Add(install);
+   if(!string.IsNullOrWhiteSpace(github.Url))
+    detail.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(github.Url),"Ghost"));
 
    Space(detail,12);detail.Children.Add(Rule());
    detail.Children.Add(T("Steam 创意工坊更新检测",14,ink,true));Space(detail,6);
-   detail.Children.Add(T(workshopId.HasValue?"已关联 Workshop ID："+workshopId.Value:
-    "尚未关联创意工坊来源。",12,muted));
+   detail.Children.Add(T(workshop.IsBound
+    ?"已关联 Workshop ID："+workshop.Identifier
+    :"尚未关联创意工坊来源。",12,muted));
    Space(detail,6);
-   if(workshopInfo!=null)
+   detail.Children.Add(T(workshop.Status,13,workshop.CanUpdate?gold:muted));
+   Space(detail,4);detail.Children.Add(T(workshop.Message,11,muted));
+   if(!string.IsNullOrWhiteSpace(workshop.RemoteManifestId))
    {
-    detail.Children.Add(T(workshopInfo.Status,13,workshopInfo.Status=="有更新"?gold:muted));
-    Space(detail,4);detail.Children.Add(T(workshopInfo.Message,11,muted));
-    if(workshopInfo.RemoteManifestId.Length>0)
-    {
-     Space(detail,4);
-     detail.Children.Add(T("远端 Manifest："+workshopInfo.RemoteManifestId,10,muted));
-    }
-    Space(detail,4);detail.Children.Add(T("检查于 "+workshopInfo.CheckedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),10,muted));
+    Space(detail,4);
+    detail.Children.Add(T("远端 Manifest："+workshop.RemoteManifestId,10,muted));
    }
-   else
+   if(workshop.CheckedAt.HasValue)
    {
-    detail.Children.Add(T(workshopId.HasValue?"尚未检查创意工坊内容。":
-     "关联来源后即可进行只读更新检测。",12,muted));
+    Space(detail,4);
+    detail.Children.Add(T("检查于 "+workshop.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),10,muted));
    }
    Space(detail,9);
-   if(workshopId.HasValue)
+   if(workshop.IsBound)
    {
     var workshopCheck=Btn("检查创意工坊",()=>CheckWorkshopMod(mod),"Ghost");
     workshopCheck.IsEnabled=!busy&&!modInventoryDirty;
     workshopCheck.Margin=new Thickness(0,0,0,7);detail.Children.Add(workshopCheck);
    }
-   string workshopAction=workshopId is null?"关联并核验创意工坊":
-    workshopInfo?.Status switch
+   string workshopAction= !workshop.IsBound?"关联并核验创意工坊":
+    workshop.Status switch
     {
      "待首次核验"=>"首次核验并建立基线",
      "本地文件已变化"=>"重新核验本地文件",
@@ -158,40 +165,31 @@ public partial class MainWindow
    detail.Children.Add(Btn("查看完整详情与备份",()=>ShowModDetail(mod.Folder),"Ghost"));
    right.Children.Add(Card(detail,"#B720344E",15));
   }
+
   void Render()
   {
    left.Children.Clear();
-   var matches=normal.Where(m=>(m.Name+" "+m.Id+" "+m.Author)
+   var matches=entries.Where(item=>(item.Mod.Name+" "+item.Mod.Id+" "+item.Mod.Author)
     .Contains(search.Text,StringComparison.OrdinalIgnoreCase)).ToArray();
    var header=T("显示 "+matches.Length+" / "+normal.Length+" 项 · "+modStatus,12,muted);
    header.Margin=new Thickness(0,0,0,8);left.Children.Add(header);
-   foreach(var mod in matches)
+   foreach(var item in matches)
    {
-    var githubState=updates.Cached(mod.Id);
-    var repo=updates.Repository(mod.Id);
-    ulong? workshopId=workshopSources.Get(mod.Id);
-    var workshopState=workshopUpdates.Cached(mod.Id);
-    string githubText=repo==null?"GitHub 未关联":githubState==null?"GitHub 待检查":
-     "GitHub "+githubState.Status;
-    string workshopText=workshopId==null?"创意工坊未关联":
-     "创意工坊 "+(workshopState?.Status??"待检查");
-    var row=V(T(mod.Name,14,ink,true),
-     T("本地 v"+mod.Version,11,muted),
-     T(githubText+" · "+workshopText,12,muted));
+    var row=V(T(item.Mod.Name,14,ink,true),
+     T("本地 v"+item.Mod.Version,11,muted),
+     T(item.Source.SummaryText,12,muted));
     var button=new Button{Content=row,HorizontalContentAlignment=HorizontalAlignment.Stretch,
      HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(0,0,0,7),
      Padding=new Thickness(13,10,13,10),MinHeight=72};
-    button.Click+=(_,_)=>Select(mod);
+    button.Click+=(_,_)=>Select(item.Mod);
     left.Children.Add(button);
    }
    if(matches.Length==0)left.Children.Add(T("没有符合搜索条件的 MOD。",13,muted));
   }
   search.TextChanged+=(_,_)=>Render();
   Render();
-  if(normal.Length>0)Select(normal.FirstOrDefault(m=>
-   updates.Cached(m.Id)?.Status=="有更新"||workshopUpdates.Cached(m.Id)?.Status=="有更新")??normal[0]);
+  if(entries.Length>0)Select(entries.FirstOrDefault(item=>item.Source.HasUpdate).Mod??normal[0]);
   else right.Children.Add(Card(T("当前没有可管理的普通 MOD。",13,muted)));
   SetPage("更新中心",root,restore:ShowModUpdatesCenter);
-
  }
 }
