@@ -769,6 +769,37 @@ internal static class ApplicationWorkflowChecks
             discoveryCalls == 3,
             "GitHub discovery uses its local cache, rechecks after expiry and honors an explicit force refresh");
 
+        DateTimeOffset seededDiscoveryClock = new(2026, 11, 22, 16, 0, 0, TimeSpan.Zero);
+        var seededDiscoveryMod = SourceFixture("fixture.source.seeded-discovery", "Seeded Discovery");
+        var seededDiscoveryBackend = new FakeModSourceCheckBackend();
+        seededDiscoveryBackend.Set(seededDiscoveryMod.Id, new ModSourceBackendSnapshot(
+            null, null,
+            new ModSourceBackendDiscoveryResult(seededDiscoveryMod.Id,
+                [new ModSourceBackendDiscoveryCandidate("fixture-owner/old-discovery",
+                    "旧缓存候选", 90, true)],
+                "旧的本地来源缓存"),
+            null, null, WorkshopBaselineState.Unbound,
+            seededDiscoveryClock.AddHours(-6).AddMinutes(-1)));
+        int seededDiscoveryRefreshes = 0;
+        seededDiscoveryBackend.DiscoveryHandler = (mod, _) =>
+        {
+            Interlocked.Increment(ref seededDiscoveryRefreshes);
+            return Task.FromResult(new ModSourceBackendDiscoveryResult(
+                mod.Id,
+                [new ModSourceBackendDiscoveryCandidate("fixture-owner/fresh-discovery",
+                    "刷新后的候选", 98, true)],
+                "刷新后的来源缓存"));
+        };
+        var seededDiscoveryWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, seededDiscoveryBackend, () => seededDiscoveryClock);
+        var seededDiscoveryBefore = seededDiscoveryWorkflow.Inspect(seededDiscoveryMod);
+        var seededDiscoveryAfter = await seededDiscoveryWorkflow.DiscoverGitHubAsync(seededDiscoveryMod);
+        check(seededDiscoveryBefore.GitHub.CacheState == ModSourceCacheState.Expired &&
+            seededDiscoveryBefore.GitHub.State == ModSourceCheckState.CacheExpired &&
+            seededDiscoveryAfter.GitHub.Candidates.Single().Repository == "fixture-owner/fresh-discovery" &&
+            seededDiscoveryRefreshes == 1,
+            "an expired discovery cache loaded from Infrastructure retains its original timestamp and is refreshed instead of being treated as new");
+
 
         var updateMod = SourceFixture("fixture.source.update", "Source Update");
         var latestMod = SourceFixture("fixture.source.latest", "Source Latest");
