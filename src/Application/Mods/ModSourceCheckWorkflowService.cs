@@ -618,10 +618,22 @@ internal sealed class ModSourceCheckWorkflowService
                 return new Execution<T>(null, null, linked.IsCancellationRequested, true, false);
 
             T value = await execute(linked.Token);
-            if (!CanPublish())
+            if (linked.IsCancellationRequested || !IsCurrent(isCurrent))
                 return new Execution<T>(value, null, linked.IsCancellationRequested, true, false);
 
-            publishValue(value);
+            lock (gate)
+            {
+                if (currentScope != scopeGeneration ||
+                    !active.TryGetValue(operationKey, out var current) ||
+                    current.Generation != operationGeneration ||
+                    !ReferenceEquals(current.Cancellation, linked) ||
+                    linked.IsCancellationRequested ||
+                    !IsCurrent(isCurrent))
+                    return new Execution<T>(value, null, linked.IsCancellationRequested, true, false);
+
+                // The generation check and publication are atomic with respect to a newer request.
+                publishValue(value);
+            }
             return new Execution<T>(value, null, false, false, true);
         }
         catch (OperationCanceledException) when (linked.IsCancellationRequested || !IsOwner())
@@ -630,9 +642,21 @@ internal sealed class ModSourceCheckWorkflowService
         }
         catch (Exception error)
         {
-            if (CanPublish())
-                publishError(error);
-            return new Execution<T>(null, error, false, !IsOwner() || !IsCurrent(isCurrent), false);
+            bool applied = false;
+            lock (gate)
+            {
+                if (currentScope == scopeGeneration &&
+                    active.TryGetValue(operationKey, out var current) &&
+                    current.Generation == operationGeneration &&
+                    ReferenceEquals(current.Cancellation, linked) &&
+                    !linked.IsCancellationRequested &&
+                    IsCurrent(isCurrent))
+                {
+                    publishError(error);
+                    applied = true;
+                }
+            }
+            return new Execution<T>(null, error, false, !applied, applied);
         }
         finally
         {
