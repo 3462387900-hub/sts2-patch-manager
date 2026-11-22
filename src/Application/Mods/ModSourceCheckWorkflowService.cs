@@ -913,18 +913,36 @@ internal sealed class ModSourceCheckWorkflowService
 
         string identifier = workshopId.Value.ToString();
         if (baseline == WorkshopBaselineState.Missing)
+        {
+            bool reviewCached = result is not null &&
+                result.WorkshopId == workshopId.Value &&
+                result.LocalVersion.Equals(mod.Version, StringComparison.Ordinal) &&
+                result.Status == "待首次核验" &&
+                IsFresh(result.CheckedAt, WorkshopCacheAge);
             return Entry(
                 ModSourceKind.Workshop, true, identifier, ModSourceTrustLevel.UserConfirmed,
                 ModSourceCheckState.NeedsReview, "待首次核验", mod.Version, "", null, null,
-                ModSourceCacheState.Missing, false, false, true,
-                ModSourceFailureKind.None, null, result?.CheckedAt, [], result?.Message ?? "尚未建立已验证的本地版本基线。");
+                reviewCached ? ModSourceCacheState.Fresh : ModSourceCacheState.Missing,
+                reviewCached, false, true,
+                ModSourceFailureKind.None, null, result?.CheckedAt, [],
+                result?.Message ?? "尚未建立已验证的本地版本基线。");
+        }
 
         if (baseline == WorkshopBaselineState.LocalVersionChanged)
+        {
+            bool reviewCached = result is not null &&
+                result.WorkshopId == workshopId.Value &&
+                result.LocalVersion.Equals(mod.Version, StringComparison.Ordinal) &&
+                result.Status == "本地文件已变化" &&
+                IsFresh(result.CheckedAt, WorkshopCacheAge);
             return Entry(
                 ModSourceKind.Workshop, true, identifier, ModSourceTrustLevel.UserConfirmed,
                 ModSourceCheckState.NeedsReview, "本地文件已变化", mod.Version, "", null, null,
-                ModSourceCacheState.Expired, false, false, true,
-                ModSourceFailureKind.None, null, result?.CheckedAt, [], result?.Message ?? "本地版本与已验证的版本基线不一致。");
+                reviewCached ? ModSourceCacheState.Fresh : ModSourceCacheState.Expired,
+                reviewCached, false, true,
+                ModSourceFailureKind.None, null, result?.CheckedAt, [],
+                result?.Message ?? "本地版本与已验证的版本基线不一致。");
+        }
 
         if (failure is not null)
             return FailedEntry(
