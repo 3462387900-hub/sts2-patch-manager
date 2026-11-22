@@ -822,7 +822,7 @@ internal sealed class ModSourceCheckWorkflowService
                     ModSourceCheckState.CacheExpired, "缓存已过期 · " + result.Status,
                     mod.Version, result.LatestVersion, result.ReleaseUrl, null,
                     ModSourceCacheState.Expired, false, false, true,
-                    ModSourceFailureKind.None, null, result.CheckedAt, []);
+                    ModSourceFailureKind.None, null, result.CheckedAt, [], result.Message);
 
             var state = result.Status switch
             {
@@ -837,7 +837,7 @@ internal sealed class ModSourceCheckWorkflowService
                 ModSourceCacheState.Fresh, true,
                 state == ModSourceCheckState.UpdateAvailable,
                 state == ModSourceCheckState.NeedsReview,
-                ModSourceFailureKind.None, null, result.CheckedAt, []);
+                ModSourceFailureKind.None, null, result.CheckedAt, [], result.Message);
         }
 
         var candidates = (discovery?.Candidates ?? [])
@@ -887,14 +887,14 @@ internal sealed class ModSourceCheckWorkflowService
                 ModSourceCheckState.CandidatesFound, "候选待确认",
                 mod.Version, "", null, null,
                 ModSourceCacheState.Fresh, true, false, true,
-                ModSourceFailureKind.None, discovery.Note, checkedAt, candidates);
+                ModSourceFailureKind.None, discovery.Note, checkedAt, candidates, discovery.Note);
 
         return Entry(
             ModSourceKind.GitHub, false, null, ModSourceTrustLevel.Unbound,
             ModSourceCheckState.NoCandidate, "暂无来源",
             mod.Version, "", null, null,
             ModSourceCacheState.Fresh, true, false, false,
-            ModSourceFailureKind.None, discovery.Note, checkedAt, []);
+            ModSourceFailureKind.None, discovery.Note, checkedAt, [], discovery.Note);
     }
 
     ModSourceEntryDiagnostic BuildWorkshopEntry(
@@ -917,14 +917,14 @@ internal sealed class ModSourceCheckWorkflowService
                 ModSourceKind.Workshop, true, identifier, ModSourceTrustLevel.UserConfirmed,
                 ModSourceCheckState.NeedsReview, "待首次核验", mod.Version, "", null, null,
                 ModSourceCacheState.Missing, false, false, true,
-                ModSourceFailureKind.None, null, result?.CheckedAt, []);
+                ModSourceFailureKind.None, null, result?.CheckedAt, [], result?.Message ?? "尚未建立已验证的本地版本基线。");
 
         if (baseline == WorkshopBaselineState.LocalVersionChanged)
             return Entry(
                 ModSourceKind.Workshop, true, identifier, ModSourceTrustLevel.UserConfirmed,
                 ModSourceCheckState.NeedsReview, "本地文件已变化", mod.Version, "", null, null,
                 ModSourceCacheState.Expired, false, false, true,
-                ModSourceFailureKind.None, null, result?.CheckedAt, []);
+                ModSourceFailureKind.None, null, result?.CheckedAt, [], result?.Message ?? "本地版本与已验证的版本基线不一致。");
 
         if (failure is not null)
             return FailedEntry(
@@ -952,7 +952,7 @@ internal sealed class ModSourceCheckWorkflowService
                     : result.RemoteManifestId,
                 null, result.RemoteManifestId,
                 ModSourceCacheState.Expired, false, false, true,
-                ModSourceFailureKind.None, null, result.CheckedAt, []);
+                ModSourceFailureKind.None, null, result.CheckedAt, [], result.Message);
 
         var state = result.Status switch
         {
