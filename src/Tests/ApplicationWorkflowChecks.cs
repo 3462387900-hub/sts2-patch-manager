@@ -64,6 +64,74 @@ internal static class ApplicationWorkflowChecks
         }
     }
 
+    sealed class FakeModSourceCheckBackend : IModSourceCheckBackend
+    {
+        readonly object gate = new();
+        readonly Dictionary<string, ModSourceBackendSnapshot> snapshots =
+            new(StringComparer.OrdinalIgnoreCase);
+        int readCount;
+        int discoveryCount;
+        int githubCheckCount;
+        int workshopCheckCount;
+
+        public int ReadCount => Volatile.Read(ref readCount);
+        public int DiscoveryCount => Volatile.Read(ref discoveryCount);
+        public int GitHubCheckCount => Volatile.Read(ref githubCheckCount);
+        public int WorkshopCheckCount => Volatile.Read(ref workshopCheckCount);
+        public int FileWriteCount { get; private set; }
+        public int DownloadCount { get; private set; }
+        public int InstallCount { get; private set; }
+
+        public Func<ManagedMod, CancellationToken, Task<GitHubSourceDiscoveryResult>> DiscoveryHandler { get; set; } =
+            (mod, _) => Task.FromResult(new GitHubSourceDiscoveryResult(
+                mod.Id, [], "模拟未找到来源"));
+        public Func<ManagedMod, CancellationToken, Task<GitHubModResult>> GitHubCheckHandler { get; set; } =
+            (mod, _) => Task.FromResult(new GitHubModResult(
+                "fixture/" + mod.Id, mod.Version, "2.0.0", "https://github.com/fixture/repo/releases/tag/2.0.0",
+                "有更新", "模拟发现更新", DateTimeOffset.UtcNow));
+        public Func<ManagedMod, ulong, CancellationToken, Task<WorkshopModUpdateResult>> WorkshopCheckHandler { get; set; } =
+            (mod, workshopId, _) => Task.FromResult(new WorkshopModUpdateResult(
+                workshopId, mod.Version, "Fixture Workshop", "2.0.0", "200",
+                "有更新", "模拟发现创意工坊更新", DateTimeOffset.UtcNow));
+
+        public void Set(string modId, ModSourceBackendSnapshot snapshot)
+        {
+            lock (gate)
+                snapshots[modId] = snapshot;
+        }
+
+        public ModSourceBackendSnapshot Read(ManagedMod mod)
+        {
+            Interlocked.Increment(ref readCount);
+            lock (gate)
+                return snapshots.TryGetValue(mod.Id, out var snapshot)
+                    ? snapshot
+                    : new ModSourceBackendSnapshot(
+                        null, null, null, null, null, WorkshopBaselineState.Unbound);
+        }
+
+        public Task<GitHubSourceDiscoveryResult> DiscoverGitHubAsync(
+            ManagedMod mod, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref discoveryCount);
+            return DiscoveryHandler(mod, cancellationToken);
+        }
+
+        public Task<GitHubModResult> CheckGitHubAsync(
+            ManagedMod mod, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref githubCheckCount);
+            return GitHubCheckHandler(mod, cancellationToken);
+        }
+
+        public Task<WorkshopModUpdateResult> CheckWorkshopAsync(
+            ManagedMod mod, ulong workshopId, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref workshopCheckCount);
+            return WorkshopCheckHandler(mod, workshopId, cancellationToken);
+        }
+    }
+
     sealed class FakeModToggleBackend : IModToggleWorkflowBackend
     {
         public ModInventory Inventory { get; private set; }
