@@ -1308,32 +1308,9 @@ public partial class MainWindow
   header.Children.Add(selectionBar);
 
   var dependencyReport=modInventory==null?null:ModDependencyDiagnostics.Analyze(modInventory);
-  var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
-   if(ModPresentation.IsIndependentPatch(mod))return "";
-   var context=new List<string>();
-   var updates=GitHubUpdates();
-   if(updates.Repository(mod.Id)==null)
-   {
-    var candidates=Discovery().Cached(mod);
-    if(candidates!=null)
-     context.Add(candidates.Candidates.Length>0
-      ?"GitHub："+(candidates.Candidates.Any(c=>c.Verified)?"已核验来源":"疑似来源")+
-       " "+candidates.Candidates.Length+" 个 · 待确认"
-      :candidates.Retryable?"GitHub：查找受限，可重试":"GitHub：暂无来源");
-   }
-   else
-   {
-    var result=updates.Cached(mod.Id);
-    context.Add(result==null?"GitHub：已关联 · 待检查":
-     "GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:""));
-   }
-   if(WorkshopSources().Get(mod.Id).HasValue)
-   {
-    var workshopResult=WorkshopUpdates().Cached(mod.Id);
-    context.Add(workshopResult==null?"创意工坊：已关联 · 待检查":"创意工坊："+workshopResult.Status);
-   }
-   return string.Join(" · ",context);
-  },mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
+  var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,
+   mod=>ModSourceChecks().Inspect(mod),
+   mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
    mod=>dependencyReport?.Summary(mod.Id).HasIssue??false,
    mod=>ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot,mod,modInventory!,dependencyReport));
   ListBox list=null!;
@@ -1670,32 +1647,9 @@ public partial class MainWindow
    CornerRadius=new CornerRadius(10),Child=selectionBar,
    Visibility=Visibility.Collapsed,Margin=new Thickness(0,6,0,0)};
   var dependencyReport=modInventory==null?null:ModDependencyDiagnostics.Analyze(modInventory);
-  var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,mod=>{
-   if(ModPresentation.IsIndependentPatch(mod))return "";
-   var context=new List<string>();
-   var updates=GitHubUpdates();
-   if(updates.Repository(mod.Id)==null)
-   {
-    var candidates=Discovery().Cached(mod);
-    if(candidates!=null)
-     context.Add(candidates.Candidates.Length>0
-      ?"GitHub："+(candidates.Candidates.Any(c=>c.Verified)?"已核验来源":"疑似来源")+
-       " "+candidates.Candidates.Length+" 个 · 待确认"
-      :candidates.Retryable?"GitHub：查找受限，可重试":"GitHub：暂无来源");
-   }
-   else
-   {
-    var result=updates.Cached(mod.Id);
-    context.Add(result==null?"GitHub：已关联 · 待检查":
-     "GitHub："+result.Status+(result.LatestVersion.Length>0?" · "+result.LatestVersion:""));
-   }
-   if(WorkshopSources().Get(mod.Id).HasValue)
-   {
-    var workshopResult=WorkshopUpdates().Cached(mod.Id);
-    context.Add(workshopResult==null?"创意工坊：已关联 · 待检查":"创意工坊："+workshopResult.Status);
-   }
-   return string.Join(" · ",context);
-  },mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
+  var rows=modInventory==null?[]:ModListView.Rows(selectedInstallRoot,modInventory,LifecycleTag,
+   mod=>ModSourceChecks().Inspect(mod),
+   mod=>dependencyReport?.Summary(mod.Id).Label??"未分析",
    mod=>dependencyReport?.Summary(mod.Id).HasIssue??false,
    mod=>ModDependencyDiagnostics.DiagnoseToggle(selectedInstallRoot,mod,modInventory!,dependencyReport));
   var empty=T("没有符合条件的 MOD。请修改搜索或筛选条件。",12,muted);
