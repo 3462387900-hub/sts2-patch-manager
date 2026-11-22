@@ -144,7 +144,7 @@ internal static class LocalModZipImportWorkflowChecks
         await Reject("reject unrelated ZIP root files",
             new("Sample/mod_manifest.json", ValidManifest),
             new("Sample/sample.dll", "dll"), new("unrelated.txt", "extra"));
-        await Reject("reject missing MOD manifest", new("Sample/sample.dll", "dll"));
+        await Reject("reject missing MOD manifest", new ZipEntry("Sample/sample.dll", "dll"));
         await Reject("reject multiple manifests",
             new("A/mod_manifest.json", ValidManifest), new("A/a.dll", "x"),
             new("B/manifest.json", ValidManifest), new("B/b.dll", "x"));
