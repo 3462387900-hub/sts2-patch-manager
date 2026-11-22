@@ -147,98 +147,61 @@ internal sealed record ModSourceCheckResult(
     }
 }
 
+internal sealed record ModSourceBackendGitHubCheck(
+    string Repository,
+    string LocalVersion,
+    string LatestVersion,
+    string ReleaseUrl,
+    string Status,
+    string Message,
+    DateTimeOffset CheckedAt);
+
+internal sealed record ModSourceBackendDiscoveryCandidate(
+    string Repository,
+    string Reason,
+    int Score,
+    bool Verified);
+
+internal sealed record ModSourceBackendDiscoveryResult(
+    string ModId,
+    ModSourceBackendDiscoveryCandidate[] Candidates,
+    string Note,
+    bool Retryable = false);
+
+internal sealed record ModSourceBackendWorkshopCheck(
+    ulong WorkshopId,
+    string LocalVersion,
+    string RemoteTitle,
+    string RemoteContentVersion,
+    string RemoteManifestId,
+    string Status,
+    string Message,
+    DateTimeOffset CheckedAt);
+
 internal sealed record ModSourceBackendSnapshot(
     string? GitHubRepository,
-    GitHubModResult? GitHubCached,
-    GitHubSourceDiscoveryResult? GitHubDiscoveryCached,
+    ModSourceBackendGitHubCheck? GitHubCached,
+    ModSourceBackendDiscoveryResult? GitHubDiscoveryCached,
     ulong? WorkshopId,
-    WorkshopModUpdateResult? WorkshopCached,
+    ModSourceBackendWorkshopCheck? WorkshopCached,
     WorkshopBaselineState WorkshopBaseline);
 
 internal interface IModSourceCheckBackend
 {
     ModSourceBackendSnapshot Read(ManagedMod mod);
 
-    Task<GitHubSourceDiscoveryResult> DiscoverGitHubAsync(
+    Task<ModSourceBackendDiscoveryResult> DiscoverGitHubAsync(
         ManagedMod mod,
         CancellationToken cancellationToken);
 
-    Task<GitHubModResult> CheckGitHubAsync(
+    Task<ModSourceBackendGitHubCheck> CheckGitHubAsync(
         ManagedMod mod,
         CancellationToken cancellationToken);
 
-    Task<WorkshopModUpdateResult> CheckWorkshopAsync(
+    Task<ModSourceBackendWorkshopCheck> CheckWorkshopAsync(
         ManagedMod mod,
         ulong workshopId,
         CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// Bridges the read-only Application workflow to the existing GitHub and Workshop
-/// infrastructure. It never binds sources, downloads packages, or writes MOD files.
-/// </summary>
-internal sealed class InfrastructureModSourceCheckBackend : IModSourceCheckBackend
-{
-    readonly GitHubModUpdates githubUpdates;
-    readonly GitHubModDiscovery githubDiscovery;
-    readonly WorkshopModSources workshopSources;
-    readonly WorkshopModUpdates workshopUpdates;
-
-    public InfrastructureModSourceCheckBackend(
-        GitHubModUpdates githubUpdates,
-        GitHubModDiscovery githubDiscovery,
-        WorkshopModSources workshopSources,
-        WorkshopModUpdates workshopUpdates)
-    {
-        this.githubUpdates = githubUpdates ?? throw new ArgumentNullException(nameof(githubUpdates));
-        this.githubDiscovery = githubDiscovery ?? throw new ArgumentNullException(nameof(githubDiscovery));
-        this.workshopSources = workshopSources ?? throw new ArgumentNullException(nameof(workshopSources));
-        this.workshopUpdates = workshopUpdates ?? throw new ArgumentNullException(nameof(workshopUpdates));
-    }
-
-    public ModSourceBackendSnapshot Read(ManagedMod mod)
-    {
-        string? repository = githubUpdates.Repository(mod.Id);
-        ulong? workshopId = workshopSources.Get(mod.Id);
-        WorkshopBaselineState baselineState = WorkshopBaselineState.Unbound;
-
-        if (workshopId.HasValue)
-        {
-            var baseline = workshopSources.GetBaseline(mod.Id);
-            baselineState = baseline is null
-                ? WorkshopBaselineState.Missing
-                : baseline.WorkshopId != workshopId.Value ||
-                    !baseline.LocalVersion.Equals(mod.Version, StringComparison.Ordinal)
-                    ? WorkshopBaselineState.LocalVersionChanged
-                    : WorkshopBaselineState.Current;
-        }
-
-        return new ModSourceBackendSnapshot(
-            repository,
-            githubUpdates.Cached(mod.Id),
-            githubDiscovery.Cached(mod),
-            workshopId,
-            workshopUpdates.Cached(mod.Id),
-            baselineState);
-    }
-
-    public Task<GitHubSourceDiscoveryResult> DiscoverGitHubAsync(
-        ManagedMod mod,
-        CancellationToken cancellationToken) =>
-        githubDiscovery.DiscoverAsync(mod, force: true, ct: cancellationToken);
-
-    public Task<GitHubModResult> CheckGitHubAsync(
-        ManagedMod mod,
-        CancellationToken cancellationToken) =>
-        githubUpdates.CheckAsync(mod, force: true, ct: cancellationToken);
-
-    public Task<WorkshopModUpdateResult> CheckWorkshopAsync(
-        ManagedMod mod,
-        ulong workshopId,
-        CancellationToken cancellationToken) =>
-        workshopUpdates.CheckAsync(
-            mod, workshopId, workshopSources, force: true,
-            cancellationToken: cancellationToken);
 }
 
 /// <summary>
@@ -260,14 +223,14 @@ internal sealed class ModSourceCheckWorkflowService
 
     sealed record PublishedState(
         string? GitHubRepository = null,
-        GitHubModResult? GitHubResult = null,
+        ModSourceBackendGitHubCheck? GitHubResult = null,
         DateTimeOffset? GitHubCheckedAt = null,
         Failure? GitHubFailure = null,
-        GitHubSourceDiscoveryResult? DiscoveryResult = null,
+        ModSourceBackendDiscoveryResult? DiscoveryResult = null,
         DateTimeOffset? DiscoveryCheckedAt = null,
         Failure? DiscoveryFailure = null,
         ulong? WorkshopId = null,
-        WorkshopModUpdateResult? WorkshopResult = null,
+        ModSourceBackendWorkshopCheck? WorkshopResult = null,
         DateTimeOffset? WorkshopCheckedAt = null,
         Failure? WorkshopFailure = null);
 
@@ -312,11 +275,11 @@ internal sealed class ModSourceCheckWorkflowService
             state.GitHubRepository, snapshot.GitHubRepository, StringComparison.OrdinalIgnoreCase);
         bool workshopMatches = state.WorkshopId == snapshot.WorkshopId;
 
-        GitHubModResult? githubResult = githubMatches
+        ModSourceBackendGitHubCheck? githubResult = githubMatches
             ? state.GitHubResult ?? snapshot.GitHubCached
             : snapshot.GitHubCached;
         Failure? githubFailure = githubMatches ? state.GitHubFailure : null;
-        GitHubSourceDiscoveryResult? discoveryResult = githubMatches
+        ModSourceBackendDiscoveryResult? discoveryResult = githubMatches
             ? state.DiscoveryResult ?? snapshot.GitHubDiscoveryCached
             : snapshot.GitHubDiscoveryCached;
         DateTimeOffset? discoveryCheckedAt = githubMatches
@@ -324,7 +287,7 @@ internal sealed class ModSourceCheckWorkflowService
             : null;
         Failure? discoveryFailure = githubMatches ? state.DiscoveryFailure : null;
 
-        WorkshopModUpdateResult? workshopResult = workshopMatches
+        ModSourceBackendWorkshopCheck? workshopResult = workshopMatches
             ? state.WorkshopResult ?? snapshot.WorkshopCached
             : snapshot.WorkshopCached;
         Failure? workshopFailure = workshopMatches ? state.WorkshopFailure : null;
@@ -673,7 +636,7 @@ internal sealed class ModSourceCheckWorkflowService
         }
     }
 
-    void PublishGitHubResult(string key, string? repository, GitHubModResult result)
+    void PublishGitHubResult(string key, string? repository, ModSourceBackendGitHubCheck result)
     {
         lock (gate)
         {
@@ -712,7 +675,7 @@ internal sealed class ModSourceCheckWorkflowService
         }
     }
 
-    void PublishDiscovery(string key, string? repository, GitHubSourceDiscoveryResult result)
+    void PublishDiscovery(string key, string? repository, ModSourceBackendDiscoveryResult result)
     {
         lock (gate)
         {
@@ -751,7 +714,7 @@ internal sealed class ModSourceCheckWorkflowService
         }
     }
 
-    void PublishWorkshopResult(string key, ulong workshopId, WorkshopModUpdateResult result)
+    void PublishWorkshopResult(string key, ulong workshopId, ModSourceBackendWorkshopCheck result)
     {
         lock (gate)
         {
@@ -793,9 +756,9 @@ internal sealed class ModSourceCheckWorkflowService
     ModSourceEntryDiagnostic BuildGitHubEntry(
         ManagedMod mod,
         string? repository,
-        GitHubModResult? result,
+        ModSourceBackendGitHubCheck? result,
         Failure? failure,
-        GitHubSourceDiscoveryResult? discovery,
+        ModSourceBackendDiscoveryResult? discovery,
         DateTimeOffset? discoveryCheckedAt,
         Failure? discoveryFailure)
     {
@@ -901,7 +864,7 @@ internal sealed class ModSourceCheckWorkflowService
         ManagedMod mod,
         ulong? workshopId,
         WorkshopBaselineState baseline,
-        WorkshopModUpdateResult? result,
+        ModSourceBackendWorkshopCheck? result,
         Failure? failure)
     {
         if (!workshopId.HasValue || workshopId.Value == 0)
@@ -1069,10 +1032,10 @@ internal sealed class ModSourceCheckWorkflowService
         return age >= TimeSpan.Zero && age < maxAge;
     }
 
-    static bool IsGitHubFailure(GitHubModResult? result) =>
+    static bool IsGitHubFailure(ModSourceBackendGitHubCheck? result) =>
         result?.Status == "无法检测";
 
-    static bool IsWorkshopFailure(WorkshopModUpdateResult? result) =>
+    static bool IsWorkshopFailure(ModSourceBackendWorkshopCheck? result) =>
         result?.Status == "检查失败";
 
     static bool IsCurrent(Func<bool>? isCurrent)
