@@ -66,7 +66,8 @@ internal sealed class InfrastructureModSourceCheckBackend : IModSourceCheckBacke
                 workshopResult.WorkshopId, workshopResult.LocalVersion, workshopResult.RemoteTitle,
                 workshopResult.RemoteContentVersion, workshopResult.RemoteManifestId,
                 workshopResult.Status, workshopResult.Message, workshopResult.CheckedAt),
-            baselineState);
+            baselineState,
+            githubDiscovery.CachedAt(mod));
     }
 
     public async Task<ModSourceBackendDiscoveryResult> DiscoverGitHubAsync(
