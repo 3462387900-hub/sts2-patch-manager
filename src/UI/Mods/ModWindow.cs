@@ -1869,23 +1869,31 @@ public partial class MainWindow
   root.Children.Add(T("版本："+mod.Version+"\n作者："+mod.Author+"\n状态："+(mod.Enabled?"启用":"停用")+"\n目录："+mod.Folder,13,muted));Space(root,18);
   if(!ModPresentation.IsIndependentPatch(mod))
   {
-   ulong? workshopId=WorkshopSources().Get(mod.Id);
+   var sourceState=ModSourceChecks().Inspect(mod);
+   var workshop=sourceState.Workshop;
+   var github=sourceState.GitHub;
+   ulong? workshopId=workshop.IsBound&&ulong.TryParse(workshop.Identifier,out ulong parsedWorkshopId)
+    ?parsedWorkshopId:null;
+
    root.Children.Add(T("Steam 创意工坊来源",17,ink,true));Space(root,8);
    root.Children.Add(T(workshopId.HasValue
     ?"已关联 Workshop ID："+workshopId.Value
     :"尚未关联创意工坊来源；下载时可输入 Workshop ID。",12,muted));
-   var workshopStatus=workshopId.HasValue?WorkshopUpdates().Cached(mod.Id):null;
-   if(workshopStatus!=null)
+   if(workshop.IsBound)
    {
     Space(root,5);
-    root.Children.Add(T("创意工坊状态："+workshopStatus.Status+" · "+workshopStatus.Message,11,
-     workshopStatus.Status=="有更新"?gold:muted));
+    root.Children.Add(T("创意工坊状态："+workshop.Status+" · "+workshop.Message,11,
+     workshop.CanUpdate?gold:muted));
+    if(workshop.RemoteManifestId?.Length>0)
+     root.Children.Add(T("远端 Manifest："+workshop.RemoteManifestId,10,muted));
+    if(workshop.CheckedAt.HasValue)
+     root.Children.Add(T("检查于 "+workshop.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),10,muted));
    }
    var workshopActions=new List<UIElement>();
    if(workshopId.HasValue)
     workshopActions.Add(Btn("检查创意工坊更新",()=>CheckWorkshopMod(mod),"Ghost"));
-   string workshopActionLabel=workshopId is null?"从创意工坊下载并关联":
-    workshopStatus?.Status switch
+   string workshopActionLabel=!workshop.IsBound?"从创意工坊下载并关联":
+    workshop.Status switch
     {
      "待首次核验"=>"首次核验并建立基线",
      "本地文件已变化"=>"重新核验本地文件",
@@ -1895,38 +1903,52 @@ public partial class MainWindow
    workshopActions.Add(Btn(workshopActionLabel,()=>DownloadWorkshopMod(mod),"Ghost"));
    if(workshopId.HasValue)
     workshopActions.Add(Btn("解除来源关联",()=>{
-     try{WorkshopSources().Unbind(mod.Id);WorkshopUpdates().Invalidate(mod.Id);ShowModDetail(mod.Folder);}
+     try
+     {
+      WorkshopSources().Unbind(mod.Id);
+      WorkshopUpdates().Invalidate(mod.Id);
+      ModSourceChecks().Invalidate(mod);
+      ShowModDetail(mod.Folder);
+     }
      catch(Exception e){toast.Text="解除关联失败："+e.Message;}
     },"Ghost"));
    root.Children.Add(H(workshopActions.ToArray()));Space(root,18);
 
-   var updates=GitHubUpdates();var repo=updates.Repository(mod.Id);var result=updates.Cached(mod.Id);
    root.Children.Add(T("GitHub 更新检测",17,ink,true));Space(root,8);
-   root.Children.Add(T(repo==null?"尚未关联 GitHub 仓库。":"仓库："+repo,12,muted));Space(root,6);
-   if(result!=null)
+   root.Children.Add(T(!github.IsBound?"尚未关联 GitHub 仓库。":"仓库："+github.Identifier,12,muted));Space(root,6);
+   if(github.CacheState!=ModSourceCacheState.Missing)
    {
-    root.Children.Add(H(Badge(result.Status,result.Status=="有更新"?gold:muted),
-     T("本地 "+result.LocalVersion+" · GitHub "+(result.LatestVersion.Length>0?result.LatestVersion:"未知"),12,muted)));
-    root.Children.Add(T(result.Message+" · 检查于 "+result.CheckedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),12,muted));
-    if(result.ReleaseUrl.Length>0)root.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(result.ReleaseUrl),"Ghost"));
+    root.Children.Add(H(Badge(github.Status,github.CanUpdate?gold:muted),
+     T("本地 "+github.LocalVersion+" · GitHub "+(github.LatestVersion.Length>0?github.LatestVersion:"未知"),12,muted)));
+    root.Children.Add(T(github.Message+
+     (github.CheckedAt.HasValue?" · 检查于 "+github.CheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"):""),12,muted));
+    if(!string.IsNullOrWhiteSpace(github.Url))
+     root.Children.Add(Btn("打开 Release 发布页",()=>OpenUrl(github.Url),"Ghost"));
    }
-   else if(repo!=null)root.Children.Add(T("尚未检查该仓库。",12,muted));
-   var discovery=Discovery().Cached(mod);
-   if(repo==null&&discovery!=null)
+   else if(github.IsBound)root.Children.Add(T("尚未检查该仓库。",12,muted));
+
+   if(!github.IsBound&&github.Candidates.Count>0)
    {
     Space(root,6);
-    root.Children.Add(T(discovery.Candidates.Length>0
-     ?"找到 "+discovery.Candidates.Length+" 个候选来源；优先参考核验 MOD ID 的仓库，请确认再关联。"
-     :discovery.Note,12,muted));
-    if(discovery.Candidates.Length>0&&discovery.Note.Length>0)
-     root.Children.Add(T(discovery.Note,11,muted));
-    foreach(var candidate in discovery.Candidates)
+    root.Children.Add(T("找到 "+github.Candidates.Count+" 个候选来源；请核对证据后再关联。",12,muted));
+    if(github.Message.Length>0)root.Children.Add(T(github.Message,11,muted));
+    foreach(var candidate in github.Candidates)
     {
-     var evidence=candidate.Reason.StartsWith("MOD 清单声明",StringComparison.Ordinal)
-       ?"本地清单声明":candidate.Verified?"仓库 MOD ID 已核验":"尚未核验，请仔细确认";
-      var row=V(T(candidate.Repository,13,ink,true),T(candidate.Reason+" · "+evidence,11,muted));
+     string evidence=candidate.Trust switch
+     {
+      ModSourceTrustLevel.ManifestDeclared=>"本地清单声明",
+      ModSourceTrustLevel.RemoteManifestVerified=>"仓库 MOD ID 已核验",
+      _=>"尚未核验，请仔细确认"
+     };
+     var row=V(T(candidate.Repository,13,ink,true),
+      T(candidate.Reason+" · "+evidence+" · 置信分 "+candidate.Confidence,11,muted));
      var confirm=Btn("确认关联",()=>{
-      try{updates.Bind(mod.Id,candidate.Repository);ShowModDetail(mod.Folder);}
+      try
+      {
+       GitHubUpdates().Bind(mod.Id,candidate.Repository);
+       ModSourceChecks().Invalidate(mod);
+       ShowModDetail(mod.Folder);
+      }
       catch(Exception e){toast.Text="关联失败："+e.Message;}
      },"Ghost");
      var openSource=Btn("查看仓库",()=>OpenUrl("https://github.com/"+candidate.Repository),"Ghost");
@@ -1934,15 +1956,15 @@ public partial class MainWindow
     }
    }
    Space(root,9);
-   if(repo==null)
+   if(!github.IsBound)
    {
     var discover=Btn("自动查找来源",()=>DiscoverGitHubMod(mod),"Ghost");discover.IsEnabled=!busy;
     root.Children.Add(H(discover));Space(root,7);
    }
-   var bind=Btn(repo==null?"关联 GitHub 仓库":"修改 GitHub 关联",()=>BindGitHubMod(mod),"Ghost");
-   var check=Btn("检查更新",()=>CheckGitHubMod(mod),"Ghost");check.IsEnabled=repo!=null&&!busy;
+   var bind=Btn(!github.IsBound?"关联 GitHub 仓库":"修改 GitHub 关联",()=>BindGitHubMod(mod),"Ghost");
+   var check=Btn("检查更新",()=>CheckGitHubMod(mod),"Ghost");check.IsEnabled=github.IsBound&&!busy;
    var update=Btn("下载并更新",()=>UpdateGitHubMod(mod),"Primary");
-   update.IsEnabled=repo!=null&&!busy&&!transactionWriting&&!modInventoryDirty&&mod.Enabled&&result?.Status=="有更新";
+   update.IsEnabled=github.CanUpdate&&!busy&&!transactionWriting&&!modInventoryDirty&&mod.Enabled;
    root.Children.Add(H(bind,check,update));Space(root,7);
    Space(root,20);
   }
