@@ -958,7 +958,7 @@ internal sealed class ModSourceCheckWorkflowService
             null, result.RemoteManifestId,
             ModSourceCacheState.Fresh, true,
             state == ModSourceCheckState.UpdateAvailable,
-            state is ModSourceCheckState.NeedsReview or ModSourceCheckState.Unsupported,
+            state == ModSourceCheckState.NeedsReview,
             state == ModSourceCheckState.Unsupported
                 ? ModSourceFailureKind.Unsupported
                 : ModSourceFailureKind.None,
