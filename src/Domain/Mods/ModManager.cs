@@ -117,9 +117,13 @@ public static class ModManager
    foreach(var dependency in mod.Dependencies.Concat(RequiredByPatch(mod.Id).Select(id=>new ModDependency(id)))){
     var actual=enabled.FirstOrDefault(m=>m.Id.Equals(dependency.Id,StringComparison.OrdinalIgnoreCase));if(actual==null)return "请先启用前置模组："+dependency.Id;
     if(dependency.Minimum.Length>0||dependency.Maximum.Length>0){
-     if(!Version.TryParse(actual.Version.TrimStart('v','V'),out var version))return "无法核对前置版本："+actual.Id+" "+actual.Version;
-     if(dependency.Minimum.Length>0&&(!Version.TryParse(dependency.Minimum.TrimStart('v','V'),out var min)||version<min))return "前置版本未满足："+actual.Id+"，最低 "+dependency.Minimum;
-     if(dependency.Maximum.Length>0&&(!Version.TryParse(dependency.Maximum.TrimStart('v','V'),out var max)||version>max))return "前置版本未满足："+actual.Id+"，最高 "+dependency.Maximum;
+     var versionCheck=ModDependencyGraph.CheckVersion(dependency,actual);
+     if(versionCheck.Status==ModDependencyStatus.VersionUnknown)return "无法核对前置版本："+actual.Id+" "+actual.Version;
+     if(versionCheck.Status!=ModDependencyStatus.Satisfied){
+      string bound=versionCheck.FailedBound ??
+       (dependency.Minimum.Length>0?"最低 "+dependency.Minimum:"最高 "+dependency.Maximum);
+      return "前置版本未满足："+actual.Id+"，"+bound;
+     }
     }
    }
   }

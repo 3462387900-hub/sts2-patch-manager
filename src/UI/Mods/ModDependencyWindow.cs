@@ -22,7 +22,7 @@ internal static class ModDependencyGraphPresentation
 public partial class MainWindow
 {
     ModInventory? dependencyCacheInventory;
-    ModDependencyGraphReport? dependencyCacheReport;
+    ModDependencyDiagnosticsReport? dependencyCacheReport;
 
     void ShowDependencyGraph(string filter = "全部关系", int requestedPage = 1)
     {
@@ -36,7 +36,7 @@ public partial class MainWindow
         if (!ReferenceEquals(dependencyCacheInventory, modInventory) || dependencyCacheReport is null)
         {
             dependencyCacheInventory = modInventory;
-            dependencyCacheReport = ModDependencyGraph.Analyze(modInventory);
+            dependencyCacheReport = ModDependencyDiagnostics.Analyze(modInventory);
         }
         var report = dependencyCacheReport;
         var root = V(ModWorkspaceHeader("依赖关系图",
@@ -118,7 +118,7 @@ public partial class MainWindow
             Space(root, 12);
         }
 
-        IEnumerable<ModDependencyEdge> filtered = report.Edges;
+        IEnumerable<ModDependencyDiagnosticEdge> filtered = report.Edges;
         filtered = filter switch
         {
             "仅显示异常" => filtered.Where(edge => edge.IsIssue),

@@ -5,7 +5,15 @@ using System.Windows.Media;
 namespace SpirePatch;
 
 // Immutable, UI-only data. Safe enable/disable still goes through ModManager.Preview/Apply.
-internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReason,string GitHubText="",string DependencyText="",bool DependencyIssue=false)
+internal sealed record ModListRow(
+ ManagedMod Mod,
+ string Health,
+ string? BlockReason,
+ string GitHubText="",
+ string DependencyText="",
+ bool DependencyIssue=false,
+ bool IsDependencyProtection=false,
+ int RelatedEnabledDependents=0)
 {
  public bool Selected{get;set;}
  internal bool IsFix=>ModPresentation.IsIndependentPatch(Mod);
@@ -13,20 +21,36 @@ internal sealed record ModListRow(ManagedMod Mod,string Health,string? BlockReas
  public string Details=>"模组 ID："+Mod.Id+"    版本号："+Mod.Version+"    作者："+Mod.Author;
  public string State=>Mod.Enabled?"已启用":"已停用";
  public string HealthText=>IsFix?"补丁健康："+Health:"";
- public string WarningText=>BlockReason==null?"":ModListView.BriefBlockReason(BlockReason);
- public bool IsDependencyProtection=>BlockReason?.StartsWith("这些启用项依赖它，请先停用依赖项：",StringComparison.Ordinal)==true;
+ public string WarningText=>BlockReason==null?"":IsDependencyProtection
+  ? $"被 {RelatedEnabledDependents} 个已启用 MOD 依赖"
+  : ModListView.BriefBlockReason(BlockReason);
 }
 
 internal static class ModListView
 {
+ // Keep the original UI-test/helper signature; the compatibility overload still
+ // delegates all readiness decisions to the Application diagnostics service.
  internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,
   Func<ManagedMod,string>? github=null,Func<ManagedMod,string>? dependency=null,
-  Func<ManagedMod,bool>? dependencyIssue=null)=>
-  inventory.Mods.Select(mod=>new ModListRow(mod,
-   ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
-   ModManager.BlockReason(root,mod,inventory),github?.Invoke(mod)??"",
-   dependency?.Invoke(mod)??"未分析",dependencyIssue?.Invoke(mod)??false))
-  .OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+  Func<ManagedMod,bool>? dependencyIssue=null)
+ {
+  var diagnostics=new ModDependencyDiagnosticsService();
+  return Rows(root,inventory,health,github,dependency,dependencyIssue,
+   mod=>diagnostics.DiagnoseToggle(root,mod,inventory));
+ }
+
+ internal static ModListRow[] Rows(string root,ModInventory inventory,Func<string,string> health,
+  Func<ManagedMod,string>? github,Func<ManagedMod,string>? dependency,
+  Func<ManagedMod,bool>? dependencyIssue,
+  Func<ManagedMod,ModTogglePreflightDiagnostic> toggleDiagnostic)=>
+  inventory.Mods.Select(mod=>{
+   var readiness=toggleDiagnostic(mod);
+   return new ModListRow(mod,
+    ModPresentation.IsIndependentPatch(mod)?health(mod.Id):"",
+    readiness.Message,github?.Invoke(mod)??"",
+    dependency?.Invoke(mod)??"未分析",dependencyIssue?.Invoke(mod)??false,
+    readiness.IsDependencyProtection,readiness.RelatedEnabledDependentCount);
+  }).OrderBy(row=>row.Name,StringComparer.OrdinalIgnoreCase).ToArray();
 
  // State (enabled/disabled) and attention filters compose instead of competing.
  // Preserve the original four-argument API for existing callers.
@@ -47,6 +71,9 @@ internal static class ModListView
  internal static int ColumnCount(double width)=>width>=1080?3:width>=700?2:1;
  internal static string BriefBlockReason(string reason)
  {
+  // Legacy row fixtures may still construct a row from the original Domain
+  // message without supplying the structured readiness flags. Keep this as
+  // presentation-only shortening; live rows use Application diagnostics.
   const string deps="这些启用项依赖它，请先停用依赖项：";
   if(reason.StartsWith(deps,StringComparison.Ordinal))
   {
