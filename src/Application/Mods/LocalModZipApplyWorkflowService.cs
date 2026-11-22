@@ -127,7 +127,9 @@ internal sealed record LocalZipInstallRecoveryItem(
     bool Cleaned,
     bool Pending,
     bool SourceReviewRequired,
-    string? Error);
+    string? Error,
+    string? ModId = null,
+    string? TargetDirectory = null);
 
 internal sealed record LocalZipInstallRecoveryReport(
     int CheckedCount,
@@ -686,7 +688,8 @@ internal sealed class LocalModZipApplyWorkflowService
                 }
                 catch { }
                 items.Add(new(journal.TransactionId, "RecoveryRequired",
-                    false, false, true, reviewRequired, error.Message));
+                    false, false, true, reviewRequired, error.Message,
+                    journal.ModId, journal.TargetDirectory));
                 StartWriting();
             }
         }
@@ -716,7 +719,7 @@ internal sealed class LocalModZipApplyWorkflowService
             previewWorkflow.Discard(journal.PreviewWorkspaceDirectory);
             backend.DeleteJournal(journal);
             return new(journal.TransactionId, "Cleaned", false, true,
-                false, reviewRequired, null);
+                false, reviewRequired, null, journal.ModId, journal.TargetDirectory);
         }
 
         IReadOnlyDictionary<string, string> targetHashes =
@@ -732,7 +735,8 @@ internal sealed class LocalModZipApplyWorkflowService
             backend.WriteJournal(journal);
             return new(journal.TransactionId, "RecoveryRequired",
                 false, false, true, reviewRequired,
-                "目标目录内容与事务日志不一致。绝不删除目标目录，请人工核对。");
+                "目标目录内容与事务日志不一致。绝不删除目标目录，请人工核对。",
+                journal.ModId, journal.TargetDirectory);
         }
 
         if (!journal.State.Equals("Committed", StringComparison.Ordinal))
@@ -757,7 +761,8 @@ internal sealed class LocalModZipApplyWorkflowService
             if (!sourceResult.Applied)
                 return new(journal.TransactionId, "Committed",
                     true, false, true, reviewRequired || sourceResult.SourceReviewRequired,
-                    sourceResult.Error ?? "历史来源处理尚未完成。");
+                    sourceResult.Error ?? "历史来源处理尚未完成。",
+                    journal.ModId, journal.TargetDirectory);
             reviewRequired = reviewRequired || sourceResult.SourceReviewRequired;
         }
 
@@ -765,7 +770,8 @@ internal sealed class LocalModZipApplyWorkflowService
         previewWorkflow.Discard(journal.PreviewWorkspaceDirectory);
         backend.DeleteJournal(journal);
         return new(journal.TransactionId, "Completed",
-            true, false, false, reviewRequired, null);
+            true, false, false, reviewRequired, null,
+            journal.ModId, journal.TargetDirectory);
     }
 
     string? CleanupUncommitted(LocalZipInstallTransactionJournal? journal)

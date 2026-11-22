@@ -26,7 +26,35 @@ public partial class MainWindow : Window
    uiTheme=onlineStartup?UiThemes.Load(installer.DataRoot):UiThemes.Workspace;
    UiThemes.Active=uiTheme;
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
-  Closing+=(_,e)=>{if(transactionWriting){e.Cancel=true;MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");}else {preparationCancellation?.Cancel();managerUpdateCancellation?.Cancel();CancelModUpdateCheck();}};
+  Closing+=(_,e)=>
+  {
+   if(transactionWriting)
+   {
+    e.Cancel=true;
+    MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");
+   }
+   else if(localZipOperationCancellation is not null)
+   {
+    localZipOperationCancellation.Cancel();
+    e.Cancel=true;
+    MessageBox.Show(this,"正在取消本地 ZIP 操作并清理隔离暂存。清理完成后请再次关闭窗口。",
+     "正在清理本地 ZIP 暂存",MessageBoxButton.OK,MessageBoxImage.Information);
+   }
+   else
+   {
+    try{DiscardLocalZipPreview();}
+    catch(Exception cleanupError)
+    {
+     e.Cancel=true;
+     MessageBox.Show(this,"本地 ZIP 隔离暂存尚未清理，窗口保持打开以便处理：\n"+cleanupError.Message,
+      "暂存清理未完成",MessageBoxButton.OK,MessageBoxImage.Warning);
+     return;
+    }
+    preparationCancellation?.Cancel();
+    managerUpdateCancellation?.Cancel();
+    CancelModUpdateCheck();
+   }
+  };
   Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
   shell.Background=SpireGlassTheme.Background(false);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
@@ -291,7 +319,11 @@ public partial class MainWindow : Window
   if(busy)return;busy=true;ClearCoop();toast.Text="正在读取模组清单与文件校验值…";
   try {UseGameRoot(folder);coopComparison=null;var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;ShowOverview();}
   catch(Exception ex){MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);toast.Text="扫描未完成，未修改任何文件。";if(report==null)ShowOverview();}
-  finally{busy=false;}
+  finally
+  {
+   busy=false;
+   if(IsVisible&&selectedInstallRoot!=null&&modInventory==null)RefreshMods();
+  }
  }
  async void Rescan(){if(busy)return;if(!demo&&selectedInstallRoot!=null){await ScanFolder(selectedInstallRoot);return;}toast.Text="正在检查内置演示目录…";busy=true;await Task.Delay(600);busy=false;ShowOverview();toast.Text="演示目录已刷新。真实仓库信息请查看在线补丁页。";}
  async void ExportReport()

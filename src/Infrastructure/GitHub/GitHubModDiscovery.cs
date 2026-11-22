@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -38,6 +39,18 @@ internal sealed class GitHubModDiscovery : IDisposable
  public void Dispose()=>client.Dispose();
  public GitHubSourceDiscoveryResult? Cached(ManagedMod mod)=>
   cache.TryGetValue(CacheKey(mod),out var entry)&&entry.Expires>DateTimeOffset.UtcNow?entry.Value:null;
+ public bool HasCachedForModId(string modId)
+ {
+  if(string.IsNullOrWhiteSpace(modId))return false;
+  DateTimeOffset now=DateTimeOffset.UtcNow;
+  return cache.Any(pair=>
+  {
+   if(pair.Value.Expires<=now)return false;
+   int first=pair.Key.IndexOf('|'),last=pair.Key.LastIndexOf('|');
+   return first>=0&&last>first&&
+    pair.Key[(first+1)..last].Equals(modId,StringComparison.OrdinalIgnoreCase);
+  });
+ }
  public DateTimeOffset? CachedAt(ManagedMod mod)
  {
   if(!cache.TryGetValue(CacheKey(mod),out var entry)||entry.Expires<=DateTimeOffset.UtcNow)
