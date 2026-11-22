@@ -926,6 +926,35 @@ internal static class ApplicationWorkflowChecks
                 "cancelling a source check leaves the previously published source state unchanged");
         }
 
+        var switchedRootMod = SourceFixture("fixture.source.root-switch", "Source Root Switch");
+        var switchedRootBackend = new FakeModSourceCheckBackend();
+        switchedRootBackend.Set(switchedRootMod.Id, new ModSourceBackendSnapshot(
+            "fixture-owner/source-root-switch", null, null, null, null, WorkshopBaselineState.Unbound));
+        var switchedRootEntered = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSwitchedRoot = new TaskCompletionSource<ModSourceBackendGitHubCheck>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        switchedRootBackend.GitHubCheckHandler = (mod, _) =>
+        {
+            switchedRootEntered.TrySetResult(true);
+            return releaseSwitchedRoot.Task;
+        };
+        var switchedRootWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, switchedRootBackend, () => sourceClock);
+        bool originalRootStillSelected = true;
+        var switchedRootCheck = switchedRootWorkflow.CheckGitHubAsync(
+            switchedRootMod, force: true, isCurrent: () => originalRootStillSelected);
+        await switchedRootEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        originalRootStillSelected = false;
+        switchedRootWorkflow.CancelAll();
+        releaseSwitchedRoot.TrySetResult(new ModSourceBackendGitHubCheck(
+            "fixture-owner/source-root-switch", switchedRootMod.Version, "7.0.0", "",
+            "有更新", "目录切换后到达的旧结果", sourceClock));
+        var switchedRootResult = await switchedRootCheck.WaitAsync(TimeSpan.FromSeconds(5));
+        check(switchedRootResult.IsStale &&
+            switchedRootWorkflow.Inspect(switchedRootMod).GitHub.State == ModSourceCheckState.NotChecked,
+            "a result arriving after the selected game-root scope changes is discarded");
+
         var readOnlyBackend = new FakeModSourceCheckBackend();
         readOnlyBackend.Set(sourceBoundMod.Id, new ModSourceBackendSnapshot(
             "fixture-owner/source-bound", null, null, 76561198000000001UL, null,
