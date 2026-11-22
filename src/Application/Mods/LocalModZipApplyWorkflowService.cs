@@ -83,6 +83,7 @@ internal sealed record LocalZipInstallTransactionJournal(
     string State,
     Dictionary<string, string> ExpectedFileHashes,
     string HistoricalBindingPolicy,
+    bool HadHistoricalSourceEvidence,
     bool SourcePolicyApplied,
     string? SourcePolicyError,
     DateTimeOffset UpdatedAt);
@@ -338,6 +339,7 @@ internal sealed class LocalModZipApplyWorkflowService
                 "Preparing",
                 expected,
                 selectedPolicy.Value.ToString(),
+                preview.HistoricalSources.HasHistoricalEvidence,
                 false,
                 null,
                 DateTimeOffset.UtcNow);
@@ -528,7 +530,8 @@ internal sealed class LocalModZipApplyWorkflowService
             journal.TargetDirectory,
             policy,
             sourceResult.Action,
-            sourceResult.SourceReviewRequired,
+            sourceResult.SourceReviewRequired ||
+                (policy == LocalZipHistoricalBindingPolicy.PreserveUnverified && journal.HadHistoricalSourceEvidence),
             policy == LocalZipHistoricalBindingPolicy.Unbind && !sourceResult.Applied,
             partial,
             true, true, true,
@@ -654,17 +657,19 @@ internal sealed class LocalModZipApplyWorkflowService
                 !journal.GameRoot.Equals(filterRoot, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            bool reviewRequired = journal.HistoricalBindingPolicy ==
-                LocalZipHistoricalBindingPolicy.RequireManualReview.ToString();
+            LocalZipHistoricalBindingPolicy recordedPolicy = ParsePolicy(journal.HistoricalBindingPolicy);
+            bool reviewRequired = journal.HadHistoricalSourceEvidence &&
+                (recordedPolicy == LocalZipHistoricalBindingPolicy.PreserveUnverified ||
+                 recordedPolicy == LocalZipHistoricalBindingPolicy.RequireManualReview);
             try
             {
                 backend.ValidateJournal(journal);
+                StartWriting();
                 LocalZipInstallRecoveryItem item = GameEnvironment.WithLock(
                     journal.GameRoot,
                     () => RecoverOne(journal, reviewRequired));
                 if (item.Completed) completed++;
                 if (item.Cleaned) cleaned++;
-                if (item.Pending) StartWriting();
                 items.Add(item);
             }
             catch (Exception error)
@@ -751,9 +756,9 @@ internal sealed class LocalModZipApplyWorkflowService
             backend.WriteJournal(journal);
             if (!sourceResult.Applied)
                 return new(journal.TransactionId, "Committed",
-                    true, false, true, sourceResult.SourceReviewRequired,
+                    true, false, true, reviewRequired || sourceResult.SourceReviewRequired,
                     sourceResult.Error ?? "历史来源处理尚未完成。");
-            reviewRequired = sourceResult.SourceReviewRequired;
+            reviewRequired = reviewRequired || sourceResult.SourceReviewRequired;
         }
 
         backend.CleanupPreparation(journal);
