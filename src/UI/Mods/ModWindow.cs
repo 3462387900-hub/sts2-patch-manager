@@ -94,27 +94,39 @@ public partial class MainWindow
  async void DiscoverGitHubMods()
  {
   if(busy||modInventory==null||selectedInstallRoot==null)return;
+  var inventory=modInventory;
+  string gameRoot=selectedInstallRoot;
+  var sourceChecks=ModSourceChecks();
+  var mods=inventory.Mods.Where(mod=>!ModPresentation.IsIndependentPatch(mod))
+   .GroupBy(mod=>mod.Id,StringComparer.OrdinalIgnoreCase).Select(group=>group.First())
+   .Where(mod=>{
+    var state=sourceChecks.Inspect(mod).GitHub;
+    return !state.IsBound&&state.CacheState!=ModSourceCacheState.Fresh;
+   }).Take(8).ToArray();
   busy=true;
   int found=0,verified=0,examined=0;
   try
   {
-   var mods=modInventory.Mods.Where(m=>!ModPresentation.IsIndependentPatch(m)&&GitHubUpdates().Repository(m.Id)==null)
-    .GroupBy(m=>m.Id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First())
-    .Where(m=>Discovery().Cached(m)==null).Take(8).ToArray();
    foreach(var mod in mods)
    {
     toast.Text="正在查找 GitHub 来源："+mod.Name+"（"+(examined+1)+"/"+mods.Length+"）";
-    var result=await Discovery().DiscoverAsync(mod);
-    if(result.Candidates.Length>0)found++;
-    if(result.Candidates.Any(c=>c.Verified))verified++;
+    var result=await sourceChecks.DiscoverGitHubAsync(
+     mod,force:false,
+     isCurrent:()=>IsCurrentModSourceScope(gameRoot,inventory,mod));
+    if(result.Cancelled||result.IsStale)break;
+    if(result.GitHub.Candidates.Count>0)found++;
+    if(result.GitHub.Candidates.Any(candidate=>
+       candidate.Trust is ModSourceTrustLevel.ManifestDeclared or ModSourceTrustLevel.RemoteManifestVerified))
+     verified++;
     examined++;
-    if(result.Retryable)
+    if(result.GitHub.State==ModSourceCheckState.Failed)
     {
-     modStatus=$"已检查 {examined} 个 MOD，GitHub 搜索暂不可用："+result.Note+
+     modStatus=$"已检查 {examined} 个 MOD，GitHub 搜索暂不可用："+result.GitHub.Message+
       "。已查到的候选仍可在详情确认；稍后可继续批量查找。";
      return;
     }
    }
+   if(gameRoot!=selectedInstallRoot||!ReferenceEquals(inventory,modInventory))return;
    modStatus=mods.Length==0
     ?"尚无待查找的普通 MOD；已关联的来源或近期检查结果均予以保留。"
     :$"查找完成：检查 {examined} 个 MOD，找到 {found} 个候选，其中 {verified} 个有明确来源证据。"+
@@ -125,13 +137,20 @@ public partial class MainWindow
  }
  async void DiscoverGitHubMod(ManagedMod mod)
  {
-  if(busy)return;
+  if(busy||selectedInstallRoot==null||modInventory==null)return;
+  string gameRoot=selectedInstallRoot;
+  var inventory=modInventory;
+  var sourceChecks=ModSourceChecks();
   busy=true;
   try
   {
-   var result=await Discovery().DiscoverAsync(mod,true);
-   if(result.Candidates.Length==0)toast.Text=mod.Name+"："+result.Note;
-   else if(result.Retryable)toast.Text=mod.Name+"："+result.Note+"；已有候选可在详情查看。";
+   var result=await sourceChecks.DiscoverGitHubAsync(
+    mod,force:true,
+    isCurrent:()=>IsCurrentModSourceScope(gameRoot,inventory,mod));
+   if(result.IsStale||result.Cancelled)return;
+   if(result.GitHub.Candidates.Count==0)toast.Text=mod.Name+"："+result.GitHub.Message;
+   else if(result.GitHub.State==ModSourceCheckState.Failed)
+    toast.Text=mod.Name+"："+result.GitHub.Message+"；已有候选可在详情查看。";
   }
   catch(Exception e){toast.Text="查找失败："+e.Message;}
   finally{busy=false;ShowModDetail(mod.Folder);}
@@ -140,13 +159,9 @@ public partial class MainWindow
  {
   if(busy||transactionWriting||modUpdateCheckRunning||modInventory==null||selectedInstallRoot==null)return;
   if(modInventoryDirty){toast.Text="本地 MOD 清单尚未稳定，请刷新后重试。";return;}
-  // Capture the read-only scan scope: leaving the page must never redirect
-  // the user back here, and switching game roots must not publish stale results.
   var inventory=modInventory;
   string gameRoot=selectedInstallRoot;
-  var github=GitHubUpdates();
-  var workshop=WorkshopUpdates();
-  var sources=WorkshopSources();
+  var sourceChecks=ModSourceChecks();
   using var cancellation=new CancellationTokenSource();
   modUpdateCheckCancellation=cancellation;
   modUpdateCheckRunning=true;
@@ -154,17 +169,16 @@ public partial class MainWindow
   if(page=="更新中心")ShowModUpdatesCenter();
   try
   {
-   int githubCount=await github.CheckAllAsync(inventory.Mods,cancellation.Token);
-   int workshopCount=await workshop.CheckAllAsync(inventory.Mods,sources,cancellation.Token);
-   if(cancellation.IsCancellationRequested||gameRoot!=selectedInstallRoot||
-      !ReferenceEquals(inventory,modInventory))return;
-   int githubNew=inventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    github.Cached(m.Id)?.Status=="有更新");
-   int workshopNew=inventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    workshop.Cached(m.Id)?.Status=="有更新");
-   int workshopNeedsReview=inventory.Mods.Count(m=>!ModPresentation.IsIndependentPatch(m)&&
-    workshop.Cached(m.Id)?.Status is "待首次核验" or "本地文件已变化");
-   modStatus=$"检查完成：GitHub {githubCount} 项（有更新 {githubNew}）；创意工坊 {workshopCount} 项（有更新 {workshopNew}，待核验 {workshopNeedsReview}）。仅检测来源内容，不会自动下载或修改游戏文件。";
+   var result=await sourceChecks.CheckAllAsync(
+    inventory.Mods,force:false,
+    isCurrent:()=>IsCurrentModSourceScope(gameRoot,inventory,
+     inventory.Mods.FirstOrDefault()??new ManagedMod("","","","","",gameRoot,Path.Combine(gameRoot,"fixture.json"),false,[])),
+    cancellationToken:cancellation.Token);
+   if(cancellation.IsCancellationRequested||result.IsStale||
+      gameRoot!=selectedInstallRoot||!ReferenceEquals(inventory,modInventory))return;
+   modStatus=$"检查完成：GitHub {result.GitHubChecked} 项（有更新 {result.GitHubUpdates}）；"+
+    $"创意工坊 {result.WorkshopChecked} 项（有更新 {result.WorkshopUpdates}，待核验 {result.WorkshopNeedsReview}）。"+
+    "仅检测来源内容，不会自动下载或修改游戏文件。";
    toast.Text=modStatus;
   }
   catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
@@ -179,20 +193,25 @@ public partial class MainWindow
   {
    if(ReferenceEquals(modUpdateCheckCancellation,cancellation))modUpdateCheckCancellation=null;
    modUpdateCheckRunning=false;
-   // A background check never changes the active workspace on completion.
    if(page=="更新中心"&&IsVisible)ShowModUpdatesCenter();
   }
  }
  async void CheckWorkshopMod(ManagedMod mod)
  {
-  if(busy||modInventoryDirty||selectedInstallRoot==null)return;
-  ulong? workshopId=WorkshopSources().Get(mod.Id);
-  if(workshopId is null){toast.Text="此 MOD 尚未关联创意工坊来源。";return;}
+  if(busy||modInventoryDirty||selectedInstallRoot==null||modInventory==null)return;
+  var inventory=modInventory;
+  string gameRoot=selectedInstallRoot;
+  var sourceChecks=ModSourceChecks();
+  var current=sourceChecks.Inspect(mod);
+  if(!current.Workshop.IsBound){toast.Text="此 MOD 尚未关联创意工坊来源。";return;}
   busy=true;
   try
   {
-   var result=await WorkshopUpdates().CheckAsync(mod,workshopId.Value,WorkshopSources(),force:true);
-   toast.Text=mod.Name+" · 创意工坊："+result.Status+" · "+result.Message;
+   var result=await sourceChecks.CheckWorkshopAsync(
+    mod,force:true,
+    isCurrent:()=>IsCurrentModSourceScope(gameRoot,inventory,mod));
+   if(!result.IsStale&&!result.Cancelled)
+    toast.Text=mod.Name+" · 创意工坊："+result.Workshop.Status+" · "+result.Workshop.Message;
   }
   catch(Exception e){toast.Text="创意工坊检查失败："+e.Message;}
   finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
