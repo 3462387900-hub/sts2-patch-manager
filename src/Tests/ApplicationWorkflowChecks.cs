@@ -1303,5 +1303,6 @@ internal static class ApplicationWorkflowChecks
         await ModUpdateStagingWorkflowChecks.RunAsync(home, check);
         await ModUpdateApplyWorkflowChecks.RunAsync(home, check);
         await LocalModZipImportWorkflowChecks.RunAsync(home, check);
+        await LocalModZipApplyWorkflowChecks.RunAsync(home, check);
     }
 }
