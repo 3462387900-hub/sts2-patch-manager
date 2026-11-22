@@ -665,6 +665,10 @@ internal static class ApplicationWorkflowChecks
         var boundSnapshot = sourceRecognition.Inspect(sourceBoundMod);
         var candidateSnapshot = sourceRecognition.Inspect(sourceCandidateMod);
         var unknownSnapshot = sourceRecognition.Inspect(sourceUnknownMod);
+        var sourceReviewMod = SourceFixture("fixture.source.review", "Source Review");
+        sourceRecognitionBackend.Set(sourceReviewMod.Id, new ModSourceBackendSnapshot(
+            null, null, null, 76561198000000004UL, null, WorkshopBaselineState.Missing));
+        var sourceReview = sourceRecognition.Inspect(sourceReviewMod);
         check(boundSnapshot.GitHub.IsBound &&
             boundSnapshot.GitHub.Identifier == "fixture-owner/source-bound" &&
             boundSnapshot.GitHub.Trust == ModSourceTrustLevel.UserConfirmed &&
@@ -678,8 +682,10 @@ internal static class ApplicationWorkflowChecks
                 item.Trust == ModSourceTrustLevel.UnverifiedCandidate) &&
             unknownSnapshot.GitHub.State == ModSourceCheckState.Unbound &&
             unknownSnapshot.GitHub.Trust == ModSourceTrustLevel.Unbound &&
-            unknownSnapshot.Workshop.State == ModSourceCheckState.Unbound,
-            "source diagnostics distinguish confirmed GitHub/Workshop bindings, declared and unverified GitHub candidates, and unknown sources");
+            unknownSnapshot.Workshop.State == ModSourceCheckState.Unbound &&
+            sourceReview.Workshop.State == ModSourceCheckState.NeedsReview &&
+            sourceReview.Workshop.Status == "待首次核验",
+            "source diagnostics distinguish confirmed GitHub/Workshop bindings, declared and unverified GitHub candidates, unknown sources and a Workshop binding awaiting its first baseline");
 
         DateTimeOffset sourceClock = new(2026, 11, 22, 12, 0, 0, TimeSpan.Zero);
         var cacheMod = SourceFixture("fixture.source.cache", "Source Cache");
@@ -733,6 +739,36 @@ internal static class ApplicationWorkflowChecks
             !forcedRefresh.GitHub.CacheHit &&
             cacheBackend.GitHubCheckCount == 2,
             "an explicit force refresh bypasses a fresh local cache while ordinary checks continue to reuse it");
+        DateTimeOffset discoveryClock = new(2026, 11, 22, 15, 0, 0, TimeSpan.Zero);
+        var discoveryCacheMod = SourceFixture("fixture.source.discovery-cache", "Source Discovery Cache");
+        var discoveryCacheBackend = new FakeModSourceCheckBackend();
+        int discoveryCalls = 0;
+        discoveryCacheBackend.DiscoveryHandler = (mod, _) =>
+        {
+            Interlocked.Increment(ref discoveryCalls);
+            return Task.FromResult(new GitHubSourceDiscoveryResult(
+                mod.Id,
+                [new GitHubSourceCandidate("fixture-owner/discovery-cache",
+                    "仓库 MOD ID 已核验", 98, true)],
+                "模拟来源候选"));
+        };
+        var discoveryCacheWorkflow = new ModSourceCheckWorkflowService(
+            sourceGameRoot, discoveryCacheBackend, () => discoveryClock);
+        var discoveryFirst = await discoveryCacheWorkflow.DiscoverGitHubAsync(discoveryCacheMod);
+        var discoveryHit = await discoveryCacheWorkflow.DiscoverGitHubAsync(discoveryCacheMod);
+        discoveryClock = discoveryClock.AddHours(6).AddMinutes(1);
+        var discoveryExpired = discoveryCacheWorkflow.Inspect(discoveryCacheMod);
+        var discoveryRefreshed = await discoveryCacheWorkflow.DiscoverGitHubAsync(discoveryCacheMod);
+        var discoveryForced = await discoveryCacheWorkflow.DiscoverGitHubAsync(
+            discoveryCacheMod, force: true);
+        check(!discoveryFirst.GitHub.CacheHit &&
+            discoveryHit.GitHub.CacheHit &&
+            discoveryExpired.GitHub.CacheState == ModSourceCacheState.Expired &&
+            !discoveryRefreshed.GitHub.CacheHit &&
+            !discoveryForced.GitHub.CacheHit &&
+            discoveryCalls == 3,
+            "GitHub discovery uses its local cache, rechecks after expiry and honors an explicit force refresh");
+
 
         var updateMod = SourceFixture("fixture.source.update", "Source Update");
         var latestMod = SourceFixture("fixture.source.latest", "Source Latest");
