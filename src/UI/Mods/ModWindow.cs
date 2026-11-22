@@ -228,8 +228,8 @@ public partial class MainWindow
   body.Children.Add(input);
   var hint=T("示例：https://github.com/作者/仓库。绑定按 MOD ID 保存，不改变模组文件。",11,muted);
   body.Children.Add(hint);
-  var save=Btn("保存关联",()=>{try{updates.Bind(mod.Id,input.Text);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Primary");
-  var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
+  var save=Btn("保存关联",()=>{try{updates.Bind(mod.Id,input.Text);ModSourceChecks().Invalidate(mod);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Primary");
+  var remove=Btn("解除关联",()=>{try{updates.Unbind(mod.Id);ModSourceChecks().Invalidate(mod);dialog.DialogResult=true;}catch(Exception e){hint.Text=e.Message;}},"Ghost");
   body.Children.Add(H(save,remove,Btn("取消",()=>dialog.DialogResult=false,"Ghost")));
   dialog.Content=body;input.Focus();
   if(dialog.ShowDialog()==true){if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
@@ -373,12 +373,18 @@ public partial class MainWindow
 
  async void CheckGitHubMod(ManagedMod mod)
  {
-  if(busy)return;
+  if(busy||selectedInstallRoot==null||modInventory==null)return;
+  string gameRoot=selectedInstallRoot;
+  var inventory=modInventory;
+  var sourceChecks=ModSourceChecks();
   busy=true;
   try
   {
-   var result=await GitHubUpdates().CheckAsync(mod,true);
-   toast.Text=mod.Name+" · "+result.Status+" · "+result.Message;
+   var result=await sourceChecks.CheckGitHubAsync(
+    mod,force:true,
+    isCurrent:()=>IsCurrentModSourceScope(gameRoot,inventory,mod));
+   if(!result.IsStale&&!result.Cancelled)
+    toast.Text=mod.Name+" · "+result.GitHub.Status+" · "+result.GitHub.Message;
   }
   catch(Exception e){toast.Text="检查失败："+e.Message;}
   finally{busy=false;if(page=="更新中心")ShowModUpdatesCenter();else ShowModDetail(mod.Folder);}
@@ -389,7 +395,7 @@ public partial class MainWindow
  {
   if(busy||transactionWriting||modInventoryDirty||selectedInstallRoot==null)return;
   string gameRoot=selectedInstallRoot;
-  string? repo=GitHubUpdates().Repository(mod.Id);
+  string? repo=ModSourceChecks().Inspect(mod).GitHub.Identifier;
   if(repo==null){toast.Text="请先关联 GitHub 来源。";return;}
   busy=true;
   bool changed=false;
