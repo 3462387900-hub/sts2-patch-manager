@@ -1692,13 +1692,11 @@ public partial class MainWindow
    actions.Children.Add(preview);
    if(!isFixSection)
    {
-    var github=GitHubUpdates();
-    var source=github.Repository(mod.Id);
-    var cached=github.Cached(mod.Id);
-    var update=Btn(source==null?"查找 GitHub 来源":cached?.Status=="有更新"?"下载并更新":"检查更新",()=>{
+    var github=ModSourceChecks().Inspect(mod).GitHub;
+    var update=Btn(!github.IsBound?"查找 GitHub 来源":github.CanUpdate?"下载并更新":"检查更新",()=>{
      if(busy||transactionWriting||modInventoryDirty)return;
-     if(source==null)DiscoverGitHubMod(mod);
-     else if(cached?.Status=="有更新")UpdateGitHubMod(mod);
+     if(!github.IsBound)DiscoverGitHubMod(mod);
+     else if(github.CanUpdate)UpdateGitHubMod(mod);
      else CheckGitHubMod(mod);
     },"ModToolbarPrimary");
     update.IsEnabled=!busy&&!transactionWriting&&!modInventoryDirty;
