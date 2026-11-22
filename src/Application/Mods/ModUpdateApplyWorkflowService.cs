@@ -450,7 +450,7 @@ internal sealed class ModUpdateApplyWorkflowService
 
             journal = journal with { State = "Prepared", UpdatedAt = DateTimeOffset.UtcNow };
             WriteJournal(journal);
-            Report("ReadyToCommit", "备份与新目录均已校验，等待进入关键提交阶段。");
+            Report("ReadyToCommit", "备份与新目录均已校验，等待进入关键提交阶段。", true);
 
             // Last cancellable boundary. After this check, no cancellation token is
             // observed until the complete commit or complete rollback has finished.
