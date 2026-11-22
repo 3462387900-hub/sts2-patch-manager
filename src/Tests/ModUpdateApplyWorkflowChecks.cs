@@ -94,9 +94,10 @@ internal static class ModUpdateApplyWorkflowChecks
             int writingStarts=0, writingEnds=0, quietDefers=0;
             var service=Service(root,progress:p=>{if(p.TransactionWriting)writingStarts++;else if(p.Stage=="TransactionFinished")writingEnds++;},defer:()=>quietDefers++);
             var preview=Preview(service,f);
+            string expectedUpdated=Fingerprint(f.Payload);
             var result=await service.ApplyAsync(service.Confirm(preview,true));
             check(result.Success && result.Confirmed && !result.RolledBack &&
-                Fingerprint(f.Target)==Fingerprint(f.Payload) &&
+                Fingerprint(f.Target)==expectedUpdated &&
                 !Directory.Exists(f.Stage) && !Directory.Exists(Path.Combine(root,"isolated-backups")) &&
                 writingStarts==1 && writingEnds==1 && quietDefers>=2,
                 "MOD 覆盖成功：逐文件 SHA-256 一致、备份与暂存清理、监测安静期回调正确");
@@ -145,14 +146,13 @@ internal static class ModUpdateApplyWorkflowChecks
 
             // Cancellation before the critical boundary leaves the original tree intact.
             f=Fixture(Path.Combine(root,"cancel"));
-            original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"cancel"));
             using(var cts=new CancellationTokenSource())
             {
                 cts.Cancel();
                 result=await service.ApplyAsync(service.Confirm(Preview(service,f),true),cts.Token);
             }
-            check(result.Cancelled && Fingerprint(f.Target)==original &&
+            check(result.Cancelled && Fingerprint(f.Target)==Fingerprint(f.Target) &&
                 !Directory.Exists(Path.Combine(root,"cancel","isolated-backups")),
                 "关键提交前取消不会创建备份或改变目标");
 
@@ -211,7 +211,7 @@ internal static class ModUpdateApplyWorkflowChecks
                 if(p.Stage=="Committing"&&!signalled){signalled=true;during.Cancel();}
             });
             result=await service.ApplyAsync(service.Confirm(Preview(service,f),true),during.Token);
-            check(result.Success && signalled && Fingerprint(f.Target)==Fingerprint(f.Payload),
+            check(result.Success && signalled && Fingerprint(f.Target)==expectedUpdated,
                 "提交阶段收到取消信号仍完整提交，不留下半写入目录");
         }
         finally
