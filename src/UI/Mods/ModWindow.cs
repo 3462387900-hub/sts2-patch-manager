@@ -1375,9 +1375,9 @@ public partial class MainWindow
   row=>{
    if(busy||transactionWriting||modInventoryDirty)return;
    if(row.IsFix){ShowModDetail(row.Mod.Folder);return;}
-   var updates=GitHubUpdates();
-   if(updates.Repository(row.Mod.Id)==null)DiscoverGitHubMod(row.Mod);
-   else if(updates.Cached(row.Mod.Id)?.Status=="有更新")UpdateGitHubMod(row.Mod);
+   var source=ModSourceChecks().Inspect(row.Mod).GitHub;
+   if(!source.IsBound)DiscoverGitHubMod(row.Mod);
+   else if(source.CanUpdate)UpdateGitHubMod(row.Mod);
    else CheckGitHubMod(row.Mod);
   },(row,value)=>{
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
@@ -1405,9 +1405,10 @@ public partial class MainWindow
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
    foreach(var button in new[]{findBatch,checkBatch,workshopCheckBatch,workshopUpdateBatch,enableBatch,disableBatch,clearBatch})
     button.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
-   bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&WorkshopSources().Get(m.Id).HasValue);
+   bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&
+    ModSourceChecks().Inspect(m).Workshop.IsBound);
    bool hasWorkshopUpdate=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
-    WorkshopSources().Get(m.Id).HasValue&&WorkshopUpdates().Cached(m.Id)?.Status=="有更新");
+    ModSourceChecks().Inspect(m).Workshop.CanUpdate);
    findBatch.IsEnabled=checkBatch.IsEnabled=enableBatch.IsEnabled=disableBatch.IsEnabled=
     count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
    workshopCheckBatch.IsEnabled=hasWorkshopSource&&!busy&&!transactionWriting&&!modInventoryDirty;
@@ -1742,9 +1743,9 @@ public partial class MainWindow
   row=>{
    if(busy||transactionWriting||modInventoryDirty)return;
    if(row.IsFix){ShowModDetail(row.Mod.Folder);return;}
-   var updates=GitHubUpdates();
-   if(updates.Repository(row.Mod.Id)==null)DiscoverGitHubMod(row.Mod);
-   else if(updates.Cached(row.Mod.Id)?.Status=="有更新")UpdateGitHubMod(row.Mod);
+   var source=ModSourceChecks().Inspect(row.Mod).GitHub;
+   if(!source.IsBound)DiscoverGitHubMod(row.Mod);
+   else if(source.CanUpdate)UpdateGitHubMod(row.Mod);
    else CheckGitHubMod(row.Mod);
   },(row,value)=>{
    if(value)chosenModFolders.Add(row.Mod.Folder);else chosenModFolders.Remove(row.Mod.Folder);
@@ -1784,9 +1785,10 @@ public partial class MainWindow
    selectionCount.Text=count==0?"":$"已选 {count} 项 · 当前显示 {visibleSelected} 项"+
     (count>visibleSelected?$" · 筛选隐藏 {count-visibleSelected} 项":"");
    bulkHost.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
-   bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&WorkshopSources().Get(m.Id).HasValue);
+   bool hasWorkshopSource=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&
+    ModSourceChecks().Inspect(m).Workshop.IsBound);
    bool hasWorkshopUpdate=ChosenMods().Any(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
-    WorkshopSources().Get(m.Id).HasValue&&WorkshopUpdates().Cached(m.Id)?.Status=="有更新");
+    ModSourceChecks().Inspect(m).Workshop.CanUpdate);
    findBatch.IsEnabled=checkBatch.IsEnabled=enableBatch.IsEnabled=disableBatch.IsEnabled=
     count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
    moreBatch.IsEnabled=count>0&&!busy&&!transactionWriting&&!modInventoryDirty;
