@@ -12,7 +12,7 @@ namespace SpirePatch;
 /// Read-only adapter from the existing source-check workflow to the local ZIP
 /// preview cache probe. InspectRuntimeCache never starts a network operation.
 /// </summary>
-internal sealed class ModSourceWorkflowLocalZipCacheProbe : ILocalZipRuntimeCacheProbe
+internal sealed class ModSourceWorkflowLocalZipCacheProbe
 {
     readonly ModSourceCheckWorkflowService sourceChecks;
 
