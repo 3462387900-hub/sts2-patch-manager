@@ -28,6 +28,13 @@ internal sealed class LocalModZipArchiveBackend : ILocalModZipImportBackend
     internal const int MaxPathCharacters = 600;
     internal const double MaxCompressionRatio = 1000d;
 
+    readonly Func<string, (bool? GitHubCached, bool? WorkshopCached)>? runtimeCacheProbe;
+    internal LocalModZipArchiveBackend(
+        Func<string, (bool? GitHubCached, bool? WorkshopCached)>? runtimeCacheProbe = null)
+    {
+        this.runtimeCacheProbe = runtimeCacheProbe;
+    }
+
     static readonly HashSet<string> ForbiddenExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".exe", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
           ".hta", ".scr", ".msi", ".msp", ".lnk", ".url" };
@@ -289,6 +296,7 @@ internal sealed class LocalModZipArchiveBackend : ILocalModZipImportBackend
         if (!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(path),
             @"\Alocalzip-[0-9a-fA-F]{32}\z"))
             throw new InvalidOperationException("拒绝清理非本地 ZIP 工作区。");
+        GameEnvironment.NoLinks(Path.GetDirectoryName(path)!);
         if (File.Exists(path) || Directory.Exists(path)) DeleteWithoutFollowingLinks(path);
     }
 
@@ -605,7 +613,7 @@ internal sealed class LocalModZipArchiveBackend : ILocalModZipImportBackend
         }
     }
 
-    static LocalZipSourceHints ReadSources(string dataRoot, string root, string modId)
+    LocalZipSourceHints ReadSources(string dataRoot, string root, string modId)
     {
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)).ToUpperInvariant())));
@@ -631,7 +639,13 @@ internal sealed class LocalModZipArchiveBackend : ILocalModZipImportBackend
                 warnings.Add("Workshop 历史基线无法读取：" + e.Message);
             }
         }
-        return new(github, workshop, baseline, null, null, Array.AsReadOnly(warnings.ToArray()));
+        // Existing update checks are in-memory, not persisted with source bindings.
+        // An optional read-only probe may supply them when the UI is wired in batch 9.
+        // Without it, the two cache values remain Unknown, never falsely "absent".
+        (bool? GitHubCached, bool? WorkshopCached) cached =
+            runtimeCacheProbe?.Invoke(modId) ?? (null, null);
+        return new(github, workshop, baseline, cached.GitHubCached, cached.WorkshopCached,
+            Array.AsReadOnly(warnings.ToArray()));
     }
 
     static string? ReadBinding(string file, string modId, List<string> warnings, string kind)

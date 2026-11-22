@@ -22,6 +22,25 @@ internal static class LocalModZipImportWorkflowChecks
 
     sealed record ZipEntry(string Path, string Body, int Attributes = 0);
 
+    sealed class CancelAfterStageBackend(CancellationTokenSource cancel) : ILocalModZipImportBackend
+    {
+        readonly LocalModZipArchiveBackend inner = new();
+        public async Task<LocalZipPackage> StageAsync(
+            string zip, string workspace, CancellationToken cancellationToken)
+        {
+            var package = await inner.StageAsync(zip, workspace, cancellationToken);
+            cancel.Cancel();
+            return package;
+        }
+        public LocalZipReadOnlyContext InspectReadOnly(
+            string root, LocalZipPackage package, string dataRoot) =>
+            inner.InspectReadOnly(root, package, dataRoot);
+        public Task<LocalZipPreviewVerification> VerifyAsync(
+            LocalZipPackage package, CancellationToken cancellationToken) =>
+            inner.VerifyAsync(package, cancellationToken);
+        public void Discard(string workspace) => inner.Discard(workspace);
+    }
+
     static string CreateZip(string parent, params ZipEntry[] entries)
     {
         string zip = Path.Combine(parent, Guid.NewGuid().ToString("N") + ".zip");
@@ -104,7 +123,10 @@ internal static class LocalModZipImportWorkflowChecks
               ready.Preview.Package.Files.All(f => f.Sha256.Length == 64) &&
               ready.Preview.Package.DestinationFolderName == "Sample" &&
               ready.Preview.Package.FolderNameReason.Contains("包装目录") &&
-              ready.Preview.Package.ArchiveSha256.Length == 64,
+              ready.Preview.Package.ArchiveSha256.Length == 64 &&
+              !ready.Preview.HistoricalSources.HasHistoricalBinding &&
+              ready.Preview.HistoricalSources.GitHubCached is null &&
+              ready.Preview.HistoricalSources.RuntimeCacheNotice.Contains("未知状态"),
               "local ZIP isolated preview contains full immutable metadata, SHA-256 files and unverified source");
         if (ready.Preview is null) throw new InvalidOperationException("Fixture must preview.");
         check((await service.VerifyAsync(ready.Preview)).IsCurrent &&
@@ -127,6 +149,12 @@ internal static class LocalModZipImportWorkflowChecks
               direct.State == LocalZipPreviewState.Ready,
               "root-level MOD manifest selects ID as destination folder");
         service.Discard(direct.Preview);
+
+        var alternateManifest = await service.PreviewAsync(root, CreateZip(parent,
+            new ZipEntry("manifest.json", ValidManifest), new ZipEntry("sample.dll", "dll")));
+        check(alternateManifest.State == LocalZipPreviewState.Ready,
+            "manifest.json at ZIP root is supported");
+        service.Discard(alternateManifest.Preview);
 
         var deep = await service.PreviewAsync(root, CreateZip(parent, Valid("outer/inner/Sample/")));
         check(deep.Preview?.Package.DestinationFolderName == "Sample" &&
@@ -317,6 +345,17 @@ internal static class LocalModZipImportWorkflowChecks
               withPending.Preview.HistoricalSources.GitHubCached is null,
               "historical GitHub/Workshop bindings are warnings, not trusted local ZIP identity or fabricated cache state");
         withSources.Discard(withPending.Preview);
+        var cacheService = new LocalModZipImportWorkflowService(
+            dataRoot, new LocalModZipArchiveBackend(_ => (true, true)),
+            Path.Combine(parent, "cache-staging-" + Guid.NewGuid().ToString("N")),
+            _ => false);
+        var cachePreview = await cacheService.PreviewAsync(root, zip);
+        check(cachePreview.Preview!.HistoricalSources.HasHistoricalCache &&
+              cachePreview.Preview.HistoricalSources.GitHubCached == true &&
+              cachePreview.Preview.HistoricalSources.WorkshopCached == true &&
+              cachePreview.Preview.HistoricalSources.RuntimeCacheNotice.Contains("已取得"),
+              "optional offline runtime cache probe distinguishes existing cache from unknown");
+        cacheService.Discard(cachePreview.Preview);
 
         var running = Workflow(parent, running: _ => true);
         var gameActive = await running.PreviewAsync(Fixture(parent), CreateZip(parent, Valid()));
@@ -354,9 +393,35 @@ internal static class LocalModZipImportWorkflowChecks
             CreateZip(parent, Valid()), cancelled.Token);
         check(cancellation.State == LocalZipPreviewState.Cancelled &&
               cancellation.Preview is null, "pre-cancelled preview returns Cancelled without creating a stage");
-        var cleanupRejected = await service.PreviewAsync(verificationRoot,
+        using var cancelledAfterStage = new CancellationTokenSource();
+        string cancelledStageRoot = Path.Combine(parent, "cancel-stage");
+        var cancellationService = new LocalModZipImportWorkflowService(
+            Path.Combine(parent, "data"), new CancelAfterStageBackend(cancelledAfterStage),
+            cancelledStageRoot, _ => false);
+        var interrupted = await cancellationService.PreviewAsync(
+            verificationRoot, CreateZip(parent, Valid()), cancelledAfterStage.Token);
+        check(interrupted.State == LocalZipPreviewState.Cancelled &&
+              !Directory.EnumerateDirectories(cancelledStageRoot).Any(),
+              "cancellation after a full stage discards the isolated workspace");
+
+        string failingStageRoot = Path.Combine(parent, "failed-stage");
+        var failureService = new LocalModZipImportWorkflowService(
+            Path.Combine(parent, "data"), stagingRoot: failingStageRoot,
+            gameRunning: _ => false);
+        var cleanupRejected = await failureService.PreviewAsync(verificationRoot,
             CreateZip(parent, new ZipEntry("bad.txt", "not-a-mod")));
-        check(cleanupRejected.State == LocalZipPreviewState.Failed,
-              "invalid package cleans its new staging workspace");
+        check(cleanupRejected.State == LocalZipPreviewState.Failed &&
+              !Directory.EnumerateDirectories(failingStageRoot).Any(),
+              "invalid package automatically cleans its new staging workspace");
+
+        string overlapStage = Path.Combine(verificationRoot, "mods", "unsafe-stage");
+        var overlapService = new LocalModZipImportWorkflowService(
+            Path.Combine(parent, "data"), stagingRoot: overlapStage,
+            gameRunning: _ => false);
+        var overlap = await overlapService.PreviewAsync(
+            verificationRoot, CreateZip(parent, Valid()));
+        check(overlap.State == LocalZipPreviewState.Failed &&
+              !Directory.Exists(overlapStage),
+              "staging directory inside game MOD tree is rejected without a write");
     }
 }

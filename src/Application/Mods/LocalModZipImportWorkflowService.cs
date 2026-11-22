@@ -27,9 +27,14 @@ internal sealed record LocalZipSourceHints(
     IReadOnlyList<string>? ReadWarnings = null)
 {
     public bool HasHistoricalBinding => GitHubRepository is not null || WorkshopId is not null;
-    public string Warning => HasHistoricalBinding
-        ? "存在此 MOD ID 的历史 GitHub/Workshop 绑定；本地 ZIP 未经远端验证，不得自动继承来源可信身份。"
+    public bool HasHistoricalCache => GitHubCached == true || WorkshopCached == true;
+    public bool HasHistoricalEvidence => HasHistoricalBinding || HasHistoricalCache || WorkshopBaselineExists;
+    public string Warning => HasHistoricalEvidence
+        ? "存在此 MOD ID 的历史 GitHub/Workshop 绑定、基线或检查缓存；本地 ZIP 未经远端验证，不得自动继承来源可信身份。"
         : "此 ZIP 是未验证的本地压缩包，不代表 GitHub/Steam 官方来源。";
+    public string RuntimeCacheNotice => GitHubCached is null || WorkshopCached is null
+        ? "运行时检查缓存未接入或无法确认；不得将未知状态当作无历史缓存。"
+        : "已取得运行时 GitHub/Workshop 缓存状态。";
 }
 internal sealed record LocalZipPackage(
     string ZipPath, string ArchiveSha256, string WorkspaceDirectory,
@@ -91,6 +96,7 @@ internal sealed class LocalModZipImportWorkflowService
     {
         string? workspace = null;
         bool retainWorkspace = false;
+        LocalZipPreviewResult outcome;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -117,23 +123,29 @@ internal sealed class LocalModZipImportWorkflowService
                 ComputeToken(root, package, context.Sources, conflicts),
                 DateTimeOffset.UtcNow);
             retainWorkspace = true;
-            return new(frozen.CanInstallNew ? LocalZipPreviewState.Ready : LocalZipPreviewState.Blocked, frozen);
+            outcome = new(frozen.CanInstallNew ? LocalZipPreviewState.Ready : LocalZipPreviewState.Blocked, frozen);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return new(LocalZipPreviewState.Cancelled, null, "本地 ZIP 预览已取消。");
+            outcome = new(LocalZipPreviewState.Cancelled, null, "本地 ZIP 预览已取消。");
         }
         catch (Exception error) when (error is IOException or InvalidDataException or
             InvalidOperationException or UnauthorizedAccessException or ArgumentException or
             System.Text.Json.JsonException)
         {
-            return new(LocalZipPreviewState.Failed, null, error.Message);
+            outcome = new(LocalZipPreviewState.Failed, null, error.Message);
         }
-        finally
+
+        if (!retainWorkspace && workspace is not null)
         {
-            if (!retainWorkspace && workspace is not null)
-                backend.Discard(workspace);
+            try { Discard(workspace); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+                InvalidOperationException or ArgumentException)
+            {
+                outcome = outcome with { CleanupWarning = "暂存清理未完成，请保留现场核对：" + error.Message };
+            }
         }
+        return outcome;
     }
 
     /// <summary>
@@ -189,6 +201,7 @@ internal sealed class LocalModZipImportWorkflowService
             !System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(full),
                 @"\Alocalzip-[0-9a-fA-F]{32}\z"))
             throw new InvalidOperationException("拒绝清理不属于本地 ZIP 预览的路径。");
+        GameEnvironment.NoLinks(stagingRoot);
         backend.Discard(full);
     }
 
