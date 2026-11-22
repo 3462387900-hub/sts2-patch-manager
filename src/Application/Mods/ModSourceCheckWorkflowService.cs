@@ -114,13 +114,17 @@ internal sealed record ModSourceCheckResult(
             var parts = new List<string>();
             if (GitHub.IsBound)
             {
-                string status = GitHub.CacheState == ModSourceCacheState.Missing
+                string status = GitHub.State == ModSourceCheckState.NotChecked
                     ? "已关联 · 待检查"
                     : GitHub.Status + (GitHub.LatestVersion.Length > 0
                         ? " · " + GitHub.LatestVersion
                         : "");
                 parts.Add("GitHub：" + status);
             }
+            else if (GitHub.State == ModSourceCheckState.Failed)
+                parts.Add("GitHub：查找受限，可重试");
+            else if (GitHub.State == ModSourceCheckState.CacheExpired)
+                parts.Add("GitHub：来源缓存已过期，可重新查找");
             else if (GitHub.Candidates.Count > 0)
             {
                 bool verified = GitHub.Candidates.Any(candidate =>
@@ -129,14 +133,12 @@ internal sealed record ModSourceCheckResult(
                 parts.Add("GitHub：" + (verified ? "已核验来源" : "疑似来源") +
                     " " + GitHub.Candidates.Count + " 个 · 待确认");
             }
-            else if (GitHub.State == ModSourceCheckState.Failed)
-                parts.Add("GitHub：查找受限，可重试");
             else if (GitHub.State == ModSourceCheckState.NoCandidate)
                 parts.Add("GitHub：暂无来源");
 
             if (Workshop.IsBound)
             {
-                string status = Workshop.CacheState == ModSourceCacheState.Missing
+                string status = Workshop.State == ModSourceCheckState.NotChecked
                     ? "已关联 · 待检查"
                     : Workshop.Status;
                 parts.Add("创意工坊：" + status);
