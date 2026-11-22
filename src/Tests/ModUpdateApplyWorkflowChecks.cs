@@ -92,14 +92,29 @@ internal static class ModUpdateApplyWorkflowChecks
             var f=Fixture(root);
             string original=Fingerprint(f.Target);
             int writingStarts=0, writingEnds=0, quietDefers=0;
-            var service=Service(root,progress:p=>{if(p.TransactionWriting)writingStarts++;else if(p.Stage=="TransactionFinished")writingEnds++;},defer:()=>quietDefers++);
+            bool watcherWriting=false;
+            var service=Service(root,progress:p=>
+            {
+                if(p.TransactionWriting && !watcherWriting)
+                {
+                    writingStarts++;
+                    watcherWriting=true;
+                }
+                else if(!p.TransactionWriting && watcherWriting)
+                {
+                    writingEnds++;
+                    watcherWriting=false;
+                }
+            },defer:()=>quietDefers++);
             var preview=Preview(service,f);
             string expectedUpdated=Fingerprint(f.Payload);
             var result=await service.ApplyAsync(service.Confirm(preview,true));
             check(result.Success && result.Confirmed && !result.RolledBack &&
                 Fingerprint(f.Target)==expectedUpdated &&
-                !Directory.Exists(f.Stage) && !Directory.Exists(Path.Combine(root,"isolated-backups")) &&
-                writingStarts==1 && writingEnds==1 && quietDefers>=2,
+                !Directory.Exists(f.Stage) &&
+                (!Directory.Exists(Path.Combine(root,"isolated-backups")) ||
+                    !Directory.EnumerateFileSystemEntries(Path.Combine(root,"isolated-backups")).Any()) &&
+                writingStarts==1 && writingEnds==1 && !watcherWriting && quietDefers>=2,
                 "MOD 覆盖成功：逐文件 SHA-256 一致、备份与暂存清理、监测安静期回调正确");
 
             // Decline does not create a backup or touch the target.
