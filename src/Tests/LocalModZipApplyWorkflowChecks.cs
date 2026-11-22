@@ -244,11 +244,16 @@ internal static class LocalModZipApplyWorkflowChecks
         // External edits after move are preserved for manual recovery, never recursively deleted.
         string rootMismatch = Fixture(parent);
         var mismatchPreview = await previewService.PreviewAsync(rootMismatch, CreateZip(parent));
+        string mismatchKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootMismatch)).ToUpperInvariant())));
+        string mismatchGithub = Path.Combine(data, "GitHub模组更新", mismatchKey + ".json");
+        Directory.CreateDirectory(Path.GetDirectoryName(mismatchGithub)!);
+        File.WriteAllText(mismatchGithub, """{"fixture.apply":"fixture/repository"}""");
         var mismatchBackend = new FailingBackend(data, (point, _) =>
-            point == LocalZipInstallFaultPoint.AfterMove ? new IOException("crash after move") : null);
+            point == LocalZipInstallFaultPoint.SourceBindingWrite ? new IOException("source persistence interrupted") : null);
         var mismatchService = new LocalModZipApplyWorkflowService(previewService, data, mismatchBackend);
         var mismatch = await mismatchService.ApplyAsync(mismatchPreview.Preview!, (_, _) =>
-            Task.FromResult(new LocalZipApplyDecision(true, LocalZipHistoricalBindingPolicy.PreserveUnverified)),
+            Task.FromResult(new LocalZipApplyDecision(true, LocalZipHistoricalBindingPolicy.Unbind)),
             () => { });
         string target = mismatchPreview.Preview.DestinationDirectory;
         File.WriteAllText(Path.Combine(target, "external-change.txt"), "external");
