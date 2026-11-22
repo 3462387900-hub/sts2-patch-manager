@@ -147,6 +147,9 @@ internal sealed class GitHubModInstaller : IDisposable
    Convert.ToHexString(hash.GetHashAndReset()).Equals(package.Sha256,StringComparison.OrdinalIgnoreCase),
    "下载的安装包 SHA-256 与 GitHub 发布记录不一致，已取消安装。");
  }
+ internal Task DownloadPackageAsync(GitHubModPackage package,string archive,CancellationToken ct=default) =>
+  DownloadAsync(package,archive,ct);
+
  static string[] SafeSegments(string name)
  {
   Require(name.Length>0&&name.Length<=600&&!name.StartsWith('/')&&!name.Contains('\\')&&
