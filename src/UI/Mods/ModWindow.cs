@@ -2327,11 +2327,12 @@ public partial class MainWindow
    (!details.HasHistoricalEvidence||localZipSelectedPolicy.HasValue)&&
    !localZipRecoveryBlocked&&!busy&&!transactionWriting&&!modInventoryDirty;
   localZipConfirmButton=confirm;
-  if(localZipPolicyPicker!=null)
+  var policyPicker=localZipPolicyPicker;
+  if(policyPicker!=null)
   {
-   localZipPolicyPicker.SelectionChanged+=(_,_) =>
+   policyPicker.SelectionChanged+=(_,_) =>
    {
-    localZipSelectedPolicy=(localZipPolicyPicker.SelectedItem as ComboBoxItem)?.Tag
+    localZipSelectedPolicy=(policyPicker.SelectedItem as ComboBoxItem)?.Tag
      is LocalZipHistoricalBindingPolicy policy?policy:null;
     if(localZipConfirmButton!=null)
      localZipConfirmButton.IsEnabled=details.CanConfirm&&
