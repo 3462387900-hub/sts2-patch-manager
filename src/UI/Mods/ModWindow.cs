@@ -43,10 +43,12 @@ public partial class MainWindow
   }
   return modSourceCheckWorkflow;
  }
- bool IsCurrentModSourceScope(string root,ModInventory inventory,ManagedMod mod)=>
+ bool IsCurrentModSourceInventory(string root,ModInventory inventory)=>
   !modInventoryDirty&&
   root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
-  ReferenceEquals(inventory,modInventory)&&
+  ReferenceEquals(inventory,modInventory);
+ bool IsCurrentModSourceScope(string root,ModInventory inventory,ManagedMod mod)=>
+  IsCurrentModSourceInventory(root,inventory)&&
   modInventory?.Mods.Any(item=>
    item.Folder.Equals(mod.Folder,StringComparison.OrdinalIgnoreCase)&&
    item.Id.Equals(mod.Id,StringComparison.OrdinalIgnoreCase)&&
@@ -171,8 +173,7 @@ public partial class MainWindow
   {
    var result=await sourceChecks.CheckAllAsync(
     inventory.Mods,force:false,
-    isCurrent:()=>IsCurrentModSourceScope(gameRoot,inventory,
-     inventory.Mods.FirstOrDefault()??new ManagedMod("","","","","",gameRoot,Path.Combine(gameRoot,"fixture.json"),false,[])),
+    isCurrent:()=>IsCurrentModSourceInventory(gameRoot,inventory),
     cancellationToken:cancellation.Token);
    if(cancellation.IsCancellationRequested||result.IsStale||
       gameRoot!=selectedInstallRoot||!ReferenceEquals(inventory,modInventory))return;
