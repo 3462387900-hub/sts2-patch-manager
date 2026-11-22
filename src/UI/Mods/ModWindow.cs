@@ -820,8 +820,9 @@ public partial class MainWindow
   string root=selectedInstallRoot;
   var selected=ChosenMods();
   var sources=WorkshopSources();
+  var sourceChecks=ModSourceChecks();
   var eligible=selected.Where(m=>!ModPresentation.IsIndependentPatch(m)&&m.Enabled&&
-   sources.Get(m.Id).HasValue&&WorkshopUpdates().Cached(m.Id)?.Status=="有更新").ToArray();
+   sourceChecks.Inspect(m).Workshop.CanUpdate).ToArray();
   var eligibleFolders=eligible.Select(m=>m.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
   var reviews=selected.Select(m=>
   {
@@ -831,10 +832,12 @@ public partial class MainWindow
     return new ModBatchReview(m.Name,"跳过","独立修复补丁不适用。");
    if(!m.Enabled)
     return new ModBatchReview(m.Name,"跳过","当前 MOD 已停用；批量更新只处理已启用的独立 MOD。");
-   if(!sources.Get(m.Id).HasValue)
+   var source=sourceChecks.Inspect(m).Workshop;
+   if(!source.IsBound)
     return new ModBatchReview(m.Name,"跳过","尚未关联创意工坊来源。");
-   var status=WorkshopUpdates().Cached(m.Id)?.Status;
-   return new ModBatchReview(m.Name,"跳过",status==null?"尚未检查创意工坊更新。":"当前状态："+status+"，没有待处理的更新。");
+   return new ModBatchReview(m.Name,"跳过",
+    source.Message.Length>0?source.Status+"："+source.Message:
+     "当前状态："+source.Status+"，没有待处理的更新。");
   }).ToArray();
   if(!ModBatchDialogs.Confirm(this,"批量更新创意工坊 MOD",
    "只处理已选中、已关联来源且检查结果为「有更新」的启用 MOD。每项都会重新下载并显示详细预览；选择“是”更新、“否”跳过、“取消”停止剩余任务。每项独立备份，失败自动回滚并停止后续更新。",reviews))return;
