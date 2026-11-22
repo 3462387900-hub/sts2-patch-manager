@@ -976,7 +976,7 @@ internal sealed class ModSourceCheckWorkflowService
                 ? ModSourceFailureKind.Unsupported
                 : ModSourceFailureKind.None,
             state == ModSourceCheckState.Unsupported ? result.Message : null,
-            result.CheckedAt, []);
+            result.CheckedAt, [], result.Message);
     }
 
     ModSourceEntryDiagnostic FailedEntry(
