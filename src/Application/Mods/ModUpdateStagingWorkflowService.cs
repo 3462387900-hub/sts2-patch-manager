@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -222,8 +223,8 @@ internal sealed class ModUpdateStagingWorkflowService
             Dictionary<string, FileSnapshot> currentFiles =
                 SnapshotDirectory(normalizedTarget, excludeWorkshopReport: false, cancellationToken);
 
-            Directory.CreateDirectory(stagingRoot);
             EnsureNoReparseAncestors(stagingRoot, ModUpdateStagingFailureKind.InvalidRequest);
+            Directory.CreateDirectory(stagingRoot);
             workspace = Path.Combine(stagingRoot, "stage-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(workspace);
             EnsureNoReparsePoint(workspace, ModUpdateStagingFailureKind.InvalidRequest);
@@ -386,8 +387,8 @@ internal sealed class ModUpdateStagingWorkflowService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stagingDirectory);
         string full = Path.GetFullPath(stagingDirectory);
-        if (full.Equals(stagingRoot, StringComparison.OrdinalIgnoreCase) ||
-            !IsSameOrWithin(full, stagingRoot))
+        if (!string.Equals(Path.GetDirectoryName(full), stagingRoot, StringComparison.OrdinalIgnoreCase) ||
+            !System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(full), @"\Astage-[0-9a-fA-F]{32}\z"))
         {
             throw new InvalidOperationException("只能清理本服务创建的隔离暂存目录。");
         }
