@@ -175,8 +175,13 @@ public partial class MainWindow
     inventory.Mods,force:false,
     isCurrent:()=>IsCurrentModSourceInventory(gameRoot,inventory),
     cancellationToken:cancellation.Token);
-   if(cancellation.IsCancellationRequested||result.IsStale||
-      gameRoot!=selectedInstallRoot||!ReferenceEquals(inventory,modInventory))return;
+   if(cancellation.IsCancellationRequested||result.Cancelled)
+   {
+    modStatus="已取消本次更新检查。";
+    return;
+   }
+   if(result.IsStale||gameRoot!=selectedInstallRoot||
+      !ReferenceEquals(inventory,modInventory))return;
    modStatus=$"检查完成：GitHub {result.GitHubChecked} 项（有更新 {result.GitHubUpdates}）；"+
     $"创意工坊 {result.WorkshopChecked} 项（有更新 {result.WorkshopUpdates}，待核验 {result.WorkshopNeedsReview}）。"+
     "仅检测来源内容，不会自动下载或修改游戏文件。";
@@ -333,7 +338,6 @@ public partial class MainWindow
     sources.Bind(result.ModId,workshopId);
     sources.RecordBaseline(result.ModId,workshopId,prepared.ManifestId,result.Version,prepared.PayloadSnapshot);
     WorkshopUpdates().Invalidate(result.ModId);
-    modSourceCheckWorkflow?.InvalidateAll();
     modSourceCheckWorkflow?.InvalidateAll();
    }
    catch(Exception sourceError)
