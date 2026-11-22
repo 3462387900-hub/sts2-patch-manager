@@ -89,7 +89,8 @@ internal sealed record ModSourceEntryDiagnostic(
     ModSourceFailureKind FailureKind,
     string? FailureReason,
     DateTimeOffset? CheckedAt,
-    IReadOnlyList<ModSourceCandidateDiagnostic> Candidates);
+    IReadOnlyList<ModSourceCandidateDiagnostic> Candidates,
+    string Message = "");
 
 internal sealed record ModSourceCheckResult(
     string GameRoot,
@@ -236,7 +237,8 @@ internal sealed class InfrastructureModSourceCheckBackend : IModSourceCheckBacke
         ulong workshopId,
         CancellationToken cancellationToken) =>
         workshopUpdates.CheckAsync(
-            mod, workshopId, workshopSources, force: true, cancellationToken);
+            mod, workshopId, workshopSources, force: true,
+            cancellationToken: cancellationToken);
 }
 
 /// <summary>
@@ -992,7 +994,7 @@ internal sealed class ModSourceCheckWorkflowService
             source == ModSourceKind.GitHub ? "无法检测" : "检查失败",
             localVersion, latestVersion, url, null,
             lastSuccessAt.HasValue ? ModSourceCacheState.Expired : ModSourceCacheState.Missing,
-            false, false, false, failure.Kind, failure.Reason, failure.At, []);
+            false, false, false, failure.Kind, failure.Reason, failure.At, [], failure.Reason);
     }
 
     static ModSourceEntryDiagnostic Entry(
@@ -1013,11 +1015,13 @@ internal sealed class ModSourceCheckWorkflowService
         ModSourceFailureKind failureKind,
         string? failureReason,
         DateTimeOffset? checkedAt,
-        IReadOnlyList<ModSourceCandidateDiagnostic> candidates) =>
+        IReadOnlyList<ModSourceCandidateDiagnostic> candidates,
+        string? message = null) =>
         new(
             source, bound, identifier, trust, state, status, localVersion, latestVersion,
             url, remoteManifestId, cacheState, cacheHit, canUpdate, needsReview,
-            failureKind, failureReason, checkedAt, candidates);
+            failureKind, failureReason, checkedAt, candidates,
+            message ?? failureReason ?? status);
 
     ModSourceCheckBatchResult CreateBatchResult(
         IEnumerable<ModSourceCheckResult> results,
