@@ -67,12 +67,12 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
                 {
                     tokenCalls++;
-                    return Json(request, Token("http://cdn.example", "token=probe-token&expiration_time=4102444800"));
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=probe-token&expiration_time=4102444800"));
                 }
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath == $"/depot/{DepotId}/manifest/{ManifestId}/5/{RequestCode}")
                     return Bytes(request, manifestZip);
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath == $"/depot/{DepotId}/chunk/{Convert.ToHexString(ChunkId)}")
                     return Bytes(request, RawChunk);
                 throw new InvalidOperationException("Unexpected chunk probe request: " + request.RequestUri);
@@ -114,8 +114,8 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                     return Json(request, Descriptor());
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                    return Json(request, Token("http://cdn.example", "token=assembly-test&expiration_time=4102444800"));
-                if (request.RequestUri.Host == "cdn.example" &&
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=assembly-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
                 throw new InvalidOperationException("Assembly mode must not redownload raw Chunk bytes.");
@@ -156,12 +156,12 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
                 {
                     redirectTokenCalls++;
-                    return Json(request, Token("http://cdn.example", "token=redirect-test&expiration_time=4102444800"));
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=redirect-test&expiration_time=4102444800"));
                 }
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
                     return Redirect(request, "https://cache1-atl3.steamcontent.com" + request.RequestUri.AbsolutePath);
                 if (request.RequestUri.Host == "cache1-atl3.steamcontent.com" &&
@@ -189,11 +189,11 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                     return Json(request, Descriptor());
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                    return Json(request, Token("http://cdn.example", "token=blocked-test&expiration_time=4102444800"));
-                if (request.RequestUri.Host == "cdn.example" &&
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=blocked-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
                     return Redirect(request, "https://evil.example" + request.RequestUri.AbsolutePath);
                 throw new InvalidOperationException("Untrusted redirect destination must never be requested.");
@@ -220,13 +220,13 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                     return Json(request, Descriptor());
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                    return Json(request, Token("http://cdn.example", "token=downgrade-test&expiration_time=4102444800"));
-                if (request.RequestUri.Host == "cdn.example" &&
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=downgrade-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
-                    return Redirect(request, "http://st.dl.eccdnx.com" + request.RequestUri.AbsolutePath);
+                    return Redirect(request, "http://st.dl.bscstorage.net" + request.RequestUri.AbsolutePath);
                 throw new InvalidOperationException("HTTP downgrade destination must never be requested.");
             })))
             {
@@ -239,7 +239,7 @@ internal static class SupplyStationContentChecks
                     downgradeError = error.Message;
                 }
                 Check(downgradeError?.Contains("只允许 HTTPS 默认端口 443", StringComparison.Ordinal) == true &&
-                    !downgradeRequests.Contains("st.dl.eccdnx.com", StringComparer.OrdinalIgnoreCase),
+                    !downgradeRequests.Contains("st.dl.bscstorage.net", StringComparer.OrdinalIgnoreCase),
                     "even a trusted Steam CDN host cannot receive a temporary authorization query over HTTP");
             }
 
@@ -253,14 +253,14 @@ internal static class SupplyStationContentChecks
                 {
                     refreshTokenCalls++;
                     bool refresh = request.RequestUri.Query.Contains("refresh=true", StringComparison.Ordinal);
-                    return Json(request, Token("http://cdn.example",
+                    return Json(request, Token("http://st.dl.eccdnx.com",
                         refresh ? "token=fresh-token&expiration_time=4102444800" :
                                   "token=stale-token&expiration_time=4102444800"));
                 }
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
                 {
                     chunkAttempts++;
@@ -283,11 +283,11 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                     return Json(request, Descriptor());
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                    return Json(request, Token("http://cdn.example", "token=length-test&expiration_time=4102444800"));
-                if (request.RequestUri.Host == "cdn.example" &&
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=length-test&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
-                if (request.RequestUri.Host == "cdn.example" &&
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/chunk/", StringComparison.Ordinal))
                 {
                     wrongLengthAttempts++;
@@ -312,8 +312,8 @@ internal static class SupplyStationContentChecks
                 if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                     return Json(request, Descriptor());
                 if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                    return Json(request, Token("http://cdn.example", "token=protected&expiration_time=4102444800"));
-                if (request.RequestUri.Host == "cdn.example" &&
+                    return Json(request, Token("http://st.dl.eccdnx.com", "token=protected&expiration_time=4102444800"));
+                if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                     request.RequestUri.AbsolutePath.Contains("/manifest/", StringComparison.Ordinal))
                     return Bytes(request, manifestZip);
                 throw new InvalidOperationException("Chunk request should not occur for a protected output directory.");
@@ -405,7 +405,7 @@ internal static class SupplyStationContentChecks
             manifestId = ManifestId.ToString(),
             depotId = DepotId,
             requestCode = RequestCode,
-            endpoints = new[] { new { origin = "http://cdn.example", query = (string?)null } },
+            endpoints = new[] { new { origin = "http://st.dl.eccdnx.com", query = (string?)null } },
             depotKeyBase64 = Convert.ToBase64String(DepotKey),
             expiresAt = Future
         });

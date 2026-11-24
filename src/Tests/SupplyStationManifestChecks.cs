@@ -51,8 +51,8 @@ internal static class SupplyStationManifestChecks
             if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                 return Json(request, Descriptor());
             if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                return Json(request, Token("http://cdn.example", "token=manifest-probe&expiration_time=4102444800"));
-            if (request.RequestUri.Host == "cdn.example" &&
+                return Json(request, Token("http://st.dl.eccdnx.com", "token=manifest-probe&expiration_time=4102444800"));
+            if (request.RequestUri.Host == "st.dl.eccdnx.com" &&
                 request.RequestUri.AbsolutePath == $"/depot/{DepotId}/manifest/{ManifestId}/5/18446744073709551614")
                 return Bytes(request, manifestZip);
             throw new InvalidOperationException("Unexpected manifest probe request: " + request.RequestUri);
@@ -74,7 +74,7 @@ internal static class SupplyStationManifestChecks
             Check(requests.Count == 3 &&
                 requests[0].Path.EndsWith("/descriptor", StringComparison.Ordinal) &&
                 requests[1].Path.EndsWith("/cdn/token", StringComparison.Ordinal) &&
-                requests[2].Host == "cdn.example" &&
+                requests[2].Host == "st.dl.eccdnx.com" &&
                 requests[2].Path == $"/depot/{DepotId}/manifest/{ManifestId}/5/18446744073709551614" &&
                 requests[2].Query.Contains("token=manifest-probe", StringComparison.Ordinal),
                 "manifest request uses the descriptor request code and the CDN token query");
@@ -102,9 +102,9 @@ internal static class SupplyStationManifestChecks
                 refreshRequested |= request.RequestUri.Query.Contains("refresh=true", StringComparison.Ordinal);
                 string token = refreshRequested ? "token=fresh-token&expiration_time=4102444800" :
                     "token=stale-token&expiration_time=4102444800";
-                return Json(request, Token("http://cdn.example", token));
+                return Json(request, Token("http://st.dl.eccdnx.com", token));
             }
-            if (request.RequestUri.Host == "cdn.example")
+            if (request.RequestUri.Host == "st.dl.eccdnx.com")
             {
                 cdnAttempts++;
                 return request.RequestUri.Query.Contains("token=fresh-token", StringComparison.Ordinal)
@@ -127,12 +127,12 @@ internal static class SupplyStationManifestChecks
             if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
                 return Json(request, Token("http://" + request.RequestUri.Query.Split("host=")[1].Split('&')[0],
                     "token=mirror-authorized&expiration_time=4102444800"));
-            if (request.RequestUri.Host == "cdn.example")
+            if (request.RequestUri.Host == "st.dl.eccdnx.com")
                 return new HttpResponseMessage(HttpStatusCode.Redirect)
                 {
-                    Headers = { Location = new Uri("https://mirror.example" + request.RequestUri.PathAndQuery.Split('?')[0]) }
+                    Headers = { Location = new Uri("https://st.dl.bscstorage.net" + request.RequestUri.PathAndQuery.Split('?')[0]) }
                 };
-            if (request.RequestUri.Host == "mirror.example")
+            if (request.RequestUri.Host == "st.dl.bscstorage.net")
             {
                 mirrorRequests++;
                 return Bytes(request, manifestZip);
@@ -150,7 +150,7 @@ internal static class SupplyStationManifestChecks
             if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                 return Json(request, Descriptor());
             if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                return Json(request, Token("http://cdn.example", "token=manifest-probe&expiration_time=4102444800"));
+                return Json(request, Token("http://st.dl.eccdnx.com", "token=manifest-probe&expiration_time=4102444800"));
             return new HttpResponseMessage(HttpStatusCode.Redirect)
             {
                 Headers = { Location = new Uri("https://unlisted.example/manifest") }
@@ -166,7 +166,7 @@ internal static class SupplyStationManifestChecks
             if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                 return Json(request, Descriptor(manifestId: (ManifestId + 1).ToString()));
             if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                return Json(request, Token("http://cdn.example", "token=manifest-probe&expiration_time=4102444800"));
+                return Json(request, Token("http://st.dl.eccdnx.com", "token=manifest-probe&expiration_time=4102444800"));
             return Bytes(request, manifestZip);
         })))
         {
@@ -179,7 +179,7 @@ internal static class SupplyStationManifestChecks
             if (request.RequestUri!.AbsolutePath.EndsWith("/descriptor", StringComparison.Ordinal))
                 return Json(request, Descriptor());
             if (request.RequestUri.AbsolutePath.EndsWith("/cdn/token", StringComparison.Ordinal))
-                return Json(request, Token("http://cdn.example", "token=manifest-probe&expiration_time=4102444800"));
+                return Json(request, Token("http://st.dl.eccdnx.com", "token=manifest-probe&expiration_time=4102444800"));
             return Bytes(request, [1, 2, 3, 4, 5]);
         })))
         {
@@ -245,9 +245,9 @@ internal static class SupplyStationManifestChecks
             depotId = DepotId,
             requestCode = "18446744073709551614",
             endpoints = includeMirror
-                ? new[] { new { origin = "http://cdn.example", query = (string?)null },
-                          new { origin = "https://mirror.example", query = (string?)null } }
-                : new[] { new { origin = "http://cdn.example", query = (string?)null } },
+                ? new[] { new { origin = "http://st.dl.eccdnx.com", query = (string?)null },
+                          new { origin = "https://st.dl.bscstorage.net", query = (string?)null } }
+                : new[] { new { origin = "http://st.dl.eccdnx.com", query = (string?)null } },
             depotKeyBase64 = DepotKey,
             expiresAt = Future
         });
