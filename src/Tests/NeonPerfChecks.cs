@@ -105,18 +105,52 @@ public partial class MainWindow
             string disabled = Path.Combine(root, ModManager.StorageName);
             Directory.CreateDirectory(mods);
             Directory.CreateDirectory(disabled);
-            string file = Path.Combine(mods, "content.dll");
-            string moved = Path.Combine(mods, "renamed.dll");
+            string nested = Path.Combine(mods, "NestedMod");
+            Directory.CreateDirectory(nested);
+            string file = Path.Combine(nested, "content.dll");
+            string moved = Path.Combine(nested, "renamed.dll");
             string disabledFile = Path.Combine(disabled, "record.json");
+            string addedDir = Path.Combine(mods, "NewMod");
+            string renamedDir = Path.Combine(mods, "MovedMod");
             File.WriteAllText(file, "AAAA");
             File.WriteAllText(disabledFile, "AAAA");
             File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(-5));
             File.SetLastWriteTimeUtc(disabledFile, DateTime.UtcNow.AddMinutes(-5));
+            Directory.SetLastWriteTimeUtc(nested, DateTime.UtcNow.AddHours(-2));
+            Check(ModFileWatcherService.IsOrdinaryDirectoryMetadataChange(nested) &&
+                !ModFileWatcherService.IsOrdinaryDirectoryMetadataChange(file) &&
+                !ModFileWatcherService.IsOrdinaryDirectoryMetadataChange(addedDir),
+                "watcher directory classifier fails closed for files and missing paths");
             using var watcher = new ModFileWatcherService();
             var observed = new ConcurrentQueue<ModFileChangeEventArgs>();
             watcher.ChangeDetected += (_, e) => observed.Enqueue(e);
             watcher.Start(root);
             Check(string.Equals(watcher.CurrentRoot, root, StringComparison.OrdinalIgnoreCase), "watcher regression mounted");
+
+            // Deliberately change only a directory timestamp. Confirm that the OS
+            // actually emitted the raw event, then require the production watcher
+            // to keep its generation. This is not a vacuous "no events" assertion.
+            using (var rawProbe = new FileSystemWatcher(mods)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.LastWrite
+            })
+            {
+                var rawDirectoryEvent = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                rawProbe.Changed += (_, e) =>
+                {
+                    if (string.Equals(e.FullPath, nested, StringComparison.OrdinalIgnoreCase))
+                        rawDirectoryEvent.TrySetResult(true);
+                };
+                rawProbe.EnableRaisingEvents = true;
+                int before = watcher.ChangeVersion;
+                await Task.Run(() => Directory.SetLastWriteTimeUtc(nested, DateTime.UtcNow.AddHours(-1)));
+                await rawDirectoryEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                await Task.Delay(1100);
+                Check(watcher.ChangeVersion == before,
+                    "watcher ignores real ordinary directory LastWrite-only notification");
+            }
+
             async Task Expect(string name, string path, WatcherChangeTypes kind, Action change)
             {
                 int before = watcher.ChangeVersion;
@@ -144,6 +178,12 @@ public partial class MainWindow
             await Expect("file rename", moved, WatcherChangeTypes.Renamed, () => File.Move(file, moved));
             await Expect("file delete", moved, WatcherChangeTypes.Deleted, () => File.Delete(moved));
             await Expect("file create", file, WatcherChangeTypes.Created, () => File.WriteAllText(file, "CCCC"));
+            await Expect("nested directory create", addedDir, WatcherChangeTypes.Created,
+                () => Directory.CreateDirectory(addedDir));
+            await Expect("nested directory rename", renamedDir, WatcherChangeTypes.Renamed,
+                () => Directory.Move(addedDir, renamedDir));
+            await Expect("nested directory delete", renamedDir, WatcherChangeTypes.Deleted,
+                () => Directory.Delete(renamedDir));
             // The top-level name watcher must still notice the owned tree disappearing.
             await Expect("owned tree removal", disabled, WatcherChangeTypes.Deleted,
                 () => Directory.Delete(disabled, recursive: true));

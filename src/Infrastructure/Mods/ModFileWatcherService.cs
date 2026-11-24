@@ -261,6 +261,28 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
         watcher.EnableRaisingEvents = true;
     }
 
+    // Windows can emit LastWrite notifications for ordinary directories when
+    // enumerating freshly populated trees. Directory timestamps are not MOD
+    // inventory/content inputs. Their child file writes and all name/structure
+    // changes have independent notifications. Never suppress an unknown path
+    // or a reparse point: those can indicate a replaced or unsafe tree.
+    internal static bool IsOrdinaryDirectoryMetadataChange(string path)
+    {
+        try
+        {
+            FileAttributes attributes = File.GetAttributes(path);
+            return (attributes & FileAttributes.Directory) != 0 &&
+                (attributes & FileAttributes.ReparsePoint) == 0;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+            ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            // The entry disappeared, is inaccessible, or cannot be classified.
+            // Conservatively treat the original notification as a real change.
+            return false;
+        }
+    }
+
     void QueueChange(string root, bool overflow, bool treeChanged,
         string? watchPath = null, string? changedPath = null, string? oldPath = null,
         WatcherChangeTypes? changeType = null, NotifyFilters? notifyMask = null, string? error = null)
@@ -269,6 +291,14 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
         lock (gate)
         {
             if (disposed || !root.Equals(watchedRoot, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // Classify under the same lock as generation publication. Only a
+            // recursive Changed notification on an existing ordinary directory
+            // is metadata noise; never suppress creates, deletes, renames, root
+            // tree events, buffer overflows or any file Changed notification.
+            if (!overflow && !treeChanged && changeType == WatcherChangeTypes.Changed &&
+                changedPath != null && IsOrdinaryDirectoryMetadataChange(changedPath))
                 return;
 
             bool first = !dirty;
