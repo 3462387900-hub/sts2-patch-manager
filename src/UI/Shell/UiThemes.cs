@@ -9,10 +9,12 @@ internal static class UiThemes
 {
  internal const string Classic="classic";
  internal const string Workspace="workspace";
+ internal const string Neon="neon";
  internal const string FileName="界面主题.json";
  internal static string Active {get;set;}=Workspace;
  internal static bool IsClassic=>Active==Classic;
  internal static bool IsWorkspace=>Active==Workspace;
+ internal static bool IsNeon=>Active==Neon;
 
  internal static string SettingsPath(string root)=>Path.Combine(root,FileName);
 
@@ -21,9 +23,9 @@ internal static class UiThemes
   try
   {
    string file=SettingsPath(root);
-   if(!File.Exists(file))return Workspace;
+   if(!File.Exists(file))return Neon;
    var pref=JsonSerializer.Deserialize<UiThemePreference>(File.ReadAllText(file));
-   if(pref?.Schema==1&&pref.Theme is Classic or Workspace)return pref.Theme;
+   if(pref?.Schema==1&&pref.Theme is Classic or Workspace or Neon)return pref.Theme;
   }
   catch(Exception e) when(e is IOException or UnauthorizedAccessException or JsonException){}
   return Workspace; // A corrupted preference cannot prevent the app from starting.
@@ -31,7 +33,7 @@ internal static class UiThemes
 
  internal static void Save(string root,string theme)
  {
-  if(theme is not(Classic or Workspace))throw new ArgumentOutOfRangeException(nameof(theme));
+  if(theme is not(Classic or Workspace or Neon))throw new ArgumentOutOfRangeException(nameof(theme));
   var file=SettingsPath(root);
   Directory.CreateDirectory(Path.GetDirectoryName(file)!);
   var temp=file+"."+Guid.NewGuid().ToString("N")+".tmp";

@@ -55,10 +55,10 @@ public partial class MainWindow : Window
     CancelModUpdateCheck();
    }
   };
-  Background=Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
+  Background=UiThemes.IsNeon?NeonPalette.BgGround:Brushes.Transparent;Foreground=ink;FontFamily=new("Microsoft YaHei UI, Segoe UI");FontSize=14;
   shell.Background=SpireGlassTheme.Background(false);UseLayoutRounding=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
-  SourceInitialized+=(_,_)=>{nativeAcrylicActive=SpireGlassBackdrop.Enable(this);SetBareGlassTest(false,false);};
+  SourceInitialized+=(_,_)=>{if(!UiThemes.IsNeon){nativeAcrylicActive=SpireGlassBackdrop.Enable(this);SetBareGlassTest(false,false);}};
   shell.ColumnDefinitions.Add(new(){Width=new(205)});shell.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
   Content=shell;glassAmbientSurface=SpireGlassTheme.AddAmbientGlow(shell);BuildSidebar();
   var main=new Grid{Margin=new(25,18,25,15)};Grid.SetColumn(main,1);shell.Children.Add(main);
@@ -71,7 +71,32 @@ public partial class MainWindow : Window
   pageScroll=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(pageScroll,1);main.Children.Add(pageScroll);
   toast.Foreground=muted;toast.FontSize=12;toast.Margin=new(0,14,0,0);Grid.SetRow(toast,2);main.Children.Add(toast);
   var controlsTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(400)};controlsTimer.Tick+=(_,_)=>UpdateGlobalControls();controlsTimer.Start();Closed+=(_,_)=>{controlsTimer.Stop();CloseModWatch();githubModUpdates?.Dispose();githubDiscovery?.Dispose();};
-  if(onlineStartup){ShowOverview();Loaded+=async(_,_)=>{_=CheckManagerUpdatesAsync(false);await LocateGameAsync(true);if(page=="在线补丁")RefreshOnline();if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();if(page=="总览")ShowOverview();};}else ShowOverview();
+  if(onlineStartup)
+  {
+   if(UiThemes.IsNeon)ShowNeonWorkbench();else ShowOverview();
+   Loaded+=async(_,_)=>
+   {
+    _=CheckManagerUpdatesAsync(false);
+    await LocateGameAsync(true);
+    if(UiThemes.IsNeon)
+    {
+     if(selectedInstallRoot!=null&&(modInventory==null||report==null||modInventoryDirty))
+      await RefreshNeonFullScanAndHealthAsync(includeLifecycle:true);
+     RefreshNeonWorkbench(preserveViewport:true);
+    }
+    else
+    {
+     if(page=="在线补丁")RefreshOnline();
+     if(selectedInstallRoot!=null&&modInventory==null)RefreshMods();
+     if(page=="总览")ShowOverview();
+    }
+   };
+  }
+  else
+  {
+   ShowOverview();
+   if(UiThemes.IsNeon)ShowNeonWorkbench();
+  }
  }
  static SolidColorBrush B(string hex)=>(SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
  TextBlock T(string text,double size=14,Brush? color=null,bool bold=false)=>new(){Text=text,FontSize=size,Foreground=color??ink,FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal,TextWrapping=TextWrapping.Wrap,LineHeight=size*1.55};
@@ -317,8 +342,8 @@ public partial class MainWindow : Window
  async Task ScanFolder(string folder)
  {
   if(busy)return;busy=true;ClearCoop();toast.Text="正在读取模组清单与文件校验值…";
-  try {UseGameRoot(folder);coopComparison=null;var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;ShowOverview();}
-  catch(Exception ex){MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);toast.Text="扫描未完成，未修改任何文件。";if(report==null)ShowOverview();}
+  try {UseGameRoot(folder);coopComparison=null;var catalog=sourceCurrent?onlineCatalog:null;var definitions=catalog?.Patches??Catalog.Bundled;report=await Task.Run(()=>Catalog.Scan(folder,definitions,catalog?.Commit));scannedCatalog=definitions;states=report.Patches;demo=false;selectedInstallRoot=report.Directory;ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:false);else ShowOverview();}
+  catch(Exception ex){MessageBox.Show(this,ex.Message,"扫描未完成",MessageBoxButton.OK,MessageBoxImage.Information);toast.Text="扫描未完成，未修改任何文件。";if(report==null){if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:true);else ShowOverview();}}
   finally
   {
    busy=false;

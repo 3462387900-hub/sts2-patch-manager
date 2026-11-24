@@ -56,12 +56,25 @@ public partial class App : Application
             if(e.Args.Contains("--online-check")) { using var source=new OnlineSource();using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(3));var data=await source.LoadAsync(timeout.Token);var destination=Path.Combine(Path.GetDirectoryName(e.Args.Last())!,data.Bundle.FileName);await source.DownloadAsync(data.Bundle,destination,ct:timeout.Token);File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(new{count=data.Patches.Count,data.Commit,download=destination,sha256=Catalog.Hash(destination),anonymous=true}));Shutdown(0);return; }
             if(e.Args.Contains("--online-scan-check")) { using var source=new OnlineSource();var catalog=await source.LoadAsync();var report=await Task.Run(()=>Catalog.Scan(e.Args[1],catalog.Patches,catalog.Commit));File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(report,new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));Shutdown(0);return; }
             if(e.Args.Contains("--scan-check")) { var report=await Task.Run(()=>Catalog.Scan(e.Args[1])); File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(report,new System.Text.Json.JsonSerializerOptions{WriteIndented=true})); Shutdown(0);return; }
+            if(e.Args.Contains("--neon-demo"))
+            {
+                string fixtureParent=e.Args.Length>1&&!e.Args[1].StartsWith("--")
+                    ?e.Args[1]
+                    :Path.Combine(Path.GetTempPath(),"SpirePatch-NeonDemo");
+                var demoWindow=new MainWindow(onlineStartup:false);
+                MainWindow=demoWindow;
+                demoWindow.Show();
+                await demoWindow.SetupNeonIsolatedFixtureAsync(fixtureParent);
+                return;
+            }
             var window=new MainWindow(!e.Args.Any(a=>a.StartsWith("--capture"))); MainWindow=window;
             if(e.Args.Contains("--manager-update-complete")){string job=e.Args.Last();string expected=ManagerAutoUpdate.Child(AppContext.BaseDirectory,"数据/管理器更新/"+Path.GetFileName(job));if(Path.GetFullPath(job)!=expected)throw new InvalidOperationException("Invalid update completion path.");window.Loaded+=(_,_)=>File.WriteAllText(ManagerAutoUpdate.Child(job,"restart-proof.json"),System.Text.Json.JsonSerializer.Serialize(new{version=ManagerUpdates.CurrentVersion,pid=Environment.ProcessId}));}
-            if(e.Args.Any(a=>a.StartsWith("--capture"))) { window.Left=-15000;window.Top=-15000;window.ShowActivated=false; }
+            if(e.Args.Any(a=>a.StartsWith("--capture"))) { window.WindowStartupLocation=WindowStartupLocation.Manual;window.Left=-15000;window.Top=-15000;window.ShowActivated=false; }
             window.Show();
             // Cleanup only on a later normal launch, never while the update worker is confirming a restart.
             if(e.Args.Length==0)_=window.CleanupOnNormalLaunchAsync();
+            if(e.Args.Contains("--capture-neon-workbench")) { await window.CaptureNeonWorkbenchAsync(e.Args[1],e.Args[2]); Shutdown(); }
+            if(e.Args.Contains("--capture-neon-motion")) { await window.CaptureNeonMotionAsync(e.Args[1],e.Args[2]); Shutdown(); }
             if(e.Args.Contains("--capture-coop-actions")) { await window.CaptureCoopActionsAsync(e.Args[1],e.Args[2],e.Args[3],e.Args[4]); Shutdown(); }
             if(e.Args.Contains("--capture-coop")) { await window.CheckCoopAsync(e.Args.Last(),true); Shutdown(); }
             if(e.Args.Contains("--capture-updates")) { await window.CaptureUpdateChecksAsync(e.Args.Last()); Shutdown(); }

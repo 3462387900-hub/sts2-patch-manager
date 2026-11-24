@@ -10,7 +10,7 @@ public partial class MainWindow
  bool modWatcherEventsSubscribed;
  string? watchedGameRoot;
  bool modInventoryDirty,modWatchOverflow,modWatchTreeChanged;
- int modChangeVersion;
+ int modChangeVersion,modInventoryCleanVersion;
 
  void EnsureModWatcherEvents()
  {
@@ -26,6 +26,7 @@ public partial class MainWindow
   EnsureModWatcherEvents();
   modFileWatcher.Stop();
   modChangeVersion=0;
+  modInventoryCleanVersion=0;
   watchedGameRoot=null;
  }
 
@@ -38,6 +39,7 @@ public partial class MainWindow
   watchedGameRoot=root;
   modFileWatcher.Start(root);
   modChangeVersion=modFileWatcher.ChangeVersion;
+  modInventoryCleanVersion=modChangeVersion;
  }
 
  void OnModWatchChangeDetected(object? sender,ModFileChangeEventArgs e)
@@ -54,6 +56,7 @@ public partial class MainWindow
   if(Dispatcher.HasShutdownStarted||Dispatcher.HasShutdownFinished)return;
   _=Dispatcher.BeginInvoke(new Action(()=>{
    if(!e.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
+   if(!e.Overflow&&e.Version<=modInventoryCleanVersion)return;
    modWatchTreeChanged|=e.TreeChanged;
    if(transactionWriting)
    {
@@ -71,7 +74,8 @@ public partial class MainWindow
     report=null;states=[];ClearCoop();ClearSelection();installPreview=null;modTogglePreview=null;
     modStatus=e.Overflow?"文件监测可能遗漏变化，请手动刷新。":"检测到 MOD 文件变化，正在等待文件写入结束。";
    }
-   if((page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page&&!busy&&!transactionWriting)ShowMods();
+   if(UiThemes.IsNeon&&neonWorkbenchView!=null)NotifyNeonHealthInvalidated();
+   else if((page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page&&!busy&&!transactionWriting)ShowMods();
   }),DispatcherPriority.Background);
  }
 
@@ -101,6 +105,7 @@ public partial class MainWindow
    return;
   }
 
+  bool staleToCurrentScan=!e.Overflow&&e.Version<=modInventoryCleanVersion;
   var reconfigured=modFileWatcher.CompleteQuietPeriod(e.Version);
   if(reconfigured.Error is not null)
   {
@@ -111,9 +116,13 @@ public partial class MainWindow
   else if(reconfigured.Recreated)
   {
    watchedGameRoot=e.Root;
-   // The service has rebuilt the root / mods / disabled watchers. Keep the stale warning.
-   modInventoryDirty=true;modWatchOverflow=false;modWatchTreeChanged=false;
+   if(!staleToCurrentScan)
+   {
+    // The service has rebuilt the root / mods / disabled watchers. Keep the stale warning.
+    modInventoryDirty=true;modWatchOverflow=false;modWatchTreeChanged=false;
+   }
   }
+  if(staleToCurrentScan&&reconfigured.Error is null)return;
 
   if(modInventoryDirty&&HasValidLifecycleReport)
   {
@@ -122,7 +131,7 @@ public partial class MainWindow
   }
   // Even when the user is viewing another tab, a known previous inventory
   // must be reconciled so manually removed target MODs can retire their fixes.
-  if(modInventoryDirty&&(modInventory!=null||(page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page))
+  if(modInventoryDirty&&(UiThemes.IsNeon||modInventory!=null||(page=="模组管理"||page=="本地补丁")&&currentVisit?.Key==page))
    RefreshMods();
   else if(modInventoryDirty)
    toast.Text="检测到 MOD 文件变化。进入模组管理刷新列表，并重新检查补丁健康状态。";

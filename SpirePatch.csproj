@@ -5,6 +5,7 @@
     <Version>0.14.3</Version><InformationalVersion>0.14.3</InformationalVersion><IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion><ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="data/workshop-source-index.json" LogicalName="SpirePatch.WorkshopSourceIndex.json" />
     <PackageReference Include="SharpCompress" Version="0.50.7" />
   </ItemGroup>
   <ItemGroup>

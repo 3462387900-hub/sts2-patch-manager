@@ -26,6 +26,7 @@ public partial class MainWindow
   retirePreview=null;
   retiringItem=null;
   lifecycleStatus=reason;
+  NotifyNeonHealthInvalidated();
  }
  LifecycleRegistry lifecycleEvidence=LifecycleEvidenceSource.Empty;
  string lifecycleStatus="首次扫描将建立当前环境基线；之后可识别 MOD 文件变化。";

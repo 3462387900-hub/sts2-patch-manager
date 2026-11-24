@@ -7,7 +7,7 @@ namespace SpirePatch;
 public partial class MainWindow
 {
  string uiTheme=UiThemes.Workspace;
- Button? classicThemeButton,workspaceThemeButton;
+ Button? neonThemeButton,classicThemeButton,workspaceThemeButton;
 
  UIElement ThemeSwitcher()
  {
@@ -15,6 +15,11 @@ public partial class MainWindow
   var heading=T("界面风格  ·  BETA",11,muted);
   heading.Margin=new Thickness(2,0,0,7);
   root.Children.Add(heading);
+  neonThemeButton=Btn("Neon 工作台（推荐）",()=>ChangeUiTheme(UiThemes.Neon),"ModSegment");
+  neonThemeButton.ToolTip="Neon 工作台：暖纸质工作台、果冻开关直启停与因果依恋检视";
+  neonThemeButton.FontSize=12;neonThemeButton.Padding=new Thickness(8,7,8,7);
+  neonThemeButton.HorizontalAlignment=HorizontalAlignment.Stretch;
+  neonThemeButton.Margin=new Thickness(0,0,0,4);
   var buttons=new Grid();
   buttons.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
   buttons.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
@@ -28,7 +33,10 @@ public partial class MainWindow
   var modern=workspaceThemeButton;
   buttons.Children.Add(classic);
   Grid.SetColumn(modern,1);buttons.Children.Add(modern);
-  root.Children.Add(new Border{Child=buttons,Background=new SolidColorBrush(Color.FromArgb(100,38,57,82)),
+  var group=new StackPanel();
+  group.Children.Add(neonThemeButton);
+  group.Children.Add(buttons);
+  root.Children.Add(new Border{Child=group,Background=new SolidColorBrush(Color.FromArgb(100,38,57,82)),
    CornerRadius=new CornerRadius(9),Padding=new Thickness(3)});
   var note=T("切换立即生效 · 不影响 MOD 文件",10,muted);
   note.Margin=new Thickness(2,7,0,0);
@@ -39,6 +47,8 @@ public partial class MainWindow
 
  void RefreshThemeButtons()
  {
+  if(neonThemeButton!=null)
+   neonThemeButton.Style=(Style)FindResource(uiTheme==UiThemes.Neon?"ModSegmentActive":"ModSegment");
   if(classicThemeButton!=null)
    classicThemeButton.Style=(Style)FindResource(uiTheme==UiThemes.Classic?"ModSegmentActive":"ModSegment");
   if(workspaceThemeButton!=null)
@@ -50,7 +60,8 @@ public partial class MainWindow
   if(theme==uiTheme)return;
   if(busy||transactionWriting)
   {
-   toast.Text="文件操作进行中，暂不能切换界面布局。";
+   if(UiThemes.IsNeon)neonWorkbenchView?.ShowToast("文件操作进行中，暂不能切换界面布局。",NeonTone.Amber);
+   else toast.Text="文件操作进行中，暂不能切换界面布局。";
    return;
   }
   try
@@ -59,18 +70,36 @@ public partial class MainWindow
   }
   catch(Exception e)
   {
-   toast.Text="主题偏好保存失败，未切换："+e.Message;
+   if(UiThemes.IsNeon)neonWorkbenchView?.ShowToast("主题偏好保存失败，未切换："+e.Message,NeonTone.Cinnabar);
+   else toast.Text="主题偏好保存失败，未切换："+e.Message;
    return;
   }
+  bool wasNeon=uiTheme==UiThemes.Neon;
   uiTheme=theme;
   UiThemes.Active=theme;
   selectedModDetailFolder=null;
   RefreshThemeButtons();
+  if(UiThemes.IsNeon)
+  {
+   ShowNeonWorkbench();
+   neonWorkbenchView?.ShowToast("已切换到 Neon 工作台；MOD 与补丁文件没有变化。");
+   return;
+  }
+  if(wasNeon)
+  {
+   Background=Brushes.Transparent;
+   TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);
+   TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);
+   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;
+   if(!nativeAcrylicActive){nativeAcrylicActive=SpireGlassBackdrop.Enable(this);SetBareGlassTest(false,false);}
+   Content=shell;
+  }
   if(backButton!=null)
    backButton.Style=(Style)FindResource(UiThemes.IsClassic?"Ghost":"ModToolbarAction");
   if(page=="模组管理"||page=="本地补丁")ShowMods();
   else if(page=="工具与设置")ShowTools();
   else if(IsPatchCenterPage(page))Navigate(page);
+  else ShowOverview();
   toast.Text="已切换到"+(UiThemes.IsClassic?"经典 Beta":"新版工作台 Beta")+"；MOD 与补丁文件没有变化。";
  }
 }

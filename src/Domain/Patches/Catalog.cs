@@ -25,4 +25,49 @@ public static class Catalog
   var report=new RecommendationScanner(root,patches??Bundled,revision??Revision).Run();var disabled=ModManager.DisabledIds(report.Directory).ToHashSet(StringComparer.OrdinalIgnoreCase);
   return report with{Patches=report.Patches.Select(p=>disabled.Contains(p.Patch.Id)?p with{Status="已停用",Reason="已在模组管理中停用；请先启用，再检查修复。",FilesMatch=false,RelatedPatchIds=[]}:p).ToList()};
  }
+ static readonly Lazy<HashSet<string>> standalonePatchIds=new(()=>
+ {
+  using var plan=Plan();
+  return plan.RootElement.GetProperty("components").EnumerateArray()
+   .Where(x=>!x.GetProperty("required").GetBoolean())
+   .Select(x=>x.GetProperty("id").GetString()!)
+   .ToHashSet(StringComparer.OrdinalIgnoreCase);
+ });
+ public static bool IsStandalonePatch(string componentId)=>standalonePatchIds.Value.Contains(componentId);
+ public static string[] PatchRelatedModIds(OnlinePatch patch)
+ {
+  var metadata=patch.Metadata;
+  var ids=new List<string>();
+  if(metadata.TryGetProperty("components",out var components))
+   foreach(var c in components.EnumerateArray())
+    if(c.TryGetProperty("role",out var r)&&r.GetString() is "affected" or "trigger"&&c.TryGetProperty("mod_id",out var id)&&id.GetString() is string s)
+     ids.Add(s);
+  if(metadata.TryGetProperty("compatibility",out var compat)&&compat.TryGetProperty("profiles",out var profiles))
+   foreach(var profile in profiles.EnumerateArray())
+    if(profile.TryGetProperty("required_mods",out var reqs))
+     foreach(var mod in reqs.EnumerateArray())
+      if(mod.TryGetProperty("mod_id",out var id)&&id.GetString() is string s)
+       ids.Add(s);
+  return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+ }
+ public static string? ReviewedRequiredVersion(string patchComponentId,string targetModId)
+ {
+  var patch=Bundled.FirstOrDefault(p=>p.ComponentId.Equals(patchComponentId,StringComparison.OrdinalIgnoreCase));
+  if(patch==null)return null;
+  if(!patch.Metadata.TryGetProperty("compatibility",out var compat)||!compat.TryGetProperty("profiles",out var profiles))return null;
+  var versions=new List<string>();
+  foreach(var profile in profiles.EnumerateArray())
+  {
+   if(!profile.TryGetProperty("required_mods",out var reqs))continue;
+   foreach(var mod in reqs.EnumerateArray())
+   {
+    if(mod.TryGetProperty("mod_id",out var id)&&targetModId.Equals(id.GetString(),StringComparison.OrdinalIgnoreCase)&&
+       mod.TryGetProperty("version_display",out var v)&&v.GetString() is string ver&&ver.Length>0)
+     versions.Add(ver.Trim());
+   }
+  }
+  if(versions.Count==0)return null;
+  var distinct=versions.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+  return distinct.Length==1?distinct[0]:null;
+ }
 }

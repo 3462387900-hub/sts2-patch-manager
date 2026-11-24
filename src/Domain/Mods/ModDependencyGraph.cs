@@ -23,7 +23,10 @@ internal sealed record ModDependencyEdge(
     ModDependencyStatus Status,
     string Message,
     bool FromPatchRule,
-    bool IsCycle = false)
+    bool IsCycle = false,
+    bool DisabledVersionFits = false,
+    string MinimumVersion = "",
+    string MaximumVersion = "")
 {
     internal bool IsIssue => Status != ModDependencyStatus.Satisfied || IsCycle;
     internal bool IsActiveIssue => Dependent.Enabled && IsIssue;
@@ -92,7 +95,9 @@ internal static class ModDependencyGraph
                         dependent.Enabled
                             ? "此 MOD 已启用，但必需前置未安装。"
                             : "必需前置尚未安装；启用此 MOD 前需要先安装。",
-                        item.FromPatchRule));
+                        item.FromPatchRule,
+                        MinimumVersion: dependency.Minimum,
+                        MaximumVersion: dependency.Maximum));
                     continue;
                 }
 
@@ -102,27 +107,37 @@ internal static class ModDependencyGraph
                         dependent, dependency.Id, dependency.Id, null,
                         ModDependencyStatus.Duplicate,
                         "本地存在多个相同 ID 的 MOD，无法确定依赖目标。",
-                        item.FromPatchRule));
+                        item.FromPatchRule,
+                        MinimumVersion: dependency.Minimum,
+                        MaximumVersion: dependency.Maximum));
                     continue;
                 }
 
                 ManagedMod prerequisite = candidates[0];
                 if (!prerequisite.Enabled)
                 {
+                    var (disabledVerStatus, disabledVerMsg, _) = CheckVersion(dependency, prerequisite);
+                    bool fits = disabledVerStatus == ModDependencyStatus.Satisfied;
+                    string explanation = dependent.Enabled
+                        ? "此 MOD 已启用，但它依赖的前置模组当前已停用。"
+                        : "前置模组当前已停用；启用此 MOD 前需要先启用前置。";
                     edges.Add(new ModDependencyEdge(
                         dependent, dependency.Id, prerequisite.Name, prerequisite,
                         ModDependencyStatus.DisabledPrerequisite,
-                        dependent.Enabled
-                            ? "此 MOD 已启用，但它依赖的前置模组当前已停用。"
-                            : "前置模组当前已停用；启用此 MOD 前需要先启用前置。",
-                        item.FromPatchRule));
+                        fits ? explanation : "前置已停用。" + disabledVerMsg,
+                        item.FromPatchRule,
+                        DisabledVersionFits: fits,
+                        MinimumVersion: dependency.Minimum,
+                        MaximumVersion: dependency.Maximum));
                     continue;
                 }
 
                 var (status, message, _) = CheckVersion(dependency, prerequisite);
                 edges.Add(new ModDependencyEdge(
                     dependent, dependency.Id, prerequisite.Name, prerequisite,
-                    status, message, item.FromPatchRule));
+                    status, message, item.FromPatchRule,
+                    MinimumVersion: dependency.Minimum,
+                    MaximumVersion: dependency.Maximum));
             }
         }
 

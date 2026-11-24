@@ -12,7 +12,10 @@ internal sealed record ModDependencyDiagnosticEdge(
     ModDependencyStatus Status,
     string Message,
     bool FromPatchRule,
-    bool IsCycle = false)
+    bool IsCycle = false,
+    bool DisabledVersionFits = false,
+    string MinimumVersion = "",
+    string MaximumVersion = "")
 {
     internal bool IsIssue => Status != ModDependencyStatus.Satisfied || IsCycle;
     internal bool IsActiveIssue => Dependent.Enabled && IsIssue;
@@ -103,7 +106,10 @@ internal sealed class ModDependencyDiagnosticsService
             edge.Status,
             edge.Message,
             edge.FromPatchRule,
-            edge.IsCycle)).ToArray();
+            edge.IsCycle,
+            edge.DisabledVersionFits,
+            edge.MinimumVersion,
+            edge.MaximumVersion)).ToArray();
         var cycles = domain.Cycles
             .Select(cycle => new ModDependencyDiagnosticCycle(cycle.ModIds, cycle.Names))
             .ToArray();

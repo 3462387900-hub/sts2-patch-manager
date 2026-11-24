@@ -52,7 +52,7 @@ public partial class MainWindow
  async Task LocateGameAsync(bool startup=false)
  {
   if(busy||transactionWriting)return;
-  busy=true;locateStatus="正在查找游戏目录…";if(!startup)ShowLocations();
+  busy=true;locateStatus="正在查找游戏目录…";if(!startup&&!UiThemes.IsNeon)ShowLocations();
   try{
    string? saved=EnvironmentSession.LoadRememberedRoot();
    if(startup&&saved!=null){UseGameRoot(saved);locateStatus="已恢复上次使用的目录。";return;}
@@ -60,7 +60,19 @@ public partial class MainWindow
    if(gameCandidates.Count==1){UseGameRoot(gameCandidates[0].Directory);locateStatus="已定位游戏目录："+gameCandidates[0].Directory;}
    else locateStatus=gameCandidates.Count==0?"没有找到可用安装，请手动选择游戏目录。":"发现多个安装目录，请选择本次使用的一个。";
   }catch(Exception e){locateStatus="自动查找未完成："+e.Message;}
-  finally{busy=false;UpdateGlobalControls();if(!startup||gameCandidates.Count>1)ShowLocations();else{folderLabel.Text=selectedInstallRoot??"尚未选择游戏目录";toast.Text=locateStatus;}}
+  finally
+  {
+   busy=false;UpdateGlobalControls();
+   if(UiThemes.IsNeon&&neonWorkbenchView!=null)
+   {
+    folderLabel.Text=selectedInstallRoot??"尚未选择游戏目录";
+    RefreshNeonWorkbench(preserveViewport:true);
+    if(gameCandidates.Count>1)ShowNeonGameRootPickerModal(gameCandidates);
+    else if(gameCandidates.Count==0&&selectedInstallRoot==null)neonWorkbenchView.ShowToast(locateStatus,NeonTone.Amber);
+   }
+   else if(!startup||gameCandidates.Count>1)ShowLocations();
+   else{folderLabel.Text=selectedInstallRoot??"尚未选择游戏目录";toast.Text=locateStatus;}
+  }
  }
  async void LocateGame()=>await LocateGameAsync();
  void ShowLocations()
@@ -75,8 +87,24 @@ public partial class MainWindow
  }
  void LaunchGame()
  {
-  if(busy||transactionWriting)return;if(selectedInstallRoot==null){LocateGame();return;}
-  try{bool started=GameEnvironment.Launch(selectedInstallRoot);toast.Text=started?"已启动游戏。":"此目录的游戏已经在运行。";}
-  catch(Exception e){MessageBox.Show(this,e.Message,"无法启动游戏");}
+  if(busy||transactionWriting)return;
+  if(selectedInstallRoot==null)
+  {
+   if(UiThemes.IsNeon&&neonWorkbenchView!=null){neonWorkbenchView.ShowToast("请先选择或自动定位游戏目录。",NeonTone.Amber);_=DiscoverNeonGameRootsAsync();}
+   else LocateGame();
+   return;
+  }
+  try
+  {
+   bool started=GameEnvironment.Launch(selectedInstallRoot);
+   string msg=started?"已启动《杀戮尖塔 2》。":"此目录的游戏已经在运行。";
+   toast.Text=msg;
+   if(UiThemes.IsNeon)neonWorkbenchView?.ShowToast(msg,started?NeonTone.Sage:NeonTone.Amber);
+  }
+  catch(Exception e)
+  {
+   if(UiThemes.IsNeon&&neonWorkbenchView!=null)neonWorkbenchView.ShowToast("无法启动游戏："+e.Message,NeonTone.Cinnabar);
+   else MessageBox.Show(this,e.Message,"无法启动游戏");
+  }
  }
 }

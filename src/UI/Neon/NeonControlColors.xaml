@@ -1,0 +1,415 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:SpirePatch">
+  <!-- Map shared App.xaml dynamic brush keys cleanly for Warm Mineral Atelier -->
+  <x:Static x:Key="Bg" Member="local:NeonPalette.BgGround"/>
+  <x:Static x:Key="Panel" Member="local:NeonPalette.BgSurface"/>
+  <x:Static x:Key="Line" Member="local:NeonPalette.BorderSubtle"/>
+  <x:Static x:Key="Ink" Member="local:NeonPalette.InkPrimary"/>
+  <x:Static x:Key="Muted" Member="local:NeonPalette.InkMuted"/>
+  <x:Static x:Key="Gold" Member="local:NeonPalette.Amber"/>
+  <x:Static x:Key="AccentPrimary" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentPrimaryForeground" Member="local:NeonPalette.SageOnPrimary"/>
+  <x:Static x:Key="AccentPrimaryBorder" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentHoverBorder" Member="local:NeonPalette.BorderStrong"/>
+  <x:Static x:Key="AccentFocusBorder" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentSelectedTabBackground" Member="local:NeonPalette.BgSelected"/>
+  <x:Static x:Key="AccentSelectedTabBorder" Member="local:NeonPalette.SageBorder"/>
+  <x:Static x:Key="AccentSelectedTabForeground" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentCaret" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentCheckboxHoverBorder" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentCheckboxCheckedBackground" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentCheckboxCheckedBorder" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentTabUnderline" Member="local:NeonPalette.Sage"/>
+  <x:Static x:Key="AccentToolbarPrimaryBackground" Member="local:NeonPalette.SageBg"/>
+  <x:Static x:Key="AccentSegmentActiveBackground" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="AccentSegmentActiveForeground" Member="local:NeonPalette.InkPrimary"/>
+  <x:Static x:Key="WindowSurface" Member="local:NeonPalette.BgGround"/>
+  <x:Static x:Key="ControlSurface" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="ControlBorder" Member="local:NeonPalette.BorderMedium"/>
+  <x:Static x:Key="GhostSurface" Member="local:NeonPalette.BgWell"/>
+  <x:Static x:Key="GhostBorder" Member="local:NeonPalette.BorderSubtle"/>
+  <x:Static x:Key="FieldSurface" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="FieldBorder" Member="local:NeonPalette.BorderMedium"/>
+  <x:Static x:Key="MenuSurface" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="PopupSurface" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="PopupBorder" Member="local:NeonPalette.BorderMedium"/>
+  <x:Static x:Key="HoverSurface" Member="local:NeonPalette.BgHover"/>
+  <x:Static x:Key="PressedSurface" Member="local:NeonPalette.BgWell"/>
+  <x:Static x:Key="CheckboxSurface" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="CheckboxBorder" Member="local:NeonPalette.BorderMedium"/>
+  <x:Static x:Key="Thumb" Member="local:NeonPalette.ScrollThumb"/>
+  <x:Static x:Key="QuietText" Member="local:NeonPalette.InkSecondary"/>
+  <x:Static x:Key="TickInk" Member="local:NeonPalette.BgElevated"/>
+  <x:Static x:Key="ToolbarText" Member="local:NeonPalette.InkPrimary"/>
+  <CornerRadius x:Key="ActionRadius">6</CornerRadius>
+
+  <!-- Crisp rounded focus visual -->
+  <Style x:Key="NeonFocusVisual" TargetType="{x:Type Control}">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type Control}">
+          <Border Margin="-2" BorderBrush="{x:Static local:NeonPalette.Sage}" BorderThickness="1.5"
+                  CornerRadius="7" SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="False"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Shared ActionButtonTemplate for compatibility with App.xaml fallback buttons -->
+  <ControlTemplate x:Key="ActionButtonTemplate" TargetType="Button">
+    <Border x:Name="Outline" Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+            CornerRadius="6" UseLayoutRounding="False" SnapsToDevicePixels="False">
+      <ContentPresenter Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
+                        HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalAlignment="Center"/>
+    </Border>
+    <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter TargetName="Outline" Property="Opacity" Value="0.92"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter TargetName="Outline" Property="Opacity" Value="0.45"/>
+      </Trigger>
+    </ControlTemplate.Triggers>
+  </ControlTemplate>
+
+  <!-- Base Neon Button (exact 32px height, 6px radius, 13px Medium) -->
+  <Style x:Key="NeonButtonBase" TargetType="Button">
+    <Setter Property="FontFamily" Value="{x:Static local:NeonPalette.SansFont}"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Padding" Value="13,0"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="FocusVisualStyle" Value="{StaticResource NeonFocusVisual}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="6" Padding="{TemplateBinding Padding}"
+                  SnapsToDevicePixels="False" UseLayoutRounding="False">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              RecognizesAccessKey="True"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Bd" Property="local:NeonMotion.TactileScale" Value="0.972"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="NeonPrimaryButton" TargetType="Button" BasedOn="{StaticResource NeonButtonBase}">
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.Sage}"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.SageOnPrimary}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.Sage}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{x:Static local:NeonPalette.SageHover}"/>
+        <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.SageHover}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="NeonSecondaryButton" TargetType="Button" BasedOn="{StaticResource NeonButtonBase}">
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.BgElevated}"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderMedium}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{x:Static local:NeonPalette.BgHover}"/>
+        <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderStrong}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="NeonCautionButton" TargetType="Button" BasedOn="{StaticResource NeonButtonBase}">
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.AmberBg}"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.Amber}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.AmberBorder}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{x:Static local:NeonPalette.AmberHoverBg}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="NeonDangerButton" TargetType="Button" BasedOn="{StaticResource NeonButtonBase}">
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.Cinnabar}"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.CinnabarOnDanger}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.Cinnabar}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{x:Static local:NeonPalette.CinnabarHover}"/>
+        <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.CinnabarHover}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="NeonGhostButton" TargetType="Button" BasedOn="{StaticResource NeonButtonBase}">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkSecondary}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{x:Static local:NeonPalette.BgWell}"/>
+        <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="NeonIconButton" TargetType="Button" BasedOn="{StaticResource NeonButtonBase}">
+    <Setter Property="Width" Value="32"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.BgSurface}"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkSecondary}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderSubtle}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{x:Static local:NeonPalette.BgElevated}"/>
+        <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderMedium}"/>
+        <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- Neon Search TextBox (exact 32px height, white elevated surface, sage focus border) -->
+  <Style x:Key="NeonSearchTextBox" TargetType="TextBox">
+    <Setter Property="FontFamily" Value="{x:Static local:NeonPalette.SansFont}"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.BgElevated}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderMedium}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CaretBrush" Value="{x:Static local:NeonPalette.Sage}"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Padding" Value="32,0,30,0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <Grid>
+            <Border x:Name="FocusHalo" Margin="-2" CornerRadius="8" BorderThickness="2"
+                    BorderBrush="Transparent" IsHitTestVisible="False"
+                    SnapsToDevicePixels="False" UseLayoutRounding="False"/>
+            <Border x:Name="Field" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6" SnapsToDevicePixels="False" UseLayoutRounding="False">
+              <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                            VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Field" Property="BorderBrush" Value="{x:Static local:NeonPalette.Sage}"/>
+              <Setter TargetName="FocusHalo" Property="BorderBrush" Value="{x:Static local:NeonPalette.SageFocusRing}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Compact 15x15 Sage CheckBox matching HTML .cb -->
+  <Style x:Key="NeonCheckBox" TargetType="CheckBox">
+    <Setter Property="Width" Value="24"/>
+    <Setter Property="Height" Value="24"/>
+    <Setter Property="Margin" Value="0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FocusVisualStyle" Value="{StaticResource NeonFocusVisual}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid Background="Transparent" Width="24" Height="24">
+            <Border x:Name="Box" Width="15" Height="15" CornerRadius="3.5"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{x:Static local:NeonPalette.BgElevated}"
+                    BorderBrush="{x:Static local:NeonPalette.BorderStrong}"
+                    BorderThickness="1" SnapsToDevicePixels="False" UseLayoutRounding="False">
+              <Path x:Name="Tick" Data="M 2.8,7.3 L 5.8,10.2 L 11.4,4.0"
+                    Stroke="{x:Static local:NeonPalette.BgElevated}" StrokeThickness="1.8"
+                    StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                    Visibility="Collapsed" IsHitTestVisible="False"/>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Box" Property="BorderBrush" Value="{x:Static local:NeonPalette.Sage}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Box" Property="local:NeonMotion.TactileScale" Value="0.88"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Box" Property="Background" Value="{x:Static local:NeonPalette.Sage}"/>
+              <Setter TargetName="Box" Property="BorderBrush" Value="{x:Static local:NeonPalette.Sage}"/>
+              <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
+              <Setter TargetName="Tick" Property="local:NeonMotion.CheckPopActive" Value="True"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Box" Property="Opacity" Value="0.45"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Compact Neon ComboBox (exact 30px height, 12px secondary ink) -->
+  <Style x:Key="NeonComboBoxItem" TargetType="ComboBoxItem">
+    <Setter Property="FontFamily" Value="{x:Static local:NeonPalette.SansFont}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBoxItem">
+          <Border x:Name="Surface" Background="{TemplateBinding Background}"
+                  CornerRadius="4" Padding="{TemplateBinding Padding}">
+            <ContentPresenter VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{x:Static local:NeonPalette.BgHover}"/>
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{x:Static local:NeonPalette.BgSelected}"/>
+              <Setter Property="Foreground" Value="{x:Static local:NeonPalette.Sage}"/>
+              <Setter Property="FontWeight" Value="SemiBold"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="NeonComboBox" TargetType="ComboBox">
+    <Setter Property="FontFamily" Value="{x:Static local:NeonPalette.SansFont}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkSecondary}"/>
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.BgElevated}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderMedium}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding" Value="9,0,4,0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="ItemContainerStyle" Value="{StaticResource NeonComboBoxItem}"/>
+    <Setter Property="FocusVisualStyle" Value="{StaticResource NeonFocusVisual}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBox">
+          <Grid>
+            <Border x:Name="Surface" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6" SnapsToDevicePixels="False" UseLayoutRounding="False"/>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="22"/>
+              </Grid.ColumnDefinitions>
+              <ContentPresenter IsHitTestVisible="False"
+                                Content="{TemplateBinding SelectionBoxItem}"
+                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                Margin="{TemplateBinding Padding}"
+                                VerticalAlignment="Center" HorizontalAlignment="Left"/>
+              <ToggleButton Grid.Column="1" Focusable="False" ClickMode="Press"
+                            IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                            Background="Transparent" BorderThickness="0">
+                <ToggleButton.Template>
+                  <ControlTemplate TargetType="ToggleButton">
+                    <Grid Background="Transparent">
+                      <Path Data="M 0,0 L 3.8,3.8 L 7.6,0" Stroke="{x:Static local:NeonPalette.InkSecondary}"
+                            StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                            StrokeLineJoin="Round" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            SnapsToDevicePixels="False" UseLayoutRounding="False"/>
+                    </Grid>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+              </ToggleButton>
+            </Grid>
+            <Popup x:Name="PART_Popup" Placement="Bottom" VerticalOffset="3"
+                   PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                   IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True"
+                   Focusable="False" PopupAnimation="Fade">
+              <Border Background="{x:Static local:NeonPalette.BgElevated}"
+                      BorderBrush="{x:Static local:NeonPalette.BorderMedium}"
+                      BorderThickness="1" CornerRadius="6" Padding="3"
+                      MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                <Border.Effect>
+                  <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.12" Color="#1B201D"/>
+                </Border.Effect>
+                <ScrollViewer CanContentScroll="True" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                  <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderStrong}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{x:Static local:NeonPalette.Sage}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Sleek translucent ScrollBar matching styles.css -->
+  <Style x:Key="NeonScrollBar" TargetType="ScrollBar">
+    <Setter Property="Width" Value="8"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Track x:Name="PART_Track" IsDirectionReversed="True"
+                 Orientation="{TemplateBinding Orientation}"
+                 Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                 Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
+            <Track.DecreaseRepeatButton>
+              <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+            </Track.DecreaseRepeatButton>
+            <Track.Thumb>
+              <Thumb>
+                <Thumb.Template>
+                  <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbPill" Background="{x:Static local:NeonPalette.ScrollThumb}"
+                            CornerRadius="4" Margin="2,2"
+                            SnapsToDevicePixels="False" UseLayoutRounding="False"/>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ThumbPill" Property="Background" Value="{x:Static local:NeonPalette.ScrollThumbHover}"/>
+                      </Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Thumb.Template>
+              </Thumb>
+            </Track.Thumb>
+            <Track.IncreaseRepeatButton>
+              <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+            </Track.IncreaseRepeatButton>
+          </Track>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

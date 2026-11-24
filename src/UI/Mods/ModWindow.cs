@@ -674,7 +674,8 @@ public partial class MainWindow
   catch(Exception ex){busy=false;transactionWriting=false;toast.Text="恢复未完成："+ex.Message;ShowModDetail(mod.Folder);}
  }
 
- async void RefreshMods()
+ void RefreshMods()=>_=RefreshModsAsync();
+ async Task RefreshModsAsync()
  {
   if(busy)
   {
@@ -689,7 +690,7 @@ public partial class MainWindow
   modInventoryRefreshRunning=true;
   activeModInventoryRefreshRoot=root;
   busy=true;modTogglePreview=null;modStatus="正在检查本地 ZIP 事务并读取模组清单…";
-  if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
+  if(!UiThemes.IsNeon&&(page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
    var localZipWorkflow=LocalZipSession();
@@ -777,7 +778,8 @@ public partial class MainWindow
    activeModInventoryRefreshRoot=null;
    string? pendingRoot=pendingModInventoryRefreshRoot;
    pendingModInventoryRefreshRoot=null;
-   if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
+   if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:true);
+   else if((page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
    else if(page=="模组管理"&&currentVisit?.Key?.StartsWith("mod:",StringComparison.Ordinal)==true)
    {
     string folder=currentVisit.Key["mod:".Length..];
