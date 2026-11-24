@@ -1,9 +1,11 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 
@@ -358,7 +360,7 @@ public static class NeonWidgets
             Cursor = Cursors.Hand,
             ToolTip = toolTip,
             VerticalAlignment = VerticalAlignment.Center,
-            Template = CreateBareButtonTemplate()
+            Template = CreateInteractiveBareButtonTemplate(pressScale: 0.95, hoverOpacity: 0.90)
         };
         if (automationName != null) AutomationProperties.SetName(btn, automationName);
         else AutomationProperties.SetName(btn, text);
@@ -743,7 +745,7 @@ public static class NeonWidgets
             IsEnabled = !isPending,
             ToolTip = toolTip,
             VerticalAlignment = VerticalAlignment.Center,
-            Template = CreateBareButtonTemplate()
+            Template = CreateInteractiveBareButtonTemplate(pressScale: 0.95, hoverOpacity: 0.90)
         };
         AutomationProperties.SetName(btn, automationName);
 
@@ -1140,6 +1142,104 @@ public static class NeonWidgets
         presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         template.VisualTree = presenter;
         return template;
+    }
+
+    /// <summary>
+    /// Tactile bare template with spring scale-down on press and subtle hover dim without shifting layout.
+    /// </summary>
+    public static ControlTemplate CreateInteractiveBareButtonTemplate(double pressScale = 0.96, double hoverOpacity = 0.90)
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var border = new FrameworkElementFactory(typeof(Border), "Bd");
+        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        border.SetValue(UIElement.SnapsToDevicePixelsProperty, false);
+        border.SetValue(FrameworkElement.UseLayoutRoundingProperty, false);
+
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        template.VisualTree = border;
+
+        if (hoverOpacity < 0.999)
+        {
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(UIElement.OpacityProperty, hoverOpacity, "Bd"));
+            template.Triggers.Add(hover);
+        }
+
+        var pressed = new Trigger { Property = ButtonBase.IsPressedProperty, Value = true };
+        pressed.Setters.Add(new Setter(NeonMotion.TactileScaleProperty, pressScale, "Bd"));
+        template.Triggers.Add(pressed);
+
+        return template;
+    }
+
+    /// <summary>
+    /// Rounded mineral scanning progress bar with silky GPU horizontal sweep and reduced-motion static fallback.
+    /// </summary>
+    public static ProgressBar CreateMineralProgressBar(FrameworkElement animHost, double width = 228)
+    {
+        double pillWidth = Math.Round(width * 0.36);
+        bool canAnimate = NeonMotion.CanAnimate(animHost);
+
+        var template = new ControlTemplate(typeof(ProgressBar));
+        var track = new FrameworkElementFactory(typeof(Border));
+        track.SetValue(Border.BackgroundProperty, NeonPalette.BgWell);
+        track.SetValue(Border.CornerRadiusProperty, new CornerRadius(2.5));
+        track.SetValue(UIElement.ClipToBoundsProperty, true);
+        track.SetValue(UIElement.SnapsToDevicePixelsProperty, false);
+        track.SetValue(FrameworkElement.UseLayoutRoundingProperty, false);
+
+        var pill = new FrameworkElementFactory(typeof(Border), "PART_Pill");
+        pill.SetValue(FrameworkElement.WidthProperty, canAnimate ? pillWidth : Math.Round(width * 0.42));
+        pill.SetValue(FrameworkElement.HeightProperty, 5.0);
+        pill.SetValue(FrameworkElement.HorizontalAlignmentProperty, canAnimate ? HorizontalAlignment.Left : HorizontalAlignment.Center);
+        pill.SetValue(Border.BackgroundProperty, NeonPalette.Sage);
+        pill.SetValue(Border.CornerRadiusProperty, new CornerRadius(2.5));
+        pill.SetValue(UIElement.SnapsToDevicePixelsProperty, false);
+        pill.SetValue(FrameworkElement.UseLayoutRoundingProperty, false);
+        track.AppendChild(pill);
+        template.VisualTree = track;
+
+        var bar = new ProgressBar
+        {
+            Width = width,
+            Height = 5,
+            Margin = new Thickness(0, 2, 0, 12),
+            Minimum = 0,
+            Maximum = 100,
+            IsIndeterminate = canAnimate,
+            Value = canAnimate ? 0 : 42,
+            Template = template
+        };
+
+        TranslateTransform? pillSlide = null;
+        bar.Loaded += (_, _) =>
+        {
+            if (bar.Template?.FindName("PART_Pill", bar) is not Border pillBorder) return;
+            if (!NeonMotion.CanAnimate(animHost))
+            {
+                pillBorder.HorizontalAlignment = HorizontalAlignment.Center;
+                pillBorder.Width = Math.Round(width * 0.42);
+                pillBorder.RenderTransform = Transform.Identity;
+                return;
+            }
+            pillSlide = new TranslateTransform(-pillWidth, 0);
+            pillBorder.RenderTransform = pillSlide;
+            var sweep = new DoubleAnimation(-pillWidth, width, TimeSpan.FromMilliseconds(Math.Max(50.0, 1250.0 * NeonMotion.RecordingTimeScale)))
+            {
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            pillSlide.BeginAnimation(TranslateTransform.XProperty, sweep);
+        };
+        bar.Unloaded += (_, _) =>
+        {
+            pillSlide?.BeginAnimation(TranslateTransform.XProperty, null);
+        };
+
+        return bar;
     }
 
     /// <summary>

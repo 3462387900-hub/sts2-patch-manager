@@ -1335,11 +1335,18 @@ public partial class MainWindow
 
         for (int i = 0; i < 120 && (busy || neonScanning || modInventoryRefreshRunning); i++) await Task.Delay(40);
         neonTestScanDelayMs = 0;
+        await Task.Delay(260);
         await Idle();
+        string revealPillText = AllText(view.LoadRevealPillControl);
         Check(view.CurrentSnapshot!.HasInventory &&
               !view.CurrentSnapshot.IsScanning &&
               view.CurrentSnapshot.AllRows.Length > 0,
             "扫描完成后恢复真实 MOD 清单并清除扫描态");
+        Check(view.IsLoadRevealVisible &&
+              revealPillText.Contains("已加载") &&
+              revealPillText.Contains("个模组"),
+            "扫描完成后顶部弹出「✓ 已加载 X 个模组」过渡确认胶囊而非生硬跳出");
+        await ShotAtScaleAsync("26-wpf-load-reveal-pill-100", 1.0, 1280, 850);
 
         CloseModWatch();
     }

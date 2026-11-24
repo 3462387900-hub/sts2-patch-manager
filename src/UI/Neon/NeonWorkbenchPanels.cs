@@ -1149,6 +1149,7 @@ internal sealed partial class NeonWorkbenchView
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             MaxHeight = 460
         };
+        NeonMotion.AttachSmoothWheelScroll(bodyScroll, this);
 
         var footGrid = new Grid();
         footGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1565,6 +1566,7 @@ internal sealed partial class NeonWorkbenchView
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
+        NeonMotion.AttachSmoothWheelScroll(scroll, this);
         Grid.SetRow(scroll, 1);
         layout.Children.Add(scroll);
 

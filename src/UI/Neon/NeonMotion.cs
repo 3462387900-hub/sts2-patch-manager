@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 
 namespace SpirePatch;
 
@@ -1154,5 +1157,236 @@ public static class NeonMotion
         slide.Completed += (_, _) => ClearAnimations(card);
         card.BeginAnimation(UIElement.OpacityProperty, fade);
         translate.BeginAnimation(TranslateTransform.YProperty, slide);
+    }
+
+    /// <summary>
+    /// Staggered cascade entrance for freshly loaded MOD rows (first 10 rows only).
+    /// </summary>
+    internal static void PlayCascadeReveal(FrameworkElement host, FrameworkElement element, int index, int maxAnimated = 10)
+    {
+        if (index < 0 || index >= maxAnimated || !CanAnimate(host))
+        {
+            ClearAnimations(element);
+            return;
+        }
+        var translate = EnsureSlideTransform(element);
+        element.Opacity = 0.0;
+        translate.Y = 10.0;
+        var delay = ScaledMs(index * 20.0);
+        var fade = SplineDouble(0.0, 1.0, 195);
+        fade.BeginTime = delay;
+        var slide = SplineDouble(10.0, 0.0, 195);
+        slide.BeginTime = delay;
+        slide.Completed += (_, _) => ClearAnimations(element);
+        element.BeginAnimation(UIElement.OpacityProperty, fade);
+        translate.BeginAnimation(TranslateTransform.YProperty, slide);
+    }
+
+    /// <summary>
+    /// Crisp 140ms vertical settle + fade-in on user-initiated filter, sort, or mode changes.
+    /// Never called during background refreshes.
+    /// </summary>
+    internal static void PlayFilterSettle(FrameworkElement host, FrameworkElement container)
+    {
+        if (!CanAnimate(host))
+        {
+            ClearAnimations(container);
+            return;
+        }
+        var translate = EnsureSlideTransform(container);
+        container.Opacity = 0.42;
+        translate.Y = 5.5;
+        var fade = SplineDouble(0.42, 1.0, 140);
+        var slide = SplineDouble(5.5, 0.0, 140);
+        slide.Completed += (_, _) => ClearAnimations(container);
+        container.BeginAnimation(UIElement.OpacityProperty, fade);
+        translate.BeginAnimation(TranslateTransform.YProperty, slide);
+    }
+
+    /// <summary>
+    /// Floating confirmation pill ("✓ 已加载 X 个模组") that enters smoothly after scan completion and auto-dismisses.
+    /// </summary>
+    internal static void ShowFloatingRevealPill(
+        FrameworkElement host,
+        FrameworkElement pill,
+        int holdMs,
+        Func<int> currentGeneration,
+        int myGeneration,
+        Action? onHidden = null)
+    {
+        var (scale, translate) = EnsureScaleTranslate(pill);
+        pill.BeginAnimation(UIElement.OpacityProperty, null);
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        translate.BeginAnimation(TranslateTransform.XProperty, null);
+        translate.BeginAnimation(TranslateTransform.YProperty, null);
+        translate.X = 0.0;
+        pill.Visibility = Visibility.Visible;
+
+        bool animate = CanAnimate(host);
+        if (!animate)
+        {
+            pill.Opacity = 1.0;
+            scale.ScaleX = 1.0;
+            scale.ScaleY = 1.0;
+            translate.Y = 0.0;
+        }
+        else
+        {
+            pill.Opacity = 0.0;
+            scale.ScaleX = 0.94;
+            scale.ScaleY = 0.94;
+            translate.Y = -10.0;
+
+            pill.BeginAnimation(UIElement.OpacityProperty, SplineDouble(0.0, 1.0, 190));
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.94, 1.0, ScaledMs(220))
+            {
+                EasingFunction = TactileSpringEase,
+                FillBehavior = FillBehavior.HoldEnd
+            });
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.94, 1.0, ScaledMs(220))
+            {
+                EasingFunction = TactileSpringEase,
+                FillBehavior = FillBehavior.HoldEnd
+            });
+            translate.BeginAnimation(TranslateTransform.YProperty, SplineDouble(-10.0, 0.0, 210));
+        }
+
+        var holdTimer = new DispatcherTimer { Interval = ScaledMs(Math.Max(200, holdMs)) };
+        holdTimer.Tick += (_, _) =>
+        {
+            holdTimer.Stop();
+            if (myGeneration != currentGeneration()) return;
+            if (!CanAnimate(host))
+            {
+                pill.Opacity = 1.0;
+                scale.ScaleX = 1.0;
+                scale.ScaleY = 1.0;
+                translate.Y = 0.0;
+                pill.Visibility = Visibility.Collapsed;
+                onHidden?.Invoke();
+                return;
+            }
+            var outFade = new DoubleAnimation(pill.Opacity, 0.0, ScaledMs(210))
+            {
+                EasingFunction = FastExitEase,
+                FillBehavior = FillBehavior.HoldEnd
+            };
+            var outSlide = new DoubleAnimation(translate.Y, -8.0, ScaledMs(210))
+            {
+                EasingFunction = FastExitEase,
+                FillBehavior = FillBehavior.HoldEnd
+            };
+            outSlide.Completed += (_, _) =>
+            {
+                if (myGeneration != currentGeneration()) return;
+                pill.BeginAnimation(UIElement.OpacityProperty, null);
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+                translate.BeginAnimation(TranslateTransform.YProperty, null);
+                pill.Opacity = 1.0;
+                scale.ScaleX = 1.0;
+                scale.ScaleY = 1.0;
+                translate.Y = 0.0;
+                pill.Visibility = Visibility.Collapsed;
+                onHidden?.Invoke();
+            };
+            pill.BeginAnimation(UIElement.OpacityProperty, outFade);
+            translate.BeginAnimation(TranslateTransform.YProperty, outSlide);
+        };
+        holdTimer.Start();
+    }
+
+    /// <summary>
+    /// Lightweight GPU horizontal nudge for hover CTA arrows and tactile row clicks.
+    /// </summary>
+    internal static void NudgeHorizontal(FrameworkElement host, FrameworkElement target, double offsetX, int ms = 120)
+    {
+        var translate = EnsureSlideTransform(target);
+        if (!CanAnimate(host))
+        {
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.X = offsetX;
+            return;
+        }
+        translate.BeginAnimation(TranslateTransform.XProperty, SplineDouble(translate.X, offsetX, ms));
+    }
+
+    /// <summary>
+    /// 60fps exponential-damping wheel scrolling that automatically yields to programmatic ScrollTo* calls.
+    /// </summary>
+    internal static void AttachSmoothWheelScroll(ScrollViewer scrollViewer, FrameworkElement animHost)
+    {
+        bool renderingHooked = false;
+        double targetOffset = scrollViewer.VerticalOffset;
+        double lastAppliedOffset = scrollViewer.VerticalOffset;
+        var frameClock = new Stopwatch();
+
+        void StopInertia()
+        {
+            if (!renderingHooked) return;
+            renderingHooked = false;
+            CompositionTarget.Rendering -= OnRenderTick;
+        }
+
+        void OnRenderTick(object? sender, EventArgs args)
+        {
+            if (!CanAnimate(animHost) || !scrollViewer.IsLoaded)
+            {
+                StopInertia();
+                return;
+            }
+            double maxOffset = scrollViewer.ScrollableHeight;
+            targetOffset = Math.Clamp(targetOffset, 0.0, maxOffset);
+            double current = scrollViewer.VerticalOffset;
+            double delta = targetOffset - current;
+            if (Math.Abs(delta) < 0.4)
+            {
+                lastAppliedOffset = targetOffset;
+                scrollViewer.ScrollToVerticalOffset(targetOffset);
+                StopInertia();
+                return;
+            }
+
+            double dt = Math.Clamp(frameClock.Elapsed.TotalSeconds, 0.001, 0.05);
+            frameClock.Restart();
+            double alpha = 1.0 - Math.Exp(-16.0 * dt);
+            double next = current + delta * alpha;
+            if (Math.Abs(targetOffset - next) < 0.4)
+                next = targetOffset;
+            lastAppliedOffset = next;
+            scrollViewer.ScrollToVerticalOffset(next);
+        }
+
+        scrollViewer.PreviewMouseWheel += (_, e) =>
+        {
+            if (!CanAnimate(animHost) || e.Delta == 0 || scrollViewer.ScrollableHeight <= 0.5)
+            {
+                StopInertia();
+                return;
+            }
+            e.Handled = true;
+            if (!renderingHooked)
+            {
+                targetOffset = scrollViewer.VerticalOffset;
+                lastAppliedOffset = scrollViewer.VerticalOffset;
+                frameClock.Restart();
+                renderingHooked = true;
+                CompositionTarget.Rendering += OnRenderTick;
+            }
+            targetOffset = Math.Clamp(targetOffset - e.Delta * 0.72, 0.0, scrollViewer.ScrollableHeight);
+        };
+
+        scrollViewer.ScrollChanged += (_, e) =>
+        {
+            if (renderingHooked && Math.Abs(e.VerticalOffset - lastAppliedOffset) > 1.5)
+            {
+                StopInertia();
+                targetOffset = e.VerticalOffset;
+                lastAppliedOffset = e.VerticalOffset;
+            }
+        };
+
+        scrollViewer.Unloaded += (_, _) => StopInertia();
     }
 }

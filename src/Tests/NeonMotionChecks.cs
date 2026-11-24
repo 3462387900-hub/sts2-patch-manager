@@ -475,6 +475,42 @@ public partial class MainWindow
             view.ClearToasts();
 
             // ----------------------------------------------------------------
+            // TEST 12B: Post-Scan Load Reveal Pill & Filter Settle Transition
+            // ----------------------------------------------------------------
+            var savedInvForReveal = modInventory;
+            var savedRepForReveal = report;
+            modInventory = null;
+            report = null;
+            RefreshNeonWorkbench(preserveViewport: false);
+            await Idle();
+
+            modInventory = savedInvForReveal;
+            report = savedRepForReveal;
+            RefreshNeonWorkbench(preserveViewport: false);
+            var (_, revealMaxOp) = await SampleOverAsync(() => view.LoadRevealPillControl.Opacity, 280);
+            string revealText = string.Join(" ", Descendants<TextBlock>(view.LoadRevealPillControl).Select(t => t.Text));
+            Check(view.IsLoadRevealVisible && revealText.Contains("已加载") && revealMaxOp >= 0.98,
+                $"模组加载完成弹出「已加载」浮动确认胶囊并稳定就位（Opacity={revealMaxOp:F2}）");
+            await Settle(2150);
+            Check(!view.IsLoadRevealVisible,
+                "「已加载」浮动确认胶囊停留后平滑退场并彻底收起");
+
+            var issuePillBtn = Descendants<Button>(view)
+                .First(b => (AutomationProperties.GetName(b) ?? "").StartsWith("需处理", StringComparison.Ordinal));
+            issuePillBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, issuePillBtn));
+            await SampleOverAsync(() => view.DeskContentControl.Opacity, 200);
+            Check(view.ActiveFilter == "issues" &&
+                  view.WorkbenchStageControl.Opacity == 1.0 &&
+                  view.TopbarControl.RenderTransform == Transform.Identity &&
+                  Math.Abs(view.DeskContentControl.Opacity - 1.0) < 0.01,
+                "切换筛选分类时列表轻快落定就位，顶栏与页面本体保持静止");
+            var allPillBtn = Descendants<Button>(view)
+                .First(b => (AutomationProperties.GetName(b) ?? "").StartsWith("全部", StringComparison.Ordinal));
+            allPillBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, allPillBtn));
+            await Settle(200);
+            view.ClearToasts();
+
+            // ----------------------------------------------------------------
             // TEST 7: System Animations Disabled (ClientAreaAnimationKey = false -> instant switch!)
             // ----------------------------------------------------------------
             view.Resources[animPrefKey] = false;
