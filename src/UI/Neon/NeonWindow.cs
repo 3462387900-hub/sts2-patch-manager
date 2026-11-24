@@ -92,22 +92,27 @@ public partial class MainWindow
         }), System.Windows.Threading.DispatcherPriority.Background);
     }
 
-    async Task<bool> NeonScanAndPublishAsync(string root)
+    async Task<bool> NeonScanAndPublishAsync(string root, Action<NeonScanStamp, string>? diagnostic = null)
     {
         var stamp = NeonCaptureScanStamp(root);
+        diagnostic?.Invoke(stamp, "captured");
         modInventoryDirty = true;
+        bool published;
         try
         {
             var inventory = await Task.Run(() => neonTestScanOverride != null ? neonTestScanOverride(root) : ModManager.Scan(root));
-            return NeonTryPublishInventory(stamp, inventory);
+            published = NeonTryPublishInventory(stamp, inventory);
         }
         catch (Exception error)
         {
             modInventoryDirty = true;
             InvalidateLifecycle("文件操作已结束，但清单扫描未完成：" + error.Message);
             neonWorkbenchView?.ShowToast("文件操作已结束，清单仍待重新扫描：" + error.Message, NeonTone.Amber);
+            diagnostic?.Invoke(stamp, "scan exception: " + error);
             return false;
         }
+        diagnostic?.Invoke(stamp, published ? "published" : "guard rejected");
+        return published;
     }
 
     const string NeonZipRecoveryKind = "本地 ZIP 安装";

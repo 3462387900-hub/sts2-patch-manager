@@ -28,6 +28,53 @@ public partial class MainWindow
             Log((ok ? "PASS " : "FAIL ") + label);
             if (!ok) throw new InvalidOperationException(label);
         }
+        string ScanState(NeonScanStamp expected) =>
+            $"expected_root=\"{expected.Root}\" expected_epoch={expected.RootEpoch} expected_generation={expected.Generation} " +
+            $"actual_selected_root=\"{selectedInstallRoot ?? "<null>"}\" actual_watcher_root=\"{modFileWatcher.CurrentRoot ?? "<null>"}\" " +
+            $"actual_epoch={Volatile.Read(ref neonRootEpoch)} actual_generation={modFileWatcher.ChangeVersion} " +
+            $"dirty={modInventoryDirty} clean_generation={modInventoryCleanVersion} ui_generation={Volatile.Read(ref modChangeVersion)} " +
+            $"overflow={modWatchOverflow} tree_changed={modWatchTreeChanged} busy={busy} transaction_writing={transactionWriting} " +
+            $"refresh_running={modInventoryRefreshRunning} status=\"{modStatus}\"";
+
+        Action<NeonScanStamp, string> ScanDiagnostic(string label) =>
+            (stamp, phase) => Log($"INFO scan={label} phase={phase} {ScanState(stamp)}");
+
+        // Use the real watcher. Wait for a full quiet interval, not an arbitrary
+        // generation value or a reset of the clean watermark. Never stop the watcher.
+        async Task AwaitFixtureWatchQuietAsync(string root, long epoch, string label)
+        {
+            var stamp = NeonCaptureScanStamp(root);
+            var stable = Stopwatch.StartNew();
+            var deadline = Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(15))
+            {
+                if (epoch != Volatile.Read(ref neonRootEpoch) ||
+                    !NeonRootMatches(root) ||
+                    !string.Equals(modFileWatcher.CurrentRoot, root, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"{label}: fixture watcher/root session changed. {ScanState(stamp)}");
+                int generation = modFileWatcher.ChangeVersion;
+                if (generation != stamp.Generation)
+                {
+                    Log($"INFO {label} watcher advanced while settling {ScanState(stamp)}");
+                    stamp = NeonCaptureScanStamp(root);
+                    stable.Restart();
+                }
+                if (stable.Elapsed >= TimeSpan.FromMilliseconds(1100))
+                {
+                    // Drain already queued watcher notifications before taking the scan stamp.
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                    if (NeonScanStampCurrent(stamp) && epoch == stamp.RootEpoch)
+                    {
+                        Log($"INFO {label} watcher settled {ScanState(stamp)}");
+                        return;
+                    }
+                    stable.Restart();
+                }
+                await Task.Delay(50);
+            }
+            throw new TimeoutException($"{label}: watcher did not settle. {ScanState(stamp)}");
+        }
+
         async Task LayoutAsync()
         {
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
@@ -77,6 +124,9 @@ public partial class MainWindow
         {
             string root = Path.Combine(parent, "game-" + n);
             Directory.CreateDirectory(Path.Combine(root, "mods"));
+            // Both MOD-owned trees exist before FileSystemWatcher starts, just as in
+            // the existing Neon fixture with a pre-disabled mod.
+            Directory.CreateDirectory(Path.Combine(root, ModManager.StorageName));
             Directory.CreateDirectory(Path.Combine(root, "data_sts2_windows_x86_64"));
             File.WriteAllBytes(Path.Combine(root, "SlayTheSpire2.exe"), []);
             File.WriteAllText(Path.Combine(root, ".spirepatch-fixture"), "isolated");
@@ -97,7 +147,7 @@ public partial class MainWindow
                 }));
                 File.WriteAllText(Path.Combine(dir, id + ".dll"), id + " isolated payload");
             }
-            return root;
+            return GameEnvironment.Root(root);
         }
 
         try
@@ -114,11 +164,34 @@ public partial class MainWindow
             {
                 string root = roots[n];
                 neonFixtureRoot = root;
-                UseGameRoot(root);
-                // No live discovery, update checks or lifecycle HTTP.
-                await NeonRecoverTransactionsAsync(root);
-                Check(NeonRecoveryChecked(root) && !NeonRecoveryBlocked(root), $"{n} isolated P1 recovery gate");
-                Check(await NeonScanAndPublishAsync(root), $"{n} initial guarded inventory publication");
+                // Mount, recover and scan are one isolated initialization operation.
+                // The real quiet-period handler respects busy, so it cannot launch a
+                // competing RefreshMods during the initial scan.
+                busy = true;
+                try
+                {
+                    UseGameRoot(root);
+                    var mounted = NeonCaptureScanStamp(root);
+                    Log($"INFO {n} mounted {ScanState(mounted)}");
+                    Check(NeonScanStampCurrent(mounted), $"{n} initial watcher mounted");
+                    // On subsequent sizes, root selection can start a Neon snapshot
+                    // worker that reads the recovery list under the game's mutex.
+                    // Finish that worker before starting recovery and the scan.
+                    if (neonSnapshotPump is { } pending) await pending;
+                    await AwaitFixtureWatchQuietAsync(root, mounted.RootEpoch, $"{n} initial");
+                    // No live discovery, update checks or lifecycle HTTP.
+                    await NeonRecoverTransactionsAsync(root);
+                    Check(NeonRecoveryChecked(root) && !NeonRecoveryBlocked(root), $"{n} isolated P1 recovery gate");
+                    await AwaitFixtureWatchQuietAsync(root, mounted.RootEpoch, $"{n} post-recovery");
+                    if (neonSnapshotPump is { } afterRecovery) await afterRecovery;
+                    Check(!modInventoryRefreshRunning && NeonRootMatches(root) &&
+                        string.Equals(modFileWatcher.CurrentRoot, root, StringComparison.OrdinalIgnoreCase) &&
+                        Volatile.Read(ref neonRootEpoch) == mounted.RootEpoch,
+                        $"{n} no competing refresh and root session unchanged");
+                    Check(await NeonScanAndPublishAsync(root, ScanDiagnostic($"{n} initial")),
+                        $"{n} initial guarded inventory publication");
+                }
+                finally { busy = false; }
                 Check(modInventory?.Mods.Count == n, $"{n} exact fixture inventory");
                 ResetHeartbeat();
                 var timer = Stopwatch.StartNew();
@@ -147,7 +220,7 @@ public partial class MainWindow
                     ReferenceEquals(original, view.DeskContentControl.Children.OfType<Border>().First(b => b.Tag is string)),
                     $"{n} unchanged refresh retains actual card instances");
                 Check(NeonDependencyBuildCount == graphs, $"{n} dependency graph cache hit");
-                Check(await NeonScanAndPublishAsync(root), $"{n} unchanged real rescan accepted");
+                Check(await NeonScanAndPublishAsync(root, ScanDiagnostic($"{n} unchanged rescan")), $"{n} unchanged real rescan accepted");
                 Check(await RefreshNeonWorkbenchAsync(), $"{n} identical rescan projected");
                 Check(NeonDependencyBuildCount == graphs, $"{n} equivalent inventory reuses dependency graph");
                 await LayoutAsync();
@@ -305,7 +378,7 @@ public partial class MainWindow
                         !neonWorkbenchView.CurrentSnapshot.IsLifecycleHealthValid,
                         "changed watcher generation rejects old clean projection");
                     await Task.Delay(1000);
-                    Check(await NeonScanAndPublishAsync(roots[500]), "new scan covers changed watcher generation");
+                    Check(await NeonScanAndPublishAsync(roots[500], ScanDiagnostic("watcher changed rescan")), "new scan covers changed watcher generation");
                     Check(await RefreshNeonWorkbenchAsync(), "clean projection after watcher change");
                 }
                 finally { busy = false; }
@@ -332,7 +405,7 @@ public partial class MainWindow
                 Check(neonWorkbenchView.CurrentSnapshot?.GameRoot == a &&
                     neonWorkbenchView.CurrentSnapshot.AllRows.Length == 0, "A-B-A cannot revive old root A projection");
                 await NeonRecoverTransactionsAsync(a);
-                Check(await NeonScanAndPublishAsync(a), "A-B-A new guarded inventory");
+                Check(await NeonScanAndPublishAsync(a, ScanDiagnostic("A-B-A rescan")), "A-B-A new guarded inventory");
                 _ = RefreshNeonWorkbenchAsync();
             }
             finally { neonTestSnapshotBuildHook = null; rootRelease.Set(); }
