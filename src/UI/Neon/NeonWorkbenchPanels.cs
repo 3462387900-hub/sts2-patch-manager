@@ -1226,11 +1226,18 @@ internal sealed partial class NeonWorkbenchView
 
     public void OpenTransactionModal(NeonTransactionConfig config)
     {
+        var previousCancel = activeModalCancelAction;
+        activeModalCancelAction = null;
+        if (previousCancel != null)
+        {
+            try { previousCancel(); } catch { }
+        }
         modalTitleText.Text = config.Title;
         modalSubText.Text = config.Subtitle;
         modalBodyStack.Children.Clear();
         modalFootButtons.Children.Clear();
         activeModalConfirmAsync = config.OnConfirmAsync;
+        activeModalCancelAction = config.OnCancel;
         modalExecuting = false;
 
         bool blocked = !string.IsNullOrWhiteSpace(config.BlockedReason);
@@ -1430,6 +1437,7 @@ internal sealed partial class NeonWorkbenchView
                 {
                     if (modalExecuting || activeModalConfirmAsync == null) return;
                     var handler = activeModalConfirmAsync;
+                    activeModalCancelAction = null;
                     modalExecuting = true;
                     CloseTransactionModal();
                     try { await handler(); }
@@ -1471,6 +1479,12 @@ internal sealed partial class NeonWorkbenchView
         var returnTarget = modalReturnFocus;
         modalReturnFocus = null;
         activeModalConfirmAsync = null;
+        var cancelAction = activeModalCancelAction;
+        activeModalCancelAction = null;
+        if (cancelAction != null)
+        {
+            try { cancelAction(); } catch { }
+        }
         modalOpenLogical = false;
         modalClosing = true;
         modalBackdrop.IsHitTestVisible = false;

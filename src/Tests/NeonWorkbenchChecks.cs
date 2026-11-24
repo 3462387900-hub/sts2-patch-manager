@@ -965,32 +965,42 @@ public partial class MainWindow
         await NeonPreviewLocalZipImportAsync(badZip);
         await Idle();
         string badZipModalText = AllText(view.ModalBackdropControl);
-        Check(view.IsModalOpen && badZipModalText.Contains("不支持的脚本或程序"),
-            "危险本地 ZIP（含 .bat 脚本）通过正式 WorkshopZipImport.Preview 拦截并弹出原因");
+        Check(view.IsModalOpen && (badZipModalText.Contains("禁止的可执行文件") || badZipModalText.Contains("脚本")),
+            "危险本地 ZIP（含 .bat 脚本）通过正式 LocalModZipImportWorkflowService 拦截并弹出原因");
         Click(Descendants<Button>(view.ModalBackdropControl).Single(b => Equals(b.Content, "关闭")));
         await Idle();
 
-        // Verify valid single-MOD ZIP passes real WorkshopZipImport.Preview + Apply (+ auto-creates protection snapshot!)
+        // Verify valid single-MOD ZIP passes real LocalZipUiWorkflowSession preview + OnCancel cleanup + Apply (+ auto-creates protection snapshot!)
         int snapsBeforeZip = ModEnvironmentSnapshots.List(fixture, NeonDataRoot).Length;
         string goodZip = Path.Combine(NeonDataRoot, "RemiliaFixture-v1.0.3.zip");
         using (var z = ZipFile.Open(goodZip, ZipArchiveMode.Create))
         {
-            var e1 = z.CreateEntry("RemiliaFixture/RemiliaFixture.json");
+            var e1 = z.CreateEntry("RemiliaFixture/mod_manifest.json");
             using (var w = new StreamWriter(e1.Open())) w.Write("""{"id":"RemiliaFixture","name":"蕾米莉亚 · 红魔馆主","version":"1.0.3","author":"ScarletDev","has_dll":true,"dependencies":[{"id":"BaseLib","min_version":"3.4.0"}]}""");
             var e2 = z.CreateEntry("RemiliaFixture/RemiliaFixture.dll");
             using (var w = new StreamWriter(e2.Open())) w.Write("RemiliaFixture@1.0.3 payload");
         }
         await NeonPreviewLocalZipImportAsync(goodZip);
         await Idle();
-        Check(view.IsModalOpen && zipImportPreview != null && zipImportPreview.ModId == "RemiliaFixture",
-            "合规本地 ZIP 通过正式 WorkshopZipImport.Preview 生成 SHA-256 预览弹窗");
+        Check(view.IsModalOpen && NeonCurrentLocalZipPreview != null && NeonCurrentLocalZipPreview.Package.ModId == "RemiliaFixture",
+            "合规本地 ZIP 通过正式 LocalZipUiWorkflowSession 生成隔离暂存预览与 SHA-256 弹窗");
+
+        // Cancel first to verify OnCancel cleans up staging cleanly, then re-preview and confirm!
+        Click(Descendants<Button>(view.ModalBackdropControl).Single(b => Equals(b.Content, "取消")));
+        await Task.Delay(260);
+        await Idle();
+        Check(!view.IsModalOpen && NeonCurrentLocalZipPreview == null && !Directory.Exists(Path.Combine(fixture, "mods", "RemiliaFixture")),
+            "取消本地 ZIP 预览弹窗时通过 OnCancel 自动清理隔离暂存且不修改 mods 目录");
+
+        await NeonPreviewLocalZipImportAsync(goodZip);
+        await Idle();
         Click(Descendants<Button>(view.ModalBackdropControl).Single(b => (b.Content?.ToString() ?? "").Contains("确认导入")));
         for (int i = 0; i < 160 && (busy || transactionWriting || view.IsModalOpen || modInventoryRefreshRunning); i++) await Task.Delay(50);
         await Idle();
         Check(Directory.Exists(Path.Combine(fixture, "mods", "RemiliaFixture")),
-            "确认导入后通过正式 WorkshopZipImport.Apply 将合规 ZIP 解压安装到 mods/");
+            "确认导入后通过正式 LocalModZipApplyWorkflowService 将合规 ZIP 事务安装到 mods/");
         Check(ModEnvironmentSnapshots.List(fixture, NeonDataRoot).Length == snapsBeforeZip + 1,
-            "导入外部 ZIP 前自动通过 ModEnvironmentSnapshots.Create 生成完整保护快照");
+            "导入外部 ZIP 前自动通过 ModEnvironmentSnapshotWorkflowService 生成完整保护快照");
 
         // --------------------------------------------------------------------
         // STEP 9: Co-op Page (联机) — Honest Scope, Diff Table, Export & Selectable Preview

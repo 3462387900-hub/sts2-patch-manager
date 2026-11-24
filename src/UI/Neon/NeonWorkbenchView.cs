@@ -27,7 +27,8 @@ internal sealed record NeonTransactionConfig(
     Func<Task>? OnConfirmAsync = null,
     UIElement? CustomContent = null,
     string? PlainSummary = null,
-    bool ExpandTechnicalDetailsByDefault = false);
+    bool ExpandTechnicalDetailsByDefault = false,
+    Action? OnCancel = null);
 
 internal enum NeonInlineTogglePhase
 {
@@ -220,6 +221,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     readonly StackPanel modalBodyStack;
     readonly StackPanel modalFootButtons;
     Func<Task>? activeModalConfirmAsync;
+    Action? activeModalCancelAction;
     bool modalExecuting;
 
     readonly Border drawerBackdrop;
@@ -986,7 +988,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         Children.Add(modalBackdrop);
 
         // ====================================================================
-        // LAYER 4: Toast Rack (background-transparent so only toast cards catch hover-to-pause!)
+        // LAYER 4: Toast Rack (below Drawer/Modal scrims so toasts never overlap modal buttons)
         // ====================================================================
         toastRack = new StackPanel
         {
@@ -995,7 +997,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             Margin = new Thickness(0, 0, 18, 44),
             Background = null
         };
-        Panel.SetZIndex(toastRack, 200);
+        Panel.SetZIndex(toastRack, 80);
         Children.Add(toastRack);
 
         // Keyboard shortcuts & responsive inspector layout
@@ -1447,6 +1449,8 @@ internal sealed partial class NeonWorkbenchView : Grid
         toastHost.Children.Add(toastShadow);
         toastHost.Children.Add(toastCard);
 
+        while (toastRack.Children.Count >= 3)
+            toastRack.Children.RemoveAt(0);
         toastRack.Children.Add(toastHost);
         NeonMotion.EnterToast(this, toastHost);
 

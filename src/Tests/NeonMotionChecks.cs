@@ -411,7 +411,7 @@ public partial class MainWindow
                 double x = ReadTransformX(view.DrawerSheetHostControl);
                 if (x > drawerMaxX) drawerMaxX = x;
                 return x;
-            }, 250);
+            }, 300);
             if (!SystemParameters.HighContrast)
             {
                 Check(drawerMaxX > 10.0 && Math.Abs(ReadTransformX(view.DrawerSheetHostControl)) < 0.1 && view.IsDrawerOpen,

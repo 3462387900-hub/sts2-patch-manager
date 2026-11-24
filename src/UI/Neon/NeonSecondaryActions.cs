@@ -9,12 +9,65 @@ namespace SpirePatch;
 public partial class MainWindow
 {
     readonly List<NeonActivityEntry> neonActivityLog = [];
-    WorkshopZipPlan? zipImportPreview;
+    LocalZipUiWorkflowSession? neonFixtureLocalZipSession;
+    string? neonFixtureLocalZipRoot;
     string? neonFixtureDataRoot;
     string? neonCoopPeerLabel;
     string neonLastUpdateCheckTimeLabel = "尚未检查";
 
     string NeonDataRoot => neonFixtureDataRoot ?? installer.DataRoot;
+
+    internal LocalModZipPreview? NeonCurrentLocalZipPreview =>
+        (neonFixtureDataRoot != null ? neonFixtureLocalZipSession : localZipSession)?.CurrentPreview;
+
+    LocalZipUiWorkflowSession NeonLocalZipSession()
+    {
+        if (neonFixtureDataRoot == null)
+            return LocalZipSession();
+        if (selectedInstallRoot == null)
+            throw new InvalidOperationException("请先选择游戏目录。");
+        if (neonFixtureLocalZipSession != null &&
+            !string.Equals(neonFixtureLocalZipRoot, selectedInstallRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            neonFixtureLocalZipSession.ChangeRoot(selectedInstallRoot);
+            neonFixtureLocalZipSession = null;
+            neonFixtureLocalZipRoot = null;
+        }
+        if (neonFixtureLocalZipSession == null)
+        {
+            var cacheProbe = new ModSourceWorkflowLocalZipCacheProbe(ModSourceChecks);
+            var archiveBackend = new LocalModZipArchiveBackend(cacheProbe.Inspect);
+            var previewWorkflow = new LocalModZipImportWorkflowService(
+                NeonDataRoot, archiveBackend, gameRunning: GameEnvironment.Running);
+            neonFixtureLocalZipSession = new LocalZipUiWorkflowSession(previewWorkflow, NeonDataRoot);
+            neonFixtureLocalZipRoot = selectedInstallRoot;
+        }
+        return neonFixtureLocalZipSession;
+    }
+
+    ModEnvironmentSnapshotWorkflowService NeonSnapshotWorkflow(string root) =>
+        new(root, NeonDataRoot, invalidateCaches: ids =>
+        {
+            try
+            {
+                var sources = WorkshopSources();
+                var updates = WorkshopUpdates();
+                foreach (string id in ids)
+                {
+                    sources.ClearBaseline(id);
+                    updates.Invalidate(id);
+                }
+                modSourceCheckWorkflow?.InvalidateAll();
+                return null;
+            }
+            catch (Exception error) { return error.Message; }
+        });
+
+    ModUpdateApplyWorkflowService NeonModUpdateApplyService() =>
+        new(
+            backupRoot: Path.Combine(NeonDataRoot, "MOD更新事务"),
+            isGameRunning: GameEnvironment.Running,
+            deferWatcherQuietPeriod: () => modFileWatcher.DeferQuietPeriod());
 
     internal void RecordNeonActivity(string kind, string text)
     {
@@ -69,7 +122,7 @@ public partial class MainWindow
         string? warning = null;
         if (selectedInstallRoot != null)
         {
-            try { entries = ModEnvironmentSnapshots.List(selectedInstallRoot, NeonDataRoot); }
+            try { entries = NeonSnapshotWorkflow(selectedInstallRoot).List(); }
             catch (Exception ex) { warning = ex.Message; }
         }
 
@@ -110,19 +163,7 @@ public partial class MainWindow
         view.RequestAcknowledgeModReview += patch => NeonOpenAcknowledgeModReviewModal(patch);
 
         // Acquire & Updates page
-        view.RequestCheckAllModUpdates += () =>
-        {
-            if (selectedInstallRoot == null || modInventory == null || modInventoryDirty)
-            {
-                view.ShowToast("MOD 清单尚未稳定，请刷新后再检查更新。", NeonTone.Amber);
-                return;
-            }
-            neonLastUpdateCheckTimeLabel = DateTime.Now.ToString("HH:mm:ss");
-            RecordNeonActivity("update", "启动了后台只读来源更新检查（GitHub + Steam 创意工坊）。");
-            CheckAllModUpdates();
-            view.ShowToast("正在后台只读检查 GitHub 与创意工坊更新（不阻塞页面切换）…");
-            RefreshNeonWorkbench(preserveViewport: true);
-        };
+        view.RequestCheckAllModUpdates += () => _ = NeonCheckAllModUpdatesAsync();
         view.RequestCancelUpdateCheck += () =>
         {
             modUpdateCheckCancellation?.Cancel();
@@ -130,13 +171,7 @@ public partial class MainWindow
         };
         view.RequestPreviewWorkshopInstall += wsId => _ = NeonPreviewWorkshopInstallAsync(wsId);
         view.RequestChooseLocalZipImport += NeonChooseLocalZipImport;
-        view.RequestDiscoverGitHubCandidates += () =>
-        {
-            if (selectedInstallRoot == null || modInventory == null) return;
-            RecordNeonActivity("source", "启动了未绑定 MOD 的 GitHub 候选来源发现（最多 8 项）。");
-            DiscoverGitHubMods();
-            view.ShowToast("正在后台查找 GitHub 候选来源（仅生成候选，不会自动绑定）…");
-        };
+        view.RequestDiscoverGitHubCandidates += () => _ = NeonDiscoverGitHubCandidatesAsync();
 
         // Co-op page
         view.RequestExportCoopManifest += () => _ = NeonExportCoopManifestAsync();
@@ -481,6 +516,144 @@ public partial class MainWindow
     // ACQUIRE & UPDATES PRODUCTION ACTIONS (Workshop + Local ZIP)
     // ========================================================================
 
+    async Task NeonCheckAllModUpdatesAsync()
+    {
+        if (selectedInstallRoot == null || modInventory == null || modInventoryDirty)
+        {
+            neonWorkbenchView?.ShowToast("MOD 清单尚未稳定，请刷新后再检查更新。", NeonTone.Amber);
+            return;
+        }
+        if (busy || transactionWriting || modUpdateCheckRunning) return;
+
+        var inventory = modInventory;
+        string gameRoot = selectedInstallRoot;
+        var sourceChecks = ModSourceChecks();
+        using var cancellation = new CancellationTokenSource();
+        modUpdateCheckCancellation = cancellation;
+        modUpdateCheckRunning = true;
+        neonLastUpdateCheckTimeLabel = DateTime.Now.ToString("HH:mm:ss");
+        RecordNeonActivity("update", "启动了后台只读来源更新检查（GitHub + Steam 创意工坊）。");
+        neonWorkbenchView?.ShowToast("正在后台只读检查 GitHub 与创意工坊更新（不阻塞页面切换）…");
+        RefreshNeonWorkbench(preserveViewport: true);
+
+        try
+        {
+            var result = await sourceChecks.CheckAllAsync(
+                inventory.Mods,
+                force: false,
+                isCurrent: () => IsCurrentModSourceInventory(gameRoot, inventory),
+                cancellationToken: cancellation.Token);
+            if (cancellation.IsCancellationRequested || result.Cancelled)
+            {
+                modStatus = "已取消本次更新检查。";
+                neonWorkbenchView?.ShowToast(modStatus, NeonTone.Amber);
+                return;
+            }
+            if (result.IsStale || gameRoot != selectedInstallRoot || !ReferenceEquals(inventory, modInventory))
+                return;
+
+            modStatus =
+                $"检查完成：GitHub {result.GitHubChecked} 项（有更新 {result.GitHubUpdates}）；" +
+                $"创意工坊 {result.WorkshopChecked} 项（有更新 {result.WorkshopUpdates}，待核验 {result.WorkshopNeedsReview}）。" +
+                "仅检测来源内容，不会自动下载或修改游戏文件。";
+            RecordNeonActivity("update", modStatus);
+            neonWorkbenchView?.ShowToast(modStatus);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            if (gameRoot == selectedInstallRoot)
+            {
+                modStatus = "已取消本次更新检查。";
+                neonWorkbenchView?.ShowToast(modStatus, NeonTone.Amber);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (gameRoot == selectedInstallRoot)
+            {
+                modStatus = "MOD 更新检查未完成：" + ex.Message;
+                neonWorkbenchView?.ShowToast(modStatus, NeonTone.Cinnabar);
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(modUpdateCheckCancellation, cancellation))
+                modUpdateCheckCancellation = null;
+            modUpdateCheckRunning = false;
+            RefreshNeonWorkbench(preserveViewport: true);
+        }
+    }
+
+    async Task NeonDiscoverGitHubCandidatesAsync()
+    {
+        if (busy || transactionWriting || modInventory == null || selectedInstallRoot == null) return;
+        if (modInventoryDirty)
+        {
+            neonWorkbenchView?.ShowToast("MOD 清单尚未稳定，请刷新后再查找来源。", NeonTone.Amber);
+            return;
+        }
+        var inventory = modInventory;
+        string gameRoot = selectedInstallRoot;
+        var sourceChecks = ModSourceChecks();
+        var mods = inventory.Mods
+            .Where(mod => !ModPresentation.IsIndependentPatch(mod))
+            .GroupBy(mod => mod.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Where(mod =>
+            {
+                var state = sourceChecks.Inspect(mod).GitHub;
+                return !state.IsBound && state.CacheState != ModSourceCacheState.Fresh;
+            })
+            .Take(8)
+            .ToArray();
+
+        if (mods.Length == 0)
+        {
+            neonWorkbenchView?.ShowToast("暂无待查找的普通 MOD；已关联来源或近期缓存结果均已保留。");
+            return;
+        }
+
+        RecordNeonActivity("source", $"启动了未绑定 MOD 的 GitHub 候选来源发现（最多 {mods.Length} 项）。");
+        neonWorkbenchView?.ShowToast($"正在后台查找 {mods.Length} 项未关联 MOD 的 GitHub 候选来源…");
+        busy = true;
+        int found = 0, verified = 0, examined = 0;
+        try
+        {
+            foreach (var mod in mods)
+            {
+                var result = await sourceChecks.DiscoverGitHubAsync(
+                    mod,
+                    force: false,
+                    isCurrent: () => IsCurrentModSourceScope(gameRoot, inventory, mod));
+                if (result.Cancelled || result.IsStale) break;
+                if (result.GitHub.Candidates.Count > 0) found++;
+                if (result.GitHub.Candidates.Any(c =>
+                    c.Trust is ModSourceTrustLevel.ManifestDeclared or ModSourceTrustLevel.RemoteManifestVerified))
+                    verified++;
+                examined++;
+                if (result.GitHub.State == ModSourceCheckState.Failed)
+                {
+                    modStatus = $"已检查 {examined} 项，GitHub 搜索暂不可用：{result.GitHub.Message}（已查到候选可在详情确认）。";
+                    neonWorkbenchView?.ShowToast(modStatus, NeonTone.Amber);
+                    return;
+                }
+            }
+            if (gameRoot != selectedInstallRoot || !ReferenceEquals(inventory, modInventory)) return;
+            modStatus = $"来源查找完成：检查 {examined} 项，发现 {found} 项候选（{verified} 项有清单证据），可在详情中人工核对绑定。";
+            RecordNeonActivity("source", modStatus);
+            neonWorkbenchView?.ShowToast(modStatus);
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView?.ShowToast("来源查找未完成：" + ex.Message, NeonTone.Cinnabar);
+        }
+        finally
+        {
+            busy = false;
+            RefreshNeonWorkbench(preserveViewport: true);
+        }
+    }
+
     async Task NeonPreviewWorkshopInstallAsync(ulong workshopId)
     {
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
@@ -630,74 +803,208 @@ public partial class MainWindow
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string gameRoot = selectedInstallRoot;
         bool running = GameEnvironment.Running(gameRoot);
+        var session = NeonLocalZipSession();
 
         busy = true;
-        WorkshopZipPlan? plan = null;
+        LocalZipPreviewResult? previewResult = null;
         string? error = null;
+        localZipOperationCancellation?.Cancel();
+        using var cts = new CancellationTokenSource();
+        localZipOperationCancellation = cts;
         try
         {
-            plan = await Task.Run(() => WorkshopZipImport.Preview(gameRoot, zipPath));
+            previewResult = await session.PreviewAsync(gameRoot, zipPath, cts.Token);
         }
         catch (Exception ex) { error = ex.Message; }
-        finally { busy = false; }
+        finally
+        {
+            if (ReferenceEquals(localZipOperationCancellation, cts))
+                localZipOperationCancellation = null;
+            busy = false;
+        }
 
-        if (error != null || plan == null)
+        if (error != null || previewResult == null ||
+            previewResult.State is LocalZipPreviewState.Failed or LocalZipPreviewState.Cancelled ||
+            previewResult.Preview == null)
         {
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
                 Title: "安全拦截：无法导入此本地 ZIP",
                 Subtitle: Path.GetFileName(zipPath),
                 GameRunning: running,
-                BlockedReason: error ?? "ZIP 未通过安全与清单校验。",
+                BlockedReason: error ?? previewResult?.Error ?? "ZIP 未通过安全与清单校验。",
                 AutoSnapshotNote: null,
                 BoundaryNote: "安全导入器拒绝路径穿越、保留文件名、脚本/可执行程序及同名目录覆盖；未改动任何磁盘文件。",
                 Token: "ZIP-BLOCKED",
                 Groups: [],
                 ConfirmLabel: "",
-                CancelLabel: "关闭"));
+                CancelLabel: "关闭",
+                PlainSummary: $"未能导入「{Path.GetFileName(zipPath)}」：{error ?? previewResult?.Error ?? "安全校验未通过"}。"));
             return;
         }
 
-        zipImportPreview = plan;
-        string relDest = Path.GetRelativePath(gameRoot, plan.Destination);
+        var preview = previewResult.Preview;
+        var pres = LocalZipConfirmationPresenter.Create(preview);
+        if (!pres.CanConfirm)
+        {
+            try { session.DiscardPreview(); } catch { }
+            var conflictLines = pres.ConflictDetails
+                .Select(d => new NeonDiffLine("del", "冲突", d, ""))
+                .ToArray();
+            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                Title: $"无法导入此本地 ZIP · {pres.ModName}",
+                Subtitle: Path.GetFileName(zipPath),
+                GameRunning: running,
+                BlockedReason: string.Join("\n", pres.ConflictDetails.DefaultIfEmpty("存在阻断冲突，不能安全导入。")),
+                AutoSnapshotNote: null,
+                BoundaryNote: pres.SourceWarning,
+                Token: preview.Token,
+                Groups: conflictLines.Length > 0 ? [new NeonDiffGroup("冲突与安全检查详情", conflictLines)] : [],
+                ConfirmLabel: "",
+                CancelLabel: "关闭",
+                ExpandTechnicalDetailsByDefault: true));
+            return;
+        }
+
+        string relDest = Path.GetRelativePath(gameRoot, pres.TargetDirectory);
         var lines = new List<NeonDiffLine>
         {
-            new("add", "新增 MOD", $"{plan.ModName} ({plan.ModId})", $"{plan.FileCount} 文件 · {ModEnvironmentSnapshots.FormatBytes(plan.Bytes)}"),
-            new("add", "目标目录", relDest, "不会覆盖现有目录"),
-            new("skip", "ZIP SHA-256", plan.ArchiveSha256[..24] + "…", "导入前再次校验压缩包未变化")
+            new("add", "新增 MOD", $"{pres.ModName} ({pres.ModId})", $"{pres.FileCount} 文件 · {ModEnvironmentSnapshots.FormatBytes(pres.TotalBytes)}"),
+            new("add", "目标目录", relDest, pres.FolderNameReason),
+            new("skip", "ZIP SHA-256", pres.ArchiveSha256[..Math.Min(24, pres.ArchiveSha256.Length)] + "…", "导入前再次校验压缩包未变化")
         };
-        if (plan.Dependencies.Length > 0)
-            lines.Add(new("mod", "声明前置", string.Join("、", plan.Dependencies), "请确认对应前置已安装启用"));
+        if (pres.Dependencies.Count > 0)
+            lines.Add(new("mod", "声明前置", string.Join("、", pres.Dependencies), "请确认对应前置已安装启用"));
+        if (pres.HasHistoricalEvidence)
+        {
+            foreach (string h in pres.HistoricalEvidence)
+                lines.Add(new("skip", "历史来源", h, pres.RuntimeCacheNotice));
+        }
+
+        LocalZipHistoricalBindingPolicy selectedPolicy = LocalZipHistoricalBindingPolicy.PreserveUnverified;
+        UIElement? policyContent = null;
+        if (pres.HasHistoricalEvidence)
+        {
+            var policyPanel = new StackPanel();
+            policyPanel.Children.Add(NeonWidgets.Text(
+                $"检测到「{pres.ModId}」已有历史更新来源绑定；本地 ZIP 无法验证作者身份，请选择导入后对历史来源的处理方式：",
+                12, NeonPalette.InkSecondary, wrap: true));
+
+            var labels = new Dictionary<LocalZipHistoricalBindingPolicy, string>
+            {
+                [LocalZipHistoricalBindingPolicy.PreserveUnverified] = "保留历史来源关联（标记未验证）",
+                [LocalZipHistoricalBindingPolicy.RequireManualReview] = "暂停自动检查并要求人工核对",
+                [LocalZipHistoricalBindingPolicy.Unbind] = "解除历史来源绑定"
+            };
+            var picker = new ComboBox
+            {
+                Margin = new Thickness(0, 7, 0, 0),
+                Height = 32,
+                SelectedIndex = 0
+            };
+            if (neonWorkbenchView.TryFindResource("NeonComboBox") is Style cbStyle)
+                picker.Style = cbStyle;
+            foreach (var policy in pres.AvailablePolicies)
+            {
+                picker.Items.Add(new ComboBoxItem
+                {
+                    Content = labels.TryGetValue(policy, out var lbl) ? lbl : policy.ToString(),
+                    Tag = policy
+                });
+            }
+            picker.SelectionChanged += (_, _) =>
+            {
+                if (picker.SelectedItem is ComboBoxItem { Tag: LocalZipHistoricalBindingPolicy chosen })
+                    selectedPolicy = chosen;
+            };
+            policyPanel.Children.Add(picker);
+            policyContent = policyPanel;
+        }
 
         neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
-            Title: $"安全预览导入本地 ZIP · {plan.ModName}",
-            Subtitle: Path.GetFileName(zipPath),
-            GameRunning: false,
+            Title: $"安全预览导入本地 ZIP · {pres.ModName}",
+            Subtitle: $"{Path.GetFileName(zipPath)} · {pres.Version}",
+            GameRunning: running,
             BlockedReason: null,
-            AutoSnapshotNote: "确认前将自动创建完整 MOD 环境快照（导入前自动保护），确保可一键回退。",
-            BoundaryNote: "本地 ZIP 属于不可信外部输入；已拦截脚本、链接与路径越界，请仅导入你信任的 MOD 压缩包。",
-            Token: plan.ArchiveSha256[..10],
-            Groups: [new NeonDiffGroup("ZIP 安全校验结果", lines)],
+            AutoSnapshotNote: "确认前将自动创建完整 MOD 环境快照（导入前自动保护），并启用独立事务日志与崩溃恢复保护。",
+            BoundaryNote: pres.SourceWarning,
+            Token: preview.Token,
+            Groups: [new NeonDiffGroup("ZIP 安全校验与目录范围", lines)],
             ConfirmLabel: "确认导入（先自动快照）",
-            OnConfirmAsync: () => NeonConfirmLocalZipImportAsync(plan),
-            PlainSummary: $"压缩包已通过安全检查（无脚本与路径越界），将把「{plan.ModName}」解压为独立 MOD 目录，不覆盖现有模组。"));
+            OnConfirmAsync: () => NeonConfirmLocalZipImportAsync(gameRoot, session, preview, () => selectedPolicy),
+            CustomContent: policyContent,
+            PlainSummary: $"压缩包已通过安全检查（无脚本与路径越界），将把「{pres.ModName}」全新安装到 mods 目录，不覆盖现有模组。",
+            OnCancel: () => { try { session.DiscardPreview(); } catch { } }));
     }
 
-    async Task NeonConfirmLocalZipImportAsync(WorkshopZipPlan plan)
+    async Task NeonConfirmLocalZipImportAsync(
+        string gameRoot,
+        LocalZipUiWorkflowSession session,
+        LocalModZipPreview preview,
+        Func<LocalZipHistoricalBindingPolicy> readPolicy)
     {
         if (busy || transactionWriting) return;
         busy = true;
         transactionWriting = true;
-        zipImportPreview = null;
+        localZipOperationCancellation?.Cancel();
+        using var cts = new CancellationTokenSource();
+        localZipOperationCancellation = cts;
         try
         {
-            var safety = await Task.Run(() => ModEnvironmentSnapshots.Create(plan.Root, NeonDataRoot, "导入前自动保护"));
-            await Task.Run(() => WorkshopZipImport.Apply(plan));
-            modInventory = await Task.Run(() => ModManager.Scan(plan.Root));
-            modInventoryDirty = false;
-            report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
-            InvalidateLifecycle($"已安全导入本地 MOD「{plan.ModName}」，旧健康结论已失效，请重新核验。");
-            RecordNeonActivity("install", $"安全导入本地 ZIP 模组「{plan.ModName}」（{plan.FileCount} 文件，已创建保护快照 {safety.Id[..8]}）。");
-            neonWorkbenchView?.ShowToast($"已安全导入本地 MOD：{plan.ModName}");
+            var safety = await NeonSnapshotWorkflow(gameRoot).CreateAsync("导入前自动保护", cts.Token);
+            var chosenPolicy = readPolicy();
+            var result = await session.ApplyAsync(
+                (confirmation, _) => Task.FromResult(new LocalZipApplyDecision(
+                    gameRoot.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) &&
+                    !modInventoryDirty &&
+                    confirmation.Preview.Token.Equals(preview.Token, StringComparison.Ordinal) &&
+                    confirmation.Preview.CanInstallNew,
+                    chosenPolicy)),
+                () => modFileWatcher.DeferQuietPeriod(),
+                progress => Dispatcher.BeginInvoke(() =>
+                {
+                    if (!gameRoot.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase)) return;
+                    transactionWriting = progress.TransactionWriting;
+                    modStatus = progress.Message;
+                }),
+                cts.Token);
+
+            var plan = LocalZipUiInvalidationPlan.ForApply(result);
+            string summary = LocalZipUiResultPresenter.FormatApplyResult(result);
+            if (result.RecoveryState == LocalZipInstallRecoveryState.PendingRecovery)
+            {
+                var recovery = await Task.Run(() => session.RecoverPendingTransactions(
+                    gameRoot, () => modFileWatcher.DeferQuietPeriod()));
+                var recPlan = HandleLocalZipRecoveryReport(gameRoot, recovery, session.TransactionLogDirectory);
+                plan = new LocalZipUiInvalidationPlan(
+                    plan.RefreshInventory || recPlan.RefreshInventory,
+                    plan.InvalidateSourceCache || recPlan.InvalidateSourceCache,
+                    plan.InvalidatePatchLifecycle || recPlan.InvalidatePatchLifecycle);
+                if (recovery.CompletedCount > 0 && session.CurrentPreview != null)
+                    session.DiscardPreview();
+                if (localZipRecoveryNotice != null)
+                    summary += "\n" + localZipRecoveryNotice;
+            }
+
+            if (plan.InvalidateSourceCache)
+                InvalidateLocalZipCaches(gameRoot);
+            if (plan.InvalidatePatchLifecycle || result.Success)
+                InvalidateLifecycle($"已安全导入本地 MOD「{preview.Package.ModName}」，旧健康结论已失效，请重新核验。");
+
+            if (plan.RefreshInventory || result.Success)
+            {
+                report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
+                modInventory = await Task.Run(() => ModManager.Scan(gameRoot));
+                modInventoryDirty = false;
+                modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+                modFileWatcher.DeferQuietPeriod();
+            }
+
+            RecordNeonActivity("install", result.Success
+                ? $"通过事务安全导入本地 ZIP 模组「{preview.Package.ModName}」（已创建保护快照 {safety.Id[..8]}）。"
+                : $"本地 ZIP 导入未完成：{summary}");
+            neonWorkbenchView?.ShowToast(
+                result.Success ? $"已安全导入本地 MOD：{preview.Package.ModName}" : summary,
+                result.Success && !result.PartialSuccess ? NeonTone.Sage : result.PartialSuccess ? NeonTone.Amber : NeonTone.Cinnabar);
         }
         catch (Exception ex)
         {
@@ -705,6 +1012,8 @@ public partial class MainWindow
         }
         finally
         {
+            if (ReferenceEquals(localZipOperationCancellation, cts))
+                localZipOperationCancellation = null;
             busy = false;
             transactionWriting = false;
             RefreshNeonWorkbench(preserveViewport: true);
@@ -786,7 +1095,8 @@ public partial class MainWindow
                 }
                 return Task.CompletedTask;
             },
-            CustomContent: previewBox));
+            CustomContent: previewBox,
+            PlainSummary: "已通过实时扫描生成本机联机核对清单（仅含已收录补丁状态与存在证据，不含存档与隐私）；可直接保存为 JSON 发给队友比对。"));
     }
 
     async Task NeonImportCoopPeerFileAsync()
@@ -856,19 +1166,23 @@ public partial class MainWindow
 
         string root = selectedInstallRoot;
         bool running = GameEnvironment.Running(root);
-        bool needsPackage = coopRows?.Any(r => selectedIds.Contains(r.Id, StringComparer.OrdinalIgnoreCase) && r.Action == CoopAction.Install) == true;
+        var currentRows = coopRows?.ToArray() ?? [];
 
         busy = true;
-        CoopPlan? plan = null;
+        CoopWorkflowPreparedPlan? prepared = null;
         string? error = null;
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         preparationCancellation = cts;
         try
         {
-            PreparedPackage? pkg = null;
-            if (needsPackage)
-                pkg = await GetPreparedPackageAsync(cts.Token, msg => Dispatcher.BeginInvoke(() => neonWorkbenchView?.ShowToast(msg)));
-            plan = await CoopAlignment.PrepareAsync(installer, pkg, root, peer, selectedIds);
+            prepared = await CoopWorkflow.PrepareAsync(
+                root,
+                peer,
+                selectedIds,
+                currentRows,
+                (ct, status) => GetPreparedPackageAsync(ct, status),
+                cts.Token,
+                status => Dispatcher.BeginInvoke(() => neonWorkbenchView?.ShowToast(status)));
         }
         catch (Exception ex) { error = ex.Message; }
         finally
@@ -877,7 +1191,7 @@ public partial class MainWindow
             if (ReferenceEquals(preparationCancellation, cts)) preparationCancellation = null;
         }
 
-        if (error != null || plan == null)
+        if (error != null || prepared == null)
         {
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
                 Title: "联机对齐预检未通过",
@@ -893,7 +1207,9 @@ public partial class MainWindow
             return;
         }
 
+        var plan = prepared.Plan;
         coopPlan = plan;
+        coopPlanPackage = prepared.Package;
         var groups = new List<NeonDiffGroup>
         {
             new("将按步骤在本机执行的对齐项",
@@ -919,6 +1235,7 @@ public partial class MainWindow
                     $"{m.Plan.FileCount} 文件 SHA-256 核对")).ToArray()));
         }
 
+        var readyPlan = prepared;
         neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
             Title: $"确认联机对齐方案（{plan.Rows.Length} 项）",
             Subtitle: $"以队友「{neonCoopPeerLabel ?? "对照快照"}」为目标，仅调整本机",
@@ -929,32 +1246,49 @@ public partial class MainWindow
             Token: plan.Token,
             Groups: groups,
             ConfirmLabel: "确认一键处理",
-            OnConfirmAsync: () => NeonConfirmCoopApplyAsync(plan)));
+            OnConfirmAsync: () => NeonConfirmCoopApplyAsync(readyPlan),
+            PlainSummary: $"将以队友「{neonCoopPeerLabel ?? "对照快照"}」为参考，只在本机调整所选的 {plan.Rows.Length} 项补丁差异，不会修改队友电脑与存档。"));
     }
 
-    async Task NeonConfirmCoopApplyAsync(CoopPlan plan)
+    async Task NeonConfirmCoopApplyAsync(CoopWorkflowPreparedPlan prepared)
     {
         if (busy || transactionWriting) return;
         busy = true;
         transactionWriting = true;
         coopPlan = null;
+        coopPlanPackage = null;
         string? savedLabel = neonCoopPeerLabel;
         try
         {
-            var outcome = await CoopAlignment.ApplyAsync(installer, preparedPackage, plan);
-            await SetCoopComparisonAsync(plan.Peer);
-            neonCoopPeerLabel = savedLabel;
+            var applied = await CoopWorkflow.ApplyAsync(prepared, CurrentCoopContext());
+            modFileWatcher.DeferQuietPeriod();
+            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+            var outcome = applied.Outcome;
+            if (applied.Comparison != null)
+            {
+                ApplyCoopComparison(applied.Comparison);
+                neonCoopPeerLabel = savedLabel;
+            }
+            else
+            {
+                coopRows = null;
+                coopComparison = null;
+            }
             coopOutcome = outcome;
-            coopStatus = outcome.Success
-                ? "所选联机对齐步骤已完成并重新扫描复检通过。"
-                : "处理已停止：" + outcome.Error;
+            coopStatus = applied.Comparison == null
+                ? "处理已记录，但重新扫描比较失败：" + applied.RefreshError
+                : outcome.Success
+                    ? "所选联机对齐步骤已完成并重新扫描复检通过。"
+                    : "处理已停止：" + outcome.Error;
             InvalidateLifecycle("联机对齐修改了本地补丁状态，请重新核验补丁健康。");
             RecordNeonActivity("coop", outcome.Success
                 ? $"完成联机对齐（{outcome.Completed.Length} 步），复检通过。"
                 : $"联机对齐中止：{outcome.Error}");
             neonWorkbenchView?.ShowToast(
-                outcome.Success ? "联机对齐完成并已复检通过" : "联机对齐已停止：" + outcome.Error,
-                outcome.Success ? NeonTone.Sage : NeonTone.Cinnabar);
+                outcome.Success && applied.Comparison != null
+                    ? "联机对齐完成并已复检通过"
+                    : coopStatus,
+                outcome.Success && applied.Comparison != null ? NeonTone.Sage : NeonTone.Amber);
         }
         catch (Exception ex)
         {
@@ -981,7 +1315,7 @@ public partial class MainWindow
         transactionWriting = true;
         try
         {
-            var snapshot = await Task.Run(() => ModEnvironmentSnapshots.Create(gameRoot, NeonDataRoot, purpose));
+            var snapshot = await NeonSnapshotWorkflow(gameRoot).CreateAsync(purpose);
             RecordNeonActivity("snapshot",
                 $"创建完整环境快照「{purpose}」（{snapshot.Files.Length:N0} 文件 · {ModEnvironmentSnapshots.FormatBytes(snapshot.TotalBytes)}）。");
             neonWorkbenchView.ShowToast($"已创建环境快照「{purpose}」（{snapshot.Files.Length:N0} 文件）");
@@ -1008,7 +1342,7 @@ public partial class MainWindow
         string? error = null;
         try
         {
-            preview = await Task.Run(() => ModEnvironmentSnapshots.PreviewRestore(gameRoot, NeonDataRoot, snapshotId));
+            preview = await NeonSnapshotWorkflow(gameRoot).PreviewRestoreAsync(snapshotId);
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
@@ -1060,28 +1394,31 @@ public partial class MainWindow
         transactionWriting = true;
         try
         {
-            var result = await Task.Run(() => ModEnvironmentSnapshots.Restore(gameRoot, NeonDataRoot, preview.SnapshotId, preview.Token));
+            var workflowResult = await NeonSnapshotWorkflow(gameRoot).ConfirmRestoreAsync(preview, previousIds);
+            modFileWatcher.DeferQuietPeriod();
+            var result = workflowResult.Restore;
             InvalidateLifecycle("MOD 环境已恢复至历史快照，旧的补丁健康结论已自动失效，请重新核验。");
             report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null; modTogglePreview = null;
 
-            var refreshed = await Task.Run(() => ModManager.Scan(gameRoot));
-            modInventory = refreshed;
-            modInventoryDirty = false;
-            try
+            if (workflowResult.RefreshedInventory != null)
             {
-                var sources = WorkshopSources();
-                var updates = WorkshopUpdates();
-                foreach (string id in previousIds.Concat(refreshed.Mods.Select(m => m.Id)).Distinct(StringComparer.OrdinalIgnoreCase))
-                {
-                    sources.ClearBaseline(id);
-                    updates.Invalidate(id);
-                }
+                modInventory = workflowResult.RefreshedInventory;
+                modInventoryDirty = false;
+                modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+                RecordNeonActivity("restore",
+                    $"已恢复完整环境快照「{preview.Purpose}」（自动生成恢复前保护快照 {result.SafetySnapshotId[..8]}）。");
+                string cacheNote = workflowResult.CacheWarning == null ? "" : $"（部分版本基线清理未完成：{workflowResult.CacheWarning}）";
+                neonWorkbenchView?.ShowToast($"已恢复快照「{preview.Purpose}」，当前现场已另存为自动保护快照{cacheNote}");
             }
-            catch { }
-
-            RecordNeonActivity("restore",
-                $"已恢复完整环境快照「{preview.Purpose}」（自动生成恢复前保护快照 {result.SafetySnapshotId[..8]}）。");
-            neonWorkbenchView?.ShowToast($"已恢复快照「{preview.Purpose}」，当前现场已另存为自动保护快照");
+            else
+            {
+                modInventoryDirty = true;
+                RecordNeonActivity("restore",
+                    $"已恢复完整环境快照「{preview.Purpose}」，但后续清单重扫受阻：{workflowResult.RefreshError}。");
+                neonWorkbenchView?.ShowToast(
+                    $"已恢复快照「{preview.Purpose}」，但重新扫描失败：{workflowResult.RefreshError}，请点击重新扫描。",
+                    NeonTone.Amber);
+            }
         }
         catch (Exception ex)
         {
@@ -1102,7 +1439,7 @@ public partial class MainWindow
         busy = true;
         try
         {
-            await Task.Run(() => ModEnvironmentSnapshots.Delete(gameRoot, NeonDataRoot, snapshotId));
+            await NeonSnapshotWorkflow(gameRoot).DeleteAsync(snapshotId);
             RecordNeonActivity("snapshot", $"删除了历史环境快照（编号 {snapshotId[..Math.Min(12, snapshotId.Length)]}）。");
             neonWorkbenchView.ShowToast("已删除该历史快照");
         }

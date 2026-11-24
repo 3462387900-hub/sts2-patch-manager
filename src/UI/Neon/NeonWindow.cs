@@ -60,13 +60,14 @@ public partial class MainWindow
         view.RequestLaunchGame += LaunchGame;
         view.RequestPreviewToggleMod += mod => _ = NeonPreviewToggleModAsync(mod);
         view.RequestDirectToggleMod += (mod, contextModId) => _ = NeonDirectToggleModAsync(mod, contextModId);
-        view.RequestPreviewUpdateMod += NeonPreviewUpdateMod;
-        view.RequestCheckModUpdate += NeonCheckSingleModUpdate;
+        view.RequestPreviewUpdateMod += mod => _ = NeonPreviewUpdateModAsync(mod);
+        view.RequestCheckModUpdate += mod => _ = NeonCheckSingleModUpdateAsync(mod);
         view.RequestQuickBindGitHub += (mod, repo) =>
         {
             try
             {
                 GitHubUpdates().Bind(mod.Id, repo);
+                modSourceCheckWorkflow?.Invalidate(mod);
                 RecordNeonActivity("source", $"将「{mod.Name}」关联至 GitHub 仓库：{repo}。");
                 view.ShowToast($"已将 {mod.Name} 关联至 GitHub：{repo}");
                 RefreshNeonWorkbench(preserveViewport: true);
@@ -78,6 +79,7 @@ public partial class MainWindow
             try
             {
                 WorkshopSources().Bind(mod.Id, wsId);
+                modSourceCheckWorkflow?.Invalidate(mod);
                 RecordNeonActivity("source", $"将「{mod.Name}」关联至 Steam 创意工坊 #{wsId}。");
                 view.ShowToast($"已将 {mod.Name} 关联至 Workshop #{wsId}");
                 RefreshNeonWorkbench(preserveViewport: true);
@@ -94,6 +96,7 @@ public partial class MainWindow
                     WorkshopSources().Unbind(mod.Id);
                     WorkshopUpdates().Invalidate(mod.Id);
                 }
+                modSourceCheckWorkflow?.Invalidate(mod);
                 RecordNeonActivity("source", $"解除「{mod.Name}」的更新来源关联（未改动 MOD 文件）。");
                 view.ShowToast($"已解除 {mod.Name} 的更新来源关联（不改动 MOD 文件）");
                 RefreshNeonWorkbench(preserveViewport: true);
@@ -107,12 +110,7 @@ public partial class MainWindow
         };
         view.RequestBatchToggleEnable += folders => _ = NeonPreviewBatchToggleAsync(folders, enable: true);
         view.RequestBatchToggleDisable += folders => _ = NeonPreviewBatchToggleAsync(folders, enable: false);
-        view.RequestBatchCheckUpdates += folders =>
-        {
-            if (selectedInstallRoot == null || modInventory == null) return;
-            CheckAllModUpdates();
-            view.ShowToast($"已启动后台只读更新复查（已选 {folders.Length} 项）");
-        };
+        view.RequestBatchCheckUpdates += folders => _ = NeonCheckBatchModUpdatesAsync(folders);
         view.RequestPreviewRetirePatch += patch => _ = NeonPreviewRetirePatchAsync(patch);
         view.RequestDiagnoseLog += ChooseLog;
         view.RequestSwitchTheme += ChangeUiTheme;
@@ -320,26 +318,394 @@ public partial class MainWindow
         }
     }
 
-    void NeonPreviewUpdateMod(ManagedMod mod)
+    async Task NeonPreviewUpdateModAsync(ManagedMod mod)
     {
-        if (selectedInstallRoot == null) return;
+        if (selectedInstallRoot == null || neonWorkbenchView == null) return;
+        if (busy || transactionWriting || modInventoryDirty)
+        {
+            neonWorkbenchView.ShowToast("MOD 清单尚未稳定或正在处理文件操作，请刷新后重试。", NeonTone.Amber);
+            return;
+        }
+        string root = selectedInstallRoot;
+        if (GameEnvironment.Running(root))
+        {
+            neonWorkbenchView.ShowToast("退出游戏后可下载并更新 MOD", NeonTone.Amber);
+            return;
+        }
+
         string? repo = null;
         ulong? wsId = null;
         try { repo = GitHubUpdates().Repository(mod.Id); } catch { }
         try { wsId = WorkshopSources().Get(mod.Id); } catch { }
+
         if (repo != null && GitHubUpdates().Cached(mod.Id)?.Status == "有更新")
-            UpdateGitHubMod(mod);
-        else if (wsId.HasValue && WorkshopUpdates().Cached(mod.Id)?.Status == "有更新")
-            _ = NeonPreviewWorkshopInstallAsync(wsId.Value);
-        else
-            neonWorkbenchView?.ShowToast("当前没有可预览的更新来源。", NeonTone.Amber);
+        {
+            busy = true;
+            GitHubModPackage[] packages = [];
+            string? pkgErr = null;
+            neonWorkbenchView.ShowToast($"正在读取 {mod.Name} 的 GitHub Release 安装包列表…");
+            try
+            {
+                using var installerSource = new GitHubModInstaller();
+                packages = await installerSource.PackagesAsync(mod, repo);
+            }
+            catch (Exception ex) { pkgErr = ex.Message; }
+            finally { busy = false; }
+
+            if (pkgErr != null)
+            {
+                neonWorkbenchView.ShowToast("读取 GitHub 更新包失败：" + pkgErr, NeonTone.Cinnabar);
+                return;
+            }
+            if (packages.Length == 0)
+            {
+                neonWorkbenchView.ShowToast("该 Release 未提供可校验的单 MOD ZIP 安装包，请从作者发布页手动更新。", NeonTone.Amber);
+                return;
+            }
+            if (packages.Length == 1)
+            {
+                var p = packages[0];
+                await NeonStageAndPreviewModUpdateAsync(
+                    root, mod,
+                    new ModUpdateStagingRequest(
+                        ModUpdateStagingSource.GitHub, p.Repository, p.Tag, p.FileName,
+                        p.Size, p.Sha256, p.DownloadUrl, p.ReleaseUrl),
+                    packages[0].ReleaseUrl);
+                return;
+            }
+
+            // Multiple packages in Release -> let player pick explicitly in a native Neon modal
+            var pkgPanel = new StackPanel();
+            foreach (var candidate in packages)
+            {
+                var chosenPkg = candidate;
+                var cardGrid = new Grid();
+                cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var meta = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+                meta.Children.Add(NeonWidgets.Text(chosenPkg.FileName, 12.5, NeonPalette.InkPrimary, FontWeights.SemiBold, mono: true));
+                meta.Children.Add(NeonWidgets.Text($"Tag {chosenPkg.Tag} · {ModEnvironmentSnapshots.FormatBytes(chosenPkg.Size)} · SHA-256 已签名", 11.5, NeonPalette.InkMuted));
+                cardGrid.Children.Add(meta);
+
+                var stageBtn = NeonWidgets.CreateStyledButton(neonWorkbenchView, "下载并预览差异", "NeonSecondaryButton", () =>
+                {
+                    neonWorkbenchView.CloseTransactionModal();
+                    _ = NeonStageAndPreviewModUpdateAsync(
+                        root, mod,
+                        new ModUpdateStagingRequest(
+                            ModUpdateStagingSource.GitHub, chosenPkg.Repository, chosenPkg.Tag, chosenPkg.FileName,
+                            chosenPkg.Size, chosenPkg.Sha256, chosenPkg.DownloadUrl, chosenPkg.ReleaseUrl),
+                        chosenPkg.ReleaseUrl);
+                }, "sm");
+                stageBtn.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(stageBtn, 1);
+                cardGrid.Children.Add(stageBtn);
+
+                pkgPanel.Children.Add(new Border
+                {
+                    Background = NeonPalette.BgElevated,
+                    BorderBrush = NeonPalette.BorderSubtle,
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(11, 9, 11, 9),
+                    Margin = new Thickness(0, 0, 0, 7),
+                    Child = cardGrid
+                });
+            }
+
+            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                Title: $"选择 GitHub 安装包 · {mod.Name}",
+                Subtitle: $"本地 v{NeonVersionDiff.StripPrefix(mod.Version)} → GitHub {packages[0].Tag} · {repo}",
+                GameRunning: false,
+                BlockedReason: null,
+                AutoSnapshotNote: null,
+                BoundaryNote: "部分仓库会区分兼容版或标准版；请根据你当前的游戏版本选择对应安装包。",
+                Token: "GH-PKG-PICK",
+                Groups: [],
+                ConfirmLabel: "查看作者发布页",
+                CancelLabel: "取消",
+                OnConfirmAsync: () => { OpenUrl(packages[0].ReleaseUrl); return Task.CompletedTask; },
+                CustomContent: pkgPanel,
+                PlainSummary: $"该 Release 提供 {packages.Length} 个已附带 SHA-256 校验的安装包，请选择与你游戏版本匹配的一个下载并预览文件差异。"));
+            return;
+        }
+
+        if (wsId.HasValue && WorkshopUpdates().Cached(mod.Id)?.Status == "有更新")
+        {
+            await NeonStageAndPreviewModUpdateAsync(
+                root, mod,
+                new ModUpdateStagingRequest(ModUpdateStagingSource.Workshop, wsId.Value.ToString()),
+                null);
+            return;
+        }
+
+        neonWorkbenchView.ShowToast("当前没有可预览的更新来源。", NeonTone.Amber);
     }
 
-    void NeonCheckSingleModUpdate(ManagedMod mod)
+    async Task NeonStageAndPreviewModUpdateAsync(
+        string root,
+        ManagedMod mod,
+        ModUpdateStagingRequest request,
+        string? releaseUrl)
     {
-        if (selectedInstallRoot == null) return;
-        if (GitHubUpdates().Repository(mod.Id) != null) CheckGitHubMod(mod);
-        else if (WorkshopSources().Get(mod.Id).HasValue) CheckWorkshopMod(mod);
+        if (busy || transactionWriting || neonWorkbenchView == null) return;
+        busy = true;
+        using var backend = new InfrastructureModUpdateStagingBackend();
+        var stagingSvc = new ModUpdateStagingWorkflowService(
+            backend,
+            Path.Combine(NeonDataRoot, "MOD更新暂存"));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        preparationCancellation = cts;
+
+        ModUpdateStagingResult? staged = null;
+        string? stageError = null;
+        try
+        {
+            staged = await stagingSvc.StageAndPreviewAsync(
+                root, mod, request, cts.Token,
+                p => Dispatcher.BeginInvoke(() => neonWorkbenchView?.ShowToast(p.Message)));
+        }
+        catch (Exception ex) { stageError = ex.Message; }
+        finally
+        {
+            if (ReferenceEquals(preparationCancellation, cts))
+                preparationCancellation = null;
+            busy = false;
+        }
+
+        if (stageError != null || staged == null || !staged.ValidationPassed)
+        {
+            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                Title: $"无法预览 MOD 更新 · {mod.Name}",
+                Subtitle: request.Source == ModUpdateStagingSource.GitHub ? $"GitHub {request.SourceIdentifier}" : $"Workshop #{request.SourceIdentifier}",
+                GameRunning: GameEnvironment.Running(root),
+                BlockedReason: stageError ?? staged?.FailureReason ?? "暂存下载或完整性校验未通过。",
+                AutoSnapshotNote: null,
+                BoundaryNote: "未对当前 mods 目录做任何修改。",
+                Token: "UPD-STAGE-FAIL",
+                Groups: [],
+                ConfirmLabel: releaseUrl != null ? "查看作者发布页" : "",
+                CancelLabel: "关闭",
+                OnConfirmAsync: releaseUrl != null ? () => { OpenUrl(releaseUrl); return Task.CompletedTask; } : null));
+            return;
+        }
+
+        var applySvc = NeonModUpdateApplyService();
+        var applyPreview = applySvc.CreatePreview(root, mod, staged);
+        var changeLines = staged.FileChanges.Take(25).Select(fc =>
+        {
+            string tag = fc.Kind == ModUpdateFileChangeKind.Added ? "add"
+                : fc.Kind == ModUpdateFileChangeKind.Deleted ? "del" : "mod";
+            string verb = fc.Kind == ModUpdateFileChangeKind.Added ? "新增"
+                : fc.Kind == ModUpdateFileChangeKind.Deleted ? "移除" : "更新";
+            return new NeonDiffLine(tag, verb, fc.RelativePath,
+                fc.StagedSizeBytes.HasValue ? ModEnvironmentSnapshots.FormatBytes(fc.StagedSizeBytes.Value) : "");
+        }).ToList();
+        if (staged.FileChanges.Count > 25)
+            changeLines.Add(new NeonDiffLine("skip", "更多", $"其余 {staged.FileChanges.Count - 25} 个文件变动已通过校验", ""));
+
+        string stagingDir = staged.StagingDirectory ?? "";
+        neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+            Title: $"确认更新 MOD · {mod.Name}",
+            Subtitle: $"v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} → v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}",
+            GameRunning: GameEnvironment.Running(root),
+            BlockedReason: null,
+            AutoSnapshotNote: "确认前将自动创建完整环境快照与事务备份；若替换途中意外中断，下次启动将自动回滚或安全恢复。",
+            BoundaryNote: "下载与校验均已在独立隔离暂存区完成，确认前未接触你的 mods 目录。",
+            Token: $"UPD-{mod.Id}",
+            Groups: [new NeonDiffGroup($"文件级差异预览（共 {staged.FileChanges.Count} 处变更）", changeLines)],
+            ConfirmLabel: "确认备份并更新",
+            CancelLabel: "取消",
+            OnConfirmAsync: () => NeonConfirmStagedModUpdateAsync(root, mod, applySvc, applyPreview, request),
+            PlainSummary: $"已下载并通过完整哈希与清单校验，将把「{mod.Name}」从 v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} 更新至 v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}（新增 {staged.AddedCount}、修改 {staged.ModifiedCount}、移除 {staged.DeletedCount} 个文件）。",
+            OnCancel: () =>
+            {
+                if (!string.IsNullOrWhiteSpace(stagingDir))
+                {
+                    try { stagingSvc.Discard(stagingDir); } catch { }
+                }
+            }));
+    }
+
+    async Task NeonConfirmStagedModUpdateAsync(
+        string root,
+        ManagedMod mod,
+        ModUpdateApplyWorkflowService applySvc,
+        ModUpdateApplyPreview applyPreview,
+        ModUpdateStagingRequest request)
+    {
+        if (busy || transactionWriting || neonWorkbenchView == null) return;
+        busy = true;
+        transactionWriting = true;
+        try
+        {
+            var safety = await NeonSnapshotWorkflow(root).CreateAsync("更新前自动保护");
+            var applyResult = await applySvc.ApplyAsync(applySvc.Confirm(applyPreview, confirmed: true));
+            modFileWatcher.DeferQuietPeriod();
+
+            if (!applyResult.Success)
+            {
+                neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                    Title: $"MOD 更新未完成 · {mod.Name}",
+                    Subtitle: $"恢复状态：{applyResult.RecoveryState}",
+                    GameRunning: false,
+                    BlockedReason: applyResult.FailureReason ?? "更新事务未完成。",
+                    AutoSnapshotNote: null,
+                    BoundaryNote: $"更新前完整保护快照：{safety.Id}",
+                    Token: "UPD-APPLY-FAIL",
+                    Groups: [],
+                    ConfirmLabel: "",
+                    CancelLabel: "关闭",
+                    PlainSummary: applyResult.RolledBack
+                        ? $"替换未成功，已自动从事务备份完整还原原版「{mod.Name}」（{applyResult.FailureReason}）。"
+                        : applyResult.FailureReason ?? "更新未完成。"));
+                return;
+            }
+
+            if (request.Source == ModUpdateStagingSource.Workshop &&
+                ulong.TryParse(request.SourceIdentifier, out ulong wsId) &&
+                !string.IsNullOrWhiteSpace(applyPreview.Staging.SourceManifestId))
+            {
+                try
+                {
+                    var sources = WorkshopSources();
+                    sources.Bind(mod.Id, wsId);
+                    sources.RecordBaseline(
+                        mod.Id,
+                        wsId,
+                        applyPreview.Staging.SourceManifestId!,
+                        applyResult.AfterVersion ?? mod.Version,
+                        applyPreview.Staging.StagedFileHashes);
+                    WorkshopUpdates().Invalidate(mod.Id);
+                }
+                catch { }
+            }
+            modSourceCheckWorkflow?.InvalidateAll();
+
+            InvalidateLifecycle($"已更新「{mod.Name}」，旧的补丁健康结论已失效，请重新核验。");
+            report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
+            modInventory = await Task.Run(() => ModManager.Scan(root));
+            modInventoryDirty = false;
+            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+
+            string newVer = applyResult.AfterVersion ?? applyPreview.Staging.StagedVersion ?? "新版";
+            RecordNeonActivity("install", $"将「{mod.Name}」更新至 v{NeonVersionDiff.StripPrefix(newVer)}（已创建保护快照 {safety.Id[..8]}）。");
+            neonWorkbenchView.ShowToast($"MOD 更新完成：{mod.Name} → v{NeonVersionDiff.StripPrefix(newVer)}");
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("MOD 更新未完成：" + ex.Message, NeonTone.Cinnabar);
+        }
+        finally
+        {
+            busy = false;
+            transactionWriting = false;
+            RefreshNeonWorkbench(preserveViewport: true);
+        }
+    }
+
+    async Task NeonCheckSingleModUpdateAsync(ManagedMod mod)
+    {
+        if (selectedInstallRoot == null || modInventory == null || neonWorkbenchView == null) return;
+        if (busy || modInventoryDirty)
+        {
+            neonWorkbenchView.ShowToast("MOD 清单尚未稳定，请刷新后再检查。", NeonTone.Amber);
+            return;
+        }
+        string gameRoot = selectedInstallRoot;
+        var inventory = modInventory;
+        var sourceChecks = ModSourceChecks();
+        var current = sourceChecks.Inspect(mod);
+        if (!current.GitHub.IsBound && !current.Workshop.IsBound)
+        {
+            neonWorkbenchView.ShowToast("该 MOD 尚未关联更新来源。", NeonTone.Amber);
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            if (current.GitHub.IsBound)
+            {
+                var res = await sourceChecks.CheckGitHubAsync(
+                    mod, force: true, isCurrent: () => IsCurrentModSourceScope(gameRoot, inventory, mod));
+                if (!res.IsStale && !res.Cancelled)
+                {
+                    neonWorkbenchView.ShowToast(
+                        $"{mod.Name} · GitHub：{res.GitHub.Status}" + (string.IsNullOrWhiteSpace(res.GitHub.Message) ? "" : $" · {res.GitHub.Message}"),
+                        res.GitHub.State == ModSourceCheckState.Failed ? NeonTone.Amber : NeonTone.Sage);
+                }
+            }
+            if (current.Workshop.IsBound)
+            {
+                var res = await sourceChecks.CheckWorkshopAsync(
+                    mod, force: true, isCurrent: () => IsCurrentModSourceScope(gameRoot, inventory, mod));
+                if (!res.IsStale && !res.Cancelled)
+                {
+                    neonWorkbenchView.ShowToast(
+                        $"{mod.Name} · 创意工坊：{res.Workshop.Status}" + (string.IsNullOrWhiteSpace(res.Workshop.Message) ? "" : $" · {res.Workshop.Message}"),
+                        res.Workshop.State == ModSourceCheckState.Failed ? NeonTone.Amber : NeonTone.Sage);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("检查更新失败：" + ex.Message, NeonTone.Cinnabar);
+        }
+        finally
+        {
+            busy = false;
+            RefreshNeonWorkbench(preserveViewport: true);
+        }
+    }
+
+    async Task NeonCheckBatchModUpdatesAsync(string[] folders)
+    {
+        if (selectedInstallRoot == null || modInventory == null || neonWorkbenchView == null) return;
+        if (modInventoryDirty || busy || transactionWriting || modUpdateCheckRunning)
+        {
+            neonWorkbenchView.ShowToast("清单尚未稳定或正在执行更新检查，请稍候。", NeonTone.Amber);
+            return;
+        }
+        var folderSet = folders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selected = modInventory.Mods
+            .Where(m => folderSet.Contains(m.Folder) && !ModPresentation.IsIndependentPatch(m))
+            .ToArray();
+        if (selected.Length == 0) return;
+
+        var inventory = modInventory;
+        string gameRoot = selectedInstallRoot;
+        var sourceChecks = ModSourceChecks();
+        using var cancellation = new CancellationTokenSource();
+        modUpdateCheckCancellation = cancellation;
+        modUpdateCheckRunning = true;
+        neonLastUpdateCheckTimeLabel = DateTime.Now.ToString("HH:mm:ss");
+        neonWorkbenchView.ShowToast($"正在后台只读检查所选 {selected.Length} 项 MOD 的来源更新…");
+        RefreshNeonWorkbench(preserveViewport: true);
+
+        try
+        {
+            var res = await sourceChecks.CheckAllAsync(
+                selected, force: true, isCurrent: () => IsCurrentModSourceInventory(gameRoot, inventory), cancellationToken: cancellation.Token);
+            if (!res.Cancelled && !res.IsStale)
+            {
+                string summary = $"所选检查完成：GitHub {res.GitHubChecked} 项（有更新 {res.GitHubUpdates}），创意工坊 {res.WorkshopChecked} 项（有更新 {res.WorkshopUpdates}）。";
+                RecordNeonActivity("update", summary);
+                neonWorkbenchView.ShowToast(summary);
+            }
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("批量检查更新未完成：" + ex.Message, NeonTone.Cinnabar);
+        }
+        finally
+        {
+            if (ReferenceEquals(modUpdateCheckCancellation, cancellation))
+                modUpdateCheckCancellation = null;
+            modUpdateCheckRunning = false;
+            RefreshNeonWorkbench(preserveViewport: true);
+        }
     }
 
     internal void RefreshNeonWorkbench(bool preserveViewport = true)
@@ -574,6 +940,27 @@ public partial class MainWindow
         {
             var definitions = sourceCurrent && onlineCatalog != null ? onlineCatalog.Patches : Catalog.Bundled;
             string revision = sourceCurrent && onlineCatalog != null ? onlineCatalog.Commit : Catalog.Revision;
+
+            if (!transactionWriting)
+            {
+                try
+                {
+                    var zipSession = NeonLocalZipSession();
+                    var zipRecovery = await Task.Run(() => zipSession.RecoverPendingTransactions(root, () => modFileWatcher.DeferQuietPeriod()));
+                    if (zipRecovery.HasPendingRecovery)
+                    {
+                        string msg = LocalZipUiResultPresenter.FormatRecoveryReport(zipRecovery, zipSession.TransactionLogDirectory)
+                            ?? "发现待人工核对的本地 ZIP 安装事务。";
+                        neonWorkbenchView?.ShowToast(msg, NeonTone.Amber);
+                    }
+                    var updRecovery = await Task.Run(() => NeonModUpdateApplyService().RecoverPendingTransactions(root));
+                    if (updRecovery.HasPendingRecovery)
+                        neonWorkbenchView?.ShowToast($"发现 {updRecovery.Items.Count(i => i.Pending)} 项待核对的 MOD 更新事务。", NeonTone.Amber);
+                    else if (updRecovery.RecoveredCount > 0)
+                        neonWorkbenchView?.ShowToast($"已自动恢复 {updRecovery.RecoveredCount} 项中断的 MOD 更新事务。", NeonTone.Amber);
+                }
+                catch { }
+            }
 
             var scanned = await Task.Run(() =>
             {

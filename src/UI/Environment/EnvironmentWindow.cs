@@ -22,6 +22,9 @@ public partial class MainWindow
     modInventoryRefresh?.Cancel();
     localZipOperationCancellation?.Cancel();
     DiscardLocalZipPreview();
+    try { neonFixtureLocalZipSession?.DiscardPreview(); } catch { }
+    neonFixtureLocalZipSession=null;
+    neonFixtureLocalZipRoot=null;
     localZipSession=null;
     localZipSessionRoot=null;
     localZipRecoveryBlocked=false;

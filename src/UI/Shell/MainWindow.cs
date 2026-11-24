@@ -42,7 +42,11 @@ public partial class MainWindow : Window
    }
    else
    {
-    try{DiscardLocalZipPreview();}
+    try
+    {
+     DiscardLocalZipPreview();
+     neonFixtureLocalZipSession?.DiscardPreview();
+    }
     catch(Exception cleanupError)
     {
      e.Cancel=true;
