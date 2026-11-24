@@ -335,8 +335,7 @@ public partial class MainWindow
             var result = await Task.Run(() => PatchOrganizer.Apply(plan, NeonDataRoot));
             installPreview = null; lastInstallResult = null; ClearSelection(); ClearCoop();
             report = null; states = []; demo = false;
-            modInventory = await Task.Run(() => ModManager.Scan(plan.Root));
-            modInventoryDirty = false;
+            await NeonScanAndPublishAsync(plan.Root);
             InvalidateLifecycle($"已整理 {result.Moved} 项独立补丁至 mods/{PatchOrganizer.CollectionName}，请重新核验补丁健康。");
             RecordNeonActivity("patch", $"整理了 {result.Moved} 项散落独立补丁至 mods/{PatchOrganizer.CollectionName}。");
             neonWorkbenchView?.ShowToast($"整理完成：已移动 {result.Moved} 项独立补丁至专用目录");
@@ -469,13 +468,18 @@ public partial class MainWindow
             lastInstallResult = result;
             ClearCoop();
             ClearSelection();
-            modInventory = await Task.Run(() => ModManager.Scan(preview.Root));
-            modInventoryDirty = false;
+            var stamp = NeonCaptureScanStamp(preview.Root);
             var definitions = sourceCurrent && onlineCatalog != null ? onlineCatalog.Patches : Catalog.Bundled;
-            report = await Task.Run(() => Catalog.Scan(preview.Root, definitions, sourceCurrent ? onlineCatalog?.Commit : null));
-            scannedCatalog = definitions;
-            states = report.Patches;
-            demo = false;
+            string? revision = sourceCurrent ? onlineCatalog?.Commit : null;
+            var scanned = await Task.Run(() => (Inventory: ModManager.Scan(preview.Root),
+                Report: Catalog.Scan(preview.Root, definitions, revision)));
+            NeonTryPublishInventory(stamp, scanned.Inventory, () =>
+            {
+                report = scanned.Report;
+                scannedCatalog = definitions;
+                states = scanned.Report.Patches;
+                demo = false;
+            });
             InvalidateLifecycle(undo ? "已完成补丁批次回滚，请重新核验补丁健康状态。" : "补丁安装完成，旧健康基线已刷新，请重新核验。");
             RecordNeonActivity(undo ? "restore" : "patch",
                 undo ? $"完成了最近一次补丁批次回滚（共还原 {result.Changed} 个文件）。"
@@ -854,8 +858,7 @@ public partial class MainWindow
             }
             catch { }
 
-            modInventory = await Task.Run(() => ModManager.Scan(gameRoot));
-            modInventoryDirty = false;
+            await NeonScanAndPublishAsync(gameRoot);
             report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
             InvalidateLifecycle("创意工坊 MOD 已安装或更新，旧的补丁健康结论已失效，请重新核验。");
             RecordNeonActivity("install",
@@ -1082,9 +1085,7 @@ public partial class MainWindow
             if (plan.RefreshInventory || result.Success)
             {
                 report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
-                modInventory = await Task.Run(() => ModManager.Scan(gameRoot));
-                modInventoryDirty = false;
-                modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+                await NeonScanAndPublishAsync(gameRoot);
                 modFileWatcher.DeferQuietPeriod();
             }
 
@@ -1349,11 +1350,13 @@ public partial class MainWindow
         string? savedLabel = neonCoopPeerLabel;
         try
         {
+            var comparisonStamp = selectedInstallRoot is { } coopRoot ? NeonCaptureScanStamp(coopRoot) : (NeonScanStamp?)null;
             var applied = await CoopWorkflow.ApplyAsync(prepared, CurrentCoopContext());
             modFileWatcher.DeferQuietPeriod();
-            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
             var outcome = applied.Outcome;
-            if (applied.Comparison != null)
+            bool comparisonCurrent = comparisonStamp.HasValue && NeonScanStampCurrent(comparisonStamp.Value);
+            if (!comparisonCurrent) NeonRejectStaleScan();
+            if (applied.Comparison != null && comparisonCurrent)
             {
                 ApplyCoopComparison(applied.Comparison);
                 neonCoopPeerLabel = savedLabel;
@@ -1364,8 +1367,8 @@ public partial class MainWindow
                 coopComparison = null;
             }
             coopOutcome = outcome;
-            coopStatus = applied.Comparison == null
-                ? "处理已记录，但重新扫描比较失败：" + applied.RefreshError
+            coopStatus = applied.Comparison == null || !comparisonCurrent
+                ? "处理已记录，但重新扫描比较失败或已过期：" + applied.RefreshError
                 : outcome.Success
                     ? "所选联机对齐步骤已完成并重新扫描复检通过。"
                     : "处理已停止：" + outcome.Error;
@@ -1374,10 +1377,10 @@ public partial class MainWindow
                 ? $"完成联机对齐（{outcome.Completed.Length} 步），复检通过。"
                 : $"联机对齐中止：{outcome.Error}");
             neonWorkbenchView?.ShowToast(
-                outcome.Success && applied.Comparison != null
+                outcome.Success && applied.Comparison != null && comparisonCurrent
                     ? "联机对齐完成并已复检通过"
                     : coopStatus,
-                outcome.Success && applied.Comparison != null ? NeonTone.Sage : NeonTone.Amber);
+                outcome.Success && applied.Comparison != null && comparisonCurrent ? NeonTone.Sage : NeonTone.Amber);
         }
         catch (Exception ex)
         {
@@ -1489,11 +1492,9 @@ public partial class MainWindow
             InvalidateLifecycle("MOD 环境已恢复至历史快照，旧的补丁健康结论已自动失效，请重新核验。");
             report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null; modTogglePreview = null;
 
-            if (workflowResult.RefreshedInventory != null)
+            // The restore service's internal scan has no watcher stamp. Scan again under our boundary.
+            if (workflowResult.RefreshedInventory != null && await NeonScanAndPublishAsync(gameRoot))
             {
-                modInventory = workflowResult.RefreshedInventory;
-                modInventoryDirty = false;
-                modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
                 RecordNeonActivity("restore",
                     $"已恢复完整环境快照「{preview.Purpose}」（自动生成恢复前保护快照 {result.SafetySnapshotId[..8]}）。");
                 string cacheNote = workflowResult.CacheWarning == null ? "" : $"（部分版本基线清理未完成：{workflowResult.CacheWarning}）";

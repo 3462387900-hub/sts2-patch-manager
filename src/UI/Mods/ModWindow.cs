@@ -700,16 +700,18 @@ public partial class MainWindow
    var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery,localZipWorkflow.TransactionLogDirectory);
    ApplyLocalZipInvalidationPlan(root,recoveryPlan);
 
+   var neonStamp=NeonCaptureScanStamp(root);
    var initialStamp=new ModInventoryRefreshStamp(
-    root,Volatile.Read(ref modChangeVersion),modInventoryDirty);
+    root,UiThemes.IsNeon?neonStamp.Generation:Volatile.Read(ref modChangeVersion),modInventoryDirty);
    var result=await ModInventoryRefresh.RefreshAsync(
     root,
     initialStamp,
     ()=>new ModInventoryRefreshStamp(
-     selectedInstallRoot,Volatile.Read(ref modChangeVersion),modInventoryDirty),
+     selectedInstallRoot,UiThemes.IsNeon?modFileWatcher.ChangeVersion:Volatile.Read(ref modChangeVersion),modInventoryDirty),
     (confirmation,token)=>Task.FromResult(
      confirmation.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
-     confirmation.ChangeVersion==Volatile.Read(ref modChangeVersion)&&
+     confirmation.ChangeVersion==(UiThemes.IsNeon?modFileWatcher.ChangeVersion:Volatile.Read(ref modChangeVersion))&&
+     (!UiThemes.IsNeon||NeonScanStampCurrent(neonStamp))&&
      OrphanPatchAutoStop.Enabled(installer.DataRoot)),
     ()=>modFileWatcher.DeferQuietPeriod(),
     checkpoint=>
@@ -730,18 +732,21 @@ public partial class MainWindow
    if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
 
    bool inventoryPublished=false;
-   if(!result.Stale)
+   if(!result.Stale&&(!UiThemes.IsNeon||NeonScanStampCurrent(neonStamp)))
    {
     inventoryPublished=modFileWatcher.TryRunIfCurrent(root,initialStamp.ChangeVersion,()=>
     {
      if(!root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
      if(result.ScanSucceeded&&result.Inventory!=null)modInventory=result.Inventory;
      modInventoryDirty=result.InventoryDirty;
+     if(UiThemes.IsNeon&&result.ScanSucceeded&&result.Inventory!=null&&!result.InventoryDirty)
+      modInventoryCleanVersion=neonStamp.Generation;
      modStatus=result.Status;
     });
    }
    if(!inventoryPublished)
    {
+    if(UiThemes.IsNeon)NeonRejectStaleScan();
     modInventoryDirty=true;
     modStatus=result.Status;
     modFileWatcher.DeferQuietPeriod();

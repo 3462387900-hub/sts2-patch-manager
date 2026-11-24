@@ -29,6 +29,85 @@ public partial class MainWindow
     NeonGitHubNetworkState? neonCachedGitHubNetwork;
     internal Func<string, ModInventory>? neonTestScanOverride;
 
+    // A watcher generation can restart at zero after a directory switch; the session
+    // epoch prevents an old A -> B -> A scan from ever being accepted.
+    long neonRootEpoch;
+    bool neonRescanPending;
+    bool neonRescanQueued;
+    internal readonly record struct NeonScanStamp(string Root, int Generation, long RootEpoch);
+
+    NeonScanStamp NeonCaptureScanStamp(string root) =>
+        new(root, modFileWatcher.ChangeVersion, Volatile.Read(ref neonRootEpoch));
+
+    bool NeonScanStampCurrent(NeonScanStamp stamp) =>
+        NeonRootMatches(stamp.Root) &&
+        string.Equals(modFileWatcher.CurrentRoot, stamp.Root, StringComparison.OrdinalIgnoreCase) &&
+        stamp.Generation == modFileWatcher.ChangeVersion &&
+        stamp.RootEpoch == Volatile.Read(ref neonRootEpoch);
+
+    bool NeonTryPublishInventory(NeonScanStamp stamp, ModInventory inventory, Action? publishOtherScanState = null)
+    {
+        bool published = false;
+        if (NeonScanStampCurrent(stamp))
+        {
+            modFileWatcher.TryRunIfCurrent(stamp.Root, stamp.Generation, () =>
+            {
+                if (!NeonRootMatches(stamp.Root) || stamp.RootEpoch != Volatile.Read(ref neonRootEpoch) ||
+                    !string.Equals(modFileWatcher.CurrentRoot, stamp.Root, StringComparison.OrdinalIgnoreCase)) return;
+                modInventory = inventory;
+                modInventoryDirty = false;
+                // Never acknowledge a generation that the actual scan did not cover.
+                modInventoryCleanVersion = stamp.Generation;
+                publishOtherScanState?.Invoke();
+                published = true;
+            });
+        }
+        if (!published) NeonRejectStaleScan();
+        return published;
+    }
+
+    void NeonRejectStaleScan()
+    {
+        modInventoryDirty = true;
+        report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; modTogglePreview = null;
+        if (selectedInstallRoot != null && string.Equals(modFileWatcher.CurrentRoot, selectedInstallRoot, StringComparison.OrdinalIgnoreCase))
+            neonRescanPending = true;
+        modFileWatcher.DeferQuietPeriod();
+        InvalidateLifecycle("扫描期间目录或文件监测世代已变化，旧结果已丢弃，请重新核验。");
+    }
+
+    void NeonSchedulePendingRescan()
+    {
+        if (!neonRescanPending || neonRescanQueued || busy || transactionWriting ||
+            !UiThemes.IsNeon || selectedInstallRoot == null || Dispatcher.HasShutdownStarted) return;
+        neonRescanQueued = true;
+        _ = Dispatcher.BeginInvoke(new Action(() =>
+        {
+            neonRescanQueued = false;
+            if (!neonRescanPending || busy || transactionWriting || !UiThemes.IsNeon) return;
+            neonRescanPending = false;
+            if (selectedInstallRoot != null) RefreshMods();
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    async Task<bool> NeonScanAndPublishAsync(string root)
+    {
+        var stamp = NeonCaptureScanStamp(root);
+        modInventoryDirty = true;
+        try
+        {
+            var inventory = await Task.Run(() => neonTestScanOverride != null ? neonTestScanOverride(root) : ModManager.Scan(root));
+            return NeonTryPublishInventory(stamp, inventory);
+        }
+        catch (Exception error)
+        {
+            modInventoryDirty = true;
+            InvalidateLifecycle("文件操作已结束，但清单扫描未完成：" + error.Message);
+            neonWorkbenchView?.ShowToast("文件操作已结束，清单仍待重新扫描：" + error.Message, NeonTone.Amber);
+            return false;
+        }
+    }
+
     void ShowNeonWorkbench()
     {
         if (neonWorkbenchView == null)
@@ -278,9 +357,7 @@ public partial class MainWindow
                 modInventoryDirty = true;
                 try
                 {
-                    modInventory = await Task.Run(() => ModManager.Scan(root));
-                    modInventoryDirty = false;
-                    modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+                    await NeonScanAndPublishAsync(root);
                 }
                 catch (Exception scanEx)
                 {
@@ -653,9 +730,7 @@ public partial class MainWindow
 
             InvalidateLifecycle($"已更新「{mod.Name}」，旧的补丁健康结论已失效，请重新核验。");
             report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
-            modInventory = await Task.Run(() => ModManager.Scan(root));
-            modInventoryDirty = false;
-            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+            await NeonScanAndPublishAsync(root);
 
             string newVer = applyResult.AfterVersion ?? applyPreview.Staging.StagedVersion ?? "新版";
             RecordNeonActivity("install", $"将「{mod.Name}」更新至 v{NeonVersionDiff.StripPrefix(newVer)}（已创建保护快照 {safety.Id[..8]}）。");
@@ -840,6 +915,7 @@ public partial class MainWindow
             scanStageText: neonScanStageText);
 
         neonWorkbenchView.ApplySnapshot(snapshot, preserveViewport);
+        NeonSchedulePendingRescan();
     }
 
     /// <summary>
@@ -1034,7 +1110,6 @@ public partial class MainWindow
         }
 
         string root = selectedInstallRoot;
-        int watchVersion = Volatile.Read(ref modChangeVersion);
         int epoch = lifecycleEpoch;
         busy = true;
         neonScanning = true;
@@ -1072,6 +1147,10 @@ public partial class MainWindow
                 catch { }
             }
 
+            // Recovery may itself write files. Capture the scan generation only after it has finished.
+            if (!NeonRootMatches(root)) { NeonRejectStaleScan(); return; }
+            epoch = lifecycleEpoch;
+            var scanStamp = NeonCaptureScanStamp(root);
             // Phase 1: Fast local MOD inventory + patch scan + recovery cache preload so UI stays non-blocking.
             var scanned = await Task.Run(() =>
             {
@@ -1081,26 +1160,19 @@ public partial class MainWindow
                 return (inv, patchRep, recCache);
             });
 
-            if (!root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
+            if (!NeonTryPublishInventory(scanStamp, scanned.inv, () =>
             {
-                modInventoryDirty = true;
-                InvalidateLifecycle("扫描期间目录发生变化，请重新扫描核验。");
-                return;
-            }
-
-            neonRecoveryCacheRoot = root;
-            neonCachedSnapshots = scanned.recCache.Snapshots;
-            neonCachedSnapshotsWarning = scanned.recCache.Warning;
-            neonCachedLatestPatchBatch = scanned.recCache.Batch;
-            neonRecoveryCacheDirty = false;
-            modInventory = scanned.inv;
-            modInventoryDirty = false;
-            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+                neonRecoveryCacheRoot = root;
+                neonCachedSnapshots = scanned.recCache.Snapshots;
+                neonCachedSnapshotsWarning = scanned.recCache.Warning;
+                neonCachedLatestPatchBatch = scanned.recCache.Batch;
+                neonRecoveryCacheDirty = false;
+                report = scanned.patchRep;
+                scannedCatalog = definitions;
+                states = scanned.patchRep.Patches;
+                demo = false;
+            })) return;
             neonWorkbenchView?.ClearAllPendingScanStates();
-            report = scanned.patchRep;
-            scannedCatalog = definitions;
-            states = scanned.patchRep.Patches;
-            demo = false;
 
             // Phase 2: History hashing + upstream lifecycle evidence check (list already visible!).
             if (includeLifecycle && scanned.inv.Issues.Count == 0 && scanned.patchRep.InventoryComplete)
@@ -1109,9 +1181,9 @@ public partial class MainWindow
                 RefreshNeonWorkbench(preserveViewport: true);
 
                 var hist = await Task.Run(() => ModHistory.CompareAndStore(root, NeonDataRoot));
-                if (epoch != lifecycleEpoch || !root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
+                if (epoch != lifecycleEpoch || !NeonScanStampCurrent(scanStamp))
                 {
-                    InvalidateLifecycle("核验期间环境已变化，请重新扫描。");
+                    NeonRejectStaleScan();
                     return;
                 }
 
@@ -1140,17 +1212,25 @@ public partial class MainWindow
                 }
 
                 var evaluated = PatchLifecycle.Evaluate(root, hist, evidence, evidenceStatus, scanned.patchRep, scanned.inv);
-                if (epoch != lifecycleEpoch || !root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
+                if (epoch != lifecycleEpoch || !NeonScanStampCurrent(scanStamp))
                 {
-                    InvalidateLifecycle("核验期间环境已变化，请重新扫描。");
+                    NeonRejectStaleScan();
                     return;
                 }
-                lifecycleEvidence = evidence;
-                lifecycleReport = evaluated;
-                lifecycleStale = false;
-                lifecycleStatus = hist.FirstScan
-                    ? "已完成本地指纹与健康基线核验；适配结论仅覆盖已收录条件。"
-                    : $"核验完成：发现变化 {hist.Changes.Length} 项 · 待人工核对 {hist.PendingReview.Length} 项。";
+                bool healthPublished = false;
+                modFileWatcher.TryRunIfCurrent(scanStamp.Root, scanStamp.Generation, () =>
+                {
+                    if (!NeonRootMatches(scanStamp.Root) || scanStamp.RootEpoch != Volatile.Read(ref neonRootEpoch) ||
+                        epoch != lifecycleEpoch) return;
+                    lifecycleEvidence = evidence;
+                    lifecycleReport = evaluated;
+                    lifecycleStale = false;
+                    lifecycleStatus = hist.FirstScan
+                        ? "已完成本地指纹与健康基线核验；适配结论仅覆盖已收录条件。"
+                        : $"核验完成：发现变化 {hist.Changes.Length} 项 · 待人工核对 {hist.PendingReview.Length} 项。";
+                    healthPublished = true;
+                });
+                if (!healthPublished) { NeonRejectStaleScan(); return; }
                 RecordNeonActivity("scan", $"完成补丁健康核验（{scanned.inv.Mods.Count(m => !ModPresentation.IsIndependentPatch(m))} 项普通 MOD · 变化 {hist.Changes.Length} 项）。");
                 neonWorkbenchView?.ShowToast("重新扫描与补丁健康核验已完成");
             }
@@ -1289,8 +1369,7 @@ public partial class MainWindow
             report = null;
             states = [];
             demo = false;
-            modInventory = await Task.Run(() => ModManager.Scan(plan.Root));
-            modInventoryDirty = false;
+            await NeonScanAndPublishAsync(plan.Root);
             modStatus = displayName + (plan.Enable ? " 已恢复启用。" : " 已停用，文件已完整保留。");
             InvalidateLifecycle("MOD 启停状态已变更，旧的补丁健康结论已自动失效，请重新核验。");
             RecordNeonActivity("toggle", $"{(plan.Enable ? "恢复启用" : "停用保留")}了「{displayName}」。");
@@ -1462,13 +1541,15 @@ public partial class MainWindow
             rerender: true);
 
         // Stage 2: Post-apply rescan in its OWN try/catch so Scan failure NEVER masquerades as Apply failure!
-        int postApplyWatchVersion = Volatile.Read(ref modChangeVersion);
+        var postApplyStamp = NeonCaptureScanStamp(plan.Root);
         ModInventory freshInventory;
         try
         {
             freshInventory = await Task.Run(() => neonTestScanOverride != null
                 ? neonTestScanOverride(plan.Root)
                 : ModManager.Scan(plan.Root));
+            if (!NeonTryPublishInventory(postApplyStamp, freshInventory))
+                throw new InvalidOperationException("扫描期间目录或文件监测世代变化，已安排重新扫描。");
         }
         catch (Exception scanEx)
         {
@@ -1505,9 +1586,7 @@ public partial class MainWindow
         }
 
         // Both Apply and Scan succeeded!
-        modInventory = freshInventory;
-        modInventoryDirty = false;
-        modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Math.Max(postApplyWatchVersion, Volatile.Read(ref modChangeVersion)));
+        // Guarded publication above is the only clean-state commit.
         modStatus = current.Name + (enable ? " 已恢复启用。" : " 已停用，文件已完整保留。");
         RecordNeonActivity("toggle", enable ? $"恢复启用了「{current.Name}」。" : $"停用并保留了「{current.Name}」。");
         neonWorkbenchView.ClearInlineToggleStatus(current.Id, rerender: false);
@@ -1662,8 +1741,7 @@ public partial class MainWindow
             report = null;
             states = [];
             demo = false;
-            modInventory = await Task.Run(() => ModManager.Scan(plan.Root));
-            modInventoryDirty = false;
+            await NeonScanAndPublishAsync(plan.Root);
             InvalidateLifecycle(item.Patch.Name + " 已安全退役至停用保留区，请重新核验补丁健康。" + (auditWarning == null ? "" : " " + auditWarning));
             RecordNeonActivity("patch", $"安全退役独立补丁「{item.Patch.Name}」（移入停用保留区并写入审计记录）。");
             neonWorkbenchView?.ShowToast($"已安全退役 {item.Patch.Name}（已移入停用保留区并写入审计记录）");
@@ -2120,9 +2198,7 @@ public partial class MainWindow
             report = null;
             states = [];
             demo = false;
-            modInventory = await Task.Run(() => ModManager.Scan(root));
-            modInventoryDirty = false;
-            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+            await NeonScanAndPublishAsync(root);
             InvalidateLifecycle($"已恢复「{mod.Name}」的上一备份，旧的补丁健康结论已失效，请重新扫描核验。");
             RecordNeonActivity("install", $"恢复「{mod.Name}」至备份「{Path.GetFileName(backupPath)}」（旧版本已保留在：{Path.GetFileName(previous)}）。");
             neonWorkbenchView.ShowToast($"已恢复「{mod.Name}」备份{baselineNote}");

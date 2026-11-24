@@ -18,6 +18,7 @@ public partial class MainWindow
    environmentSession=new GameEnvironmentSessionService(SettingsPath,modFileWatcher,selectedInstallRoot);
    environmentSession.DirectoryChanging+=(_,e)=>
    {
+    Interlocked.Increment(ref neonRootEpoch);
     CancelModUpdateCheck();
     modInventoryRefresh?.Cancel();
     localZipOperationCancellation?.Cancel();
@@ -35,7 +36,8 @@ public partial class MainWindow
     selectedInstallRoot=e.CurrentRoot;
     watchedGameRoot=e.CurrentRoot;
     if(modInventoryRefreshRunning)pendingModInventoryRefreshRoot=e.CurrentRoot;
-    modInventoryDirty=false;modWatchOverflow=false;modWatchTreeChanged=false;modChangeVersion=0;
+    modInventoryDirty=UiThemes.IsNeon;modWatchOverflow=false;modWatchTreeChanged=false;modChangeVersion=0;
+    modInventoryCleanVersion=0;
     report=null;states=[];ClearCoop();demo=false;ClearSelection();installPreview=null;lastInstallResult=null;
     modInventory=null;modTogglePreview=null;orphanPatchNotice=null;
     modStatus="目录已切换，请刷新模组列表。";

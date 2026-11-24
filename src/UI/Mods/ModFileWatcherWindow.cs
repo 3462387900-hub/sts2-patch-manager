@@ -24,6 +24,7 @@ public partial class MainWindow
  void StopModWatch()
  {
   EnsureModWatcherEvents();
+  Interlocked.Increment(ref neonRootEpoch);
   modFileWatcher.Stop();
   modChangeVersion=0;
   modInventoryCleanVersion=0;
@@ -34,6 +35,7 @@ public partial class MainWindow
  {
   EnsureModWatcherEvents();
   if(root.Equals(watchedGameRoot,StringComparison.OrdinalIgnoreCase))return;
+  Interlocked.Increment(ref neonRootEpoch);
   modFileWatcher.Stop();
   modInventoryDirty=false;modWatchOverflow=false;modWatchTreeChanged=false;
   watchedGameRoot=root;
@@ -58,6 +60,7 @@ public partial class MainWindow
    if(!e.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase))return;
    if(!e.Overflow&&e.Version<=modInventoryCleanVersion)return;
    modWatchTreeChanged|=e.TreeChanged;
+   modWatchOverflow|=e.Overflow;
    if(transactionWriting)
    {
     modInventoryDirty=true;
