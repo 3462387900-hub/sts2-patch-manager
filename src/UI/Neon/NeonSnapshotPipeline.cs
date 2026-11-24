@@ -18,8 +18,22 @@ public partial class MainWindow
     internal double NeonLastSnapshotCaptureMs { get; private set; }
     internal Action? neonTestSnapshotBuildHook;
 
-    sealed record NeonDependencyCache(ModInventory Identity, long RootEpoch, int Generation,
+    sealed record NeonDependencyCache(ModInventory Identity, ModInventory Captured, long RootEpoch, int Generation,
         ModDependencyGraphReport Graph, IReadOnlyDictionary<string, string?>? BlockReasons);
+
+    static bool SameNeonInventory(ModInventory a, ModInventory b)
+    {
+        if (a.Mods.Count != b.Mods.Count || !a.Issues.SequenceEqual(b.Issues)) return false;
+        // The dependency report contains display names, paths and records as well as
+        // dependency edges, so compare every scalar and dependency declaration.
+        for (int i = 0; i < a.Mods.Count; i++)
+        {
+            var x = a.Mods[i]; var y = b.Mods[i];
+            if ((x with { Dependencies = y.Dependencies }) != y ||
+                !x.Dependencies.SequenceEqual(y.Dependencies)) return false;
+        }
+        return true;
+    }
 
     sealed class SnapshotNoHttpHandler : HttpMessageHandler
     {
@@ -142,10 +156,10 @@ public partial class MainWindow
                     if (identity != null && inventory != null)
                     {
                         cache = depCache;
-                        if (cache == null || !ReferenceEquals(cache.Identity, identity) ||
-                            cache.RootEpoch != rootEpoch || cache.Generation != generation)
+                        if (cache == null || cache.RootEpoch != rootEpoch ||
+                            !SameNeonInventory(cache.Captured, inventory))
                         {
-                            var diag = ModDependencyDiagnostics.Analyze(inventory);
+                            var diag = new ModDependencyDiagnosticsService().Analyze(inventory);
                             var graph = new ModDependencyGraphReport(
                                 diag.Edges.Select(e => new ModDependencyEdge(e.Dependent, e.DependencyId, e.DependencyName,
                                     e.Prerequisite, e.Status, e.Message, e.FromPatchRule, e.IsCycle,
@@ -154,8 +168,15 @@ public partial class MainWindow
                                 diag.Summaries.ToDictionary(kv => kv.Key, kv => new ModDependencySummary(
                                     kv.Value.DependencyCount, kv.Value.UnsatisfiedCount, kv.Value.ActiveIssueCount,
                                     kv.Value.CycleEdgeCount), StringComparer.OrdinalIgnoreCase), diag.ActiveIssueCount);
-                            cache = new(identity, rootEpoch, generation, graph, null);
+                            cache = new(identity, inventory, rootEpoch, generation, graph, null);
                             rebuiltGraph = true;
+                        }
+                        else if (!ReferenceEquals(cache.Identity, identity) || cache.Generation != generation)
+                        {
+                            // Identical manifests may keep the graph; never keep a stale
+                            // filesystem occupancy / toggle preflight result across scans.
+                            cache = cache with { Identity = identity, Captured = inventory,
+                                Generation = generation, BlockReasons = null };
                         }
                         if (!dirty && !running && root != null && cache.BlockReasons == null)
                         {

@@ -126,7 +126,7 @@ public partial class MainWindow
                 var view = neonWorkbenchView!;
                 view.SearchBoxControl.Text = "";
                 view.SetNeonPerfNameSort();
-                Check(await RefreshNeonWorkbenchAsync(preserveViewport: false), $"{n} first snapshot accepted");
+                bool firstAccepted = await RefreshNeonWorkbenchAsync(preserveViewport: false);
                 await LayoutAsync();
                 var drawTimer = Stopwatch.StartNew();
                 Draw(view);
@@ -135,6 +135,7 @@ public partial class MainWindow
                 double delay = await FinishHeartbeat();
                 Metric(n, "first_screen", timer.Elapsed.TotalMilliseconds,
                     NeonLastSnapshotCaptureMs + NeonLastSnapshotApplyMs + drawTimer.Elapsed.TotalMilliseconds, delay, view);
+                Check(firstAccepted, $"{n} first snapshot accepted");
                 Check(view.CurrentSnapshot?.AllRows.Length == n, $"{n} snapshot has all rows");
                 Bound(view, n, "first screen");
                 var original = view.DeskContentControl.Children.OfType<Border>().First(b => b.Tag is string);
@@ -146,6 +147,10 @@ public partial class MainWindow
                     ReferenceEquals(original, view.DeskContentControl.Children.OfType<Border>().First(b => b.Tag is string)),
                     $"{n} unchanged refresh retains actual card instances");
                 Check(NeonDependencyBuildCount == graphs, $"{n} dependency graph cache hit");
+                Check(await NeonScanAndPublishAsync(root), $"{n} unchanged real rescan accepted");
+                Check(await RefreshNeonWorkbenchAsync(), $"{n} identical rescan projected");
+                Check(NeonDependencyBuildCount == graphs, $"{n} equivalent inventory reuses dependency graph");
+                await LayoutAsync();
 
                 const string selected = "PerfMod0010";
                 view.SelectMod(selected);
@@ -160,10 +165,12 @@ public partial class MainWindow
                 UpdateLayout();
                 ui.Stop();
                 await LayoutAsync();
+                drawTimer.Restart();
                 Draw(view);
+                drawTimer.Stop();
                 timer.Stop();
                 delay = await FinishHeartbeat();
-                Metric(n, "scroll", timer.Elapsed.TotalMilliseconds, ui.Elapsed.TotalMilliseconds, delay, view);
+                Metric(n, "scroll", timer.Elapsed.TotalMilliseconds, ui.Elapsed.TotalMilliseconds + drawTimer.Elapsed.TotalMilliseconds, delay, view);
                 double savedOffset = sv.VerticalOffset;
                 Check(savedOffset > 100, $"{n} actual nonzero scroll offset");
 
@@ -174,10 +181,12 @@ public partial class MainWindow
                 UpdateLayout();
                 ui.Stop();
                 await LayoutAsync();
+                drawTimer.Restart();
                 Draw(view);
+                drawTimer.Stop();
                 timer.Stop();
                 delay = await FinishHeartbeat();
-                Metric(n, "search_filter", timer.Elapsed.TotalMilliseconds, ui.Elapsed.TotalMilliseconds, delay, view);
+                Metric(n, "search_filter", timer.Elapsed.TotalMilliseconds, ui.Elapsed.TotalMilliseconds + drawTimer.Elapsed.TotalMilliseconds, delay, view);
                 Check(NeonWorkbenchBuilder.FilterAndSort(view.CurrentSnapshot!.AllRows, "all", "PerfGroup", "name").Length == n - 5,
                     $"{n} search matches expected count");
                 Check(view.SelectedModId == selected && view.SearchBoxControl.Text == "PerfGroup" &&
@@ -192,11 +201,13 @@ public partial class MainWindow
                 ui.Stop();
                 await toggle;
                 await LayoutAsync();
+                drawTimer.Restart();
                 Draw(view);
+                drawTimer.Stop();
                 timer.Stop();
                 delay = await FinishHeartbeat();
                 Metric(n, "single_disable_refresh", timer.Elapsed.TotalMilliseconds,
-                    ui.Elapsed.TotalMilliseconds + NeonLastSnapshotCaptureMs + NeonLastSnapshotApplyMs, delay, view);
+                    ui.Elapsed.TotalMilliseconds + NeonLastSnapshotCaptureMs + NeonLastSnapshotApplyMs + drawTimer.Elapsed.TotalMilliseconds, delay, view);
                 Check(view.CurrentSnapshot?.AllRows.Single(x => x.Mod.Id == selected).Mod.Enabled == false &&
                     !view.CurrentSnapshot.ModInventoryDirty && !Directory.Exists(Path.Combine(root, "mods", selected)),
                     $"{n} real disable and clean refreshed inventory");
@@ -211,11 +222,13 @@ public partial class MainWindow
                 ui.Stop();
                 await enable;
                 await LayoutAsync();
+                drawTimer.Restart();
                 Draw(view);
+                drawTimer.Stop();
                 timer.Stop();
                 delay = await FinishHeartbeat();
                 Metric(n, "single_enable_refresh", timer.Elapsed.TotalMilliseconds,
-                    ui.Elapsed.TotalMilliseconds + NeonLastSnapshotCaptureMs + NeonLastSnapshotApplyMs, delay, view);
+                    ui.Elapsed.TotalMilliseconds + NeonLastSnapshotCaptureMs + NeonLastSnapshotApplyMs + drawTimer.Elapsed.TotalMilliseconds, delay, view);
                 Check(view.CurrentSnapshot?.AllRows.Single(x => x.Mod.Id == selected).Mod.Enabled == true &&
                     !view.CurrentSnapshot.ModInventoryDirty && Directory.Exists(Path.Combine(root, "mods", selected)),
                     $"{n} real enable and clean refreshed inventory");
@@ -258,6 +271,45 @@ public partial class MainWindow
                 await Task.Delay(1000);
             }
 
+            // A real watcher event must invalidate a blocked projection even if no
+            // new inventory object has yet been published. Hold busy only to keep the
+            // existing watcher quiet-period auto-scan from racing the assertion.
+            using (var watcherRelease = new ManualResetEventSlim(false))
+            {
+                var watcherStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                long watcherDiscards = NeonSnapshotDiscardCount;
+                int before = modFileWatcher.ChangeVersion;
+                int gateOnce = 0;
+                neonTestSnapshotBuildHook = () =>
+                {
+                    if (Interlocked.Exchange(ref gateOnce, 1) != 0) return;
+                    watcherStarted.TrySetResult(true);
+                    if (!watcherRelease.Wait(TimeSpan.FromSeconds(15))) throw new TimeoutException("watcher fixture worker gate");
+                };
+                busy = true;
+                var blocked = RefreshNeonWorkbenchAsync();
+                try
+                {
+                    await watcherStarted.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                    string marker = Path.Combine(roots[500], "mods", "PerfMod0010", "watcher-fixture.txt");
+                    await Task.Run(() => File.WriteAllText(marker, "external fixture edit"));
+                    for (int i = 0; i < 100 && modFileWatcher.ChangeVersion == before; i++) await Task.Delay(25);
+                    Check(modFileWatcher.ChangeVersion != before, "real isolated watcher generation advanced");
+                }
+                finally { neonTestSnapshotBuildHook = null; watcherRelease.Set(); }
+                try
+                {
+                    Check(await blocked && NeonSnapshotDiscardCount > watcherDiscards &&
+                        neonWorkbenchView!.CurrentSnapshot?.ModInventoryDirty == true &&
+                        !neonWorkbenchView.CurrentSnapshot.IsLifecycleHealthValid,
+                        "changed watcher generation rejects old clean projection");
+                    await Task.Delay(1000);
+                    Check(await NeonScanAndPublishAsync(roots[500]), "new scan covers changed watcher generation");
+                    Check(await RefreshNeonWorkbenchAsync(), "clean projection after watcher change");
+                }
+                finally { busy = false; }
+            }
+
             // Root A -> B -> A with a blocked worker, same watcher generation may be reused.
             string a = roots[500], b = roots[50];
             using var rootRelease = new ManualResetEventSlim(false);
@@ -296,6 +348,7 @@ public partial class MainWindow
         finally
         {
             heartbeat.Stop();
+            busy = false;
             neonTestSnapshotBuildHook = null;
             neonTestHoldRescan = false;
             CloseModWatch();
