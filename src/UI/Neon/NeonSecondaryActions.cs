@@ -73,6 +73,21 @@ public partial class MainWindow
     {
         neonActivityLog.Insert(0, new NeonActivityEntry(DateTime.Now.ToString("HH:mm:ss"), kind, text));
         if (neonActivityLog.Count > 80) neonActivityLog.RemoveAt(neonActivityLog.Count - 1);
+        if (kind is "snapshot" or "patch" or "restore" or "install" or "coop")
+            InvalidateNeonRecoveryCache();
+    }
+
+    void InvalidateNeonRecoveryCache() => neonRecoveryCacheDirty = true;
+
+    (ModEnvironmentSnapshotEntry[] Snapshots, string? Warning, NeonPatchBackupBatch? Batch) LoadRecoveryCacheSync(string? root)
+    {
+        if (root == null) return ([], null, null);
+        ModEnvironmentSnapshotEntry[] entries = [];
+        string? warning = null;
+        try { entries = NeonSnapshotWorkflow(root).List(); }
+        catch (Exception ex) { warning = ex.Message; }
+        var batch = NeonWorkbenchBuilder.ReadLatestPatchBackupBatch(root);
+        return (entries, warning, batch);
     }
 
     NeonCoopSnapshotState BuildNeonCoopSnapshotState()
@@ -118,12 +133,23 @@ public partial class MainWindow
 
     NeonRecoverySnapshotState BuildNeonRecoverySnapshotState()
     {
-        ModEnvironmentSnapshotEntry[] entries = [];
-        string? warning = null;
-        if (selectedInstallRoot != null)
+        if (selectedInstallRoot != null &&
+            (neonRecoveryCacheDirty || !string.Equals(neonRecoveryCacheRoot, selectedInstallRoot, StringComparison.OrdinalIgnoreCase)))
         {
-            try { entries = NeonSnapshotWorkflow(selectedInstallRoot).List(); }
-            catch (Exception ex) { warning = ex.Message; }
+            var loaded = LoadRecoveryCacheSync(selectedInstallRoot);
+            neonRecoveryCacheRoot = selectedInstallRoot;
+            neonCachedSnapshots = loaded.Snapshots;
+            neonCachedSnapshotsWarning = loaded.Warning;
+            neonCachedLatestPatchBatch = loaded.Batch;
+            neonRecoveryCacheDirty = false;
+        }
+        else if (selectedInstallRoot == null)
+        {
+            neonRecoveryCacheRoot = null;
+            neonCachedSnapshots = [];
+            neonCachedSnapshotsWarning = null;
+            neonCachedLatestPatchBatch = null;
+            neonRecoveryCacheDirty = false;
         }
 
         var disabledAll = (modInventory?.Mods ?? [])
@@ -133,9 +159,9 @@ public partial class MainWindow
             .ToArray();
 
         return new NeonRecoverySnapshotState(
-            Snapshots: entries,
-            SnapshotsWarning: warning,
-            LatestPatchBatch: NeonWorkbenchBuilder.ReadLatestPatchBackupBatch(selectedInstallRoot),
+            Snapshots: neonCachedSnapshots,
+            SnapshotsWarning: neonCachedSnapshotsWarning,
+            LatestPatchBatch: neonCachedLatestPatchBatch,
             DisabledAllMods: disabledAll,
             ActivityLog: neonActivityLog.ToArray());
     }
@@ -151,6 +177,7 @@ public partial class MainWindow
             try
             {
                 OrphanPatchAutoStop.SetEnabled(NeonDataRoot, enabled);
+                neonCachedOrphanAutoStop = enabled;
                 RecordNeonActivity("patch", enabled ? "开启了目标 MOD 删除后自动安全停用孤立补丁。" : "关闭了孤立补丁自动停用。");
                 view.ShowToast(enabled ? "已开启：目标 MOD 全部删除后自动安全停用其孤立补丁" : "已关闭孤立补丁自动停用");
                 view.UpdateOrphanAutoStopOnly(enabled, BuildNeonRecoverySnapshotState());
@@ -231,7 +258,7 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string root = selectedInstallRoot;
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         bool isFixture = neonFixtureRoot != null &&
             root.Equals(neonFixtureRoot, StringComparison.OrdinalIgnoreCase) &&
             File.Exists(Path.Combine(root, ".spirepatch-fixture")) &&
@@ -332,7 +359,7 @@ public partial class MainWindow
         if (requestedIds.Length == 0) return;
 
         string root = selectedInstallRoot;
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         if (running)
         {
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
@@ -663,7 +690,7 @@ public partial class MainWindow
             return;
         }
         string gameRoot = selectedInstallRoot;
-        bool running = GameEnvironment.Running(gameRoot);
+        bool running = await CheckGameRunningOffUiAsync(gameRoot);
         if (running)
         {
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
@@ -802,7 +829,7 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string gameRoot = selectedInstallRoot;
-        bool running = GameEnvironment.Running(gameRoot);
+        bool running = await CheckGameRunningOffUiAsync(gameRoot);
         var session = NeonLocalZipSession();
 
         busy = true;
@@ -1165,7 +1192,7 @@ public partial class MainWindow
         if (selectedIds.Length == 0) return;
 
         string root = selectedInstallRoot;
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         var currentRows = coopRows?.ToArray() ?? [];
 
         busy = true;
@@ -1336,7 +1363,7 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || modInventoryDirty || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string gameRoot = selectedInstallRoot;
-        bool running = GameEnvironment.Running(gameRoot);
+        bool running = await CheckGameRunningOffUiAsync(gameRoot);
         busy = true;
         ModEnvironmentSnapshotPreview? preview = null;
         string? error = null;
@@ -1458,7 +1485,7 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string root = selectedInstallRoot;
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         if (running)
         {
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(

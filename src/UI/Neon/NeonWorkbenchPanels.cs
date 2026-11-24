@@ -927,12 +927,49 @@ internal sealed partial class NeonWorkbenchView
         sizeK.Margin = new Thickness(0, 5, 0, 0);
         Grid.SetRow(sizeK, 1);
         kv.Children.Add(sizeK);
-        var sizeV = NeonWidgets.Text($"{row.FileCount} 文件 · {NeonWorkbenchBuilder.FormatBytes(row.TotalBytes)}", 11.5, NeonPalette.InkPrimary, mono: true);
+        string cachedSizeText = modFileStatsCache.TryGetValue(row.Mod.Folder, out var cachedStats)
+            ? $"{cachedStats.Count} 文件 · {NeonWorkbenchBuilder.FormatBytes(cachedStats.Bytes)}"
+            : "计算中…";
+        var sizeV = NeonWidgets.Text(cachedSizeText, 11.5, NeonPalette.InkPrimary, mono: true);
         sizeV.Margin = new Thickness(0, 5, 0, 0);
         Grid.SetRow(sizeV, 1);
         Grid.SetColumn(sizeV, 1);
         kv.Children.Add(sizeV);
         stack.Children.Add(kv);
+
+        if (!modFileStatsCache.ContainsKey(row.Mod.Folder))
+        {
+            string targetFolder = row.Mod.Folder;
+            string targetId = row.Mod.Id;
+            _ = Task.Run(() =>
+            {
+                int count = 0;
+                long bytes = 0;
+                try
+                {
+                    if (Directory.Exists(targetFolder))
+                    {
+                        foreach (string file in Directory.EnumerateFiles(targetFolder, "*", SearchOption.AllDirectories))
+                        {
+                            count++;
+                            bytes += new FileInfo(file).Length;
+                            if (count >= 2000) break;
+                        }
+                    }
+                }
+                catch { }
+                return (count, bytes);
+            }).ContinueWith(t =>
+            {
+                if (!t.IsCompletedSuccessfully) return;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    modFileStatsCache[targetFolder] = t.Result;
+                    if (string.Equals(selectedModId, targetId, StringComparison.OrdinalIgnoreCase))
+                        sizeV.Text = $"{t.Result.count} 文件 · {NeonWorkbenchBuilder.FormatBytes(t.Result.bytes)}";
+                });
+            }, TaskScheduler.Default);
+        }
 
         var quickLinks = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         var openFolder = NeonWidgets.CreateStyledButton(this, "打开模组目录", "NeonGhostButton",

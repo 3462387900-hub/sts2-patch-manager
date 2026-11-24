@@ -96,6 +96,7 @@ public static class NeonPalette
     public static readonly SolidColorBrush BrandGold = Freeze("#E8C27A");
     public static readonly SolidColorBrush BrandIvory = Freeze("#F7F5F0");
     public static readonly SolidColorBrush RowFlashBg = Freeze("#FCE6C4");
+    public static readonly SolidColorBrush ToggleKnobBorder = Freeze("#2E1B201D");
 
     public static readonly LinearGradientBrush ReadyGateBg = CreateReadyGateGradient();
 

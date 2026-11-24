@@ -668,22 +668,9 @@ internal static class NeonWorkbenchBuilder
             }
             bool isLockedByDependents = mod.Enabled && !gameRunning && !modInventoryDirty && blockReason != null;
 
-            // Lightweight local file stats
-            int fileCount = 0;
-            long totalBytes = 0;
-            try
-            {
-                if (Directory.Exists(mod.Folder))
-                {
-                    foreach (string file in Directory.EnumerateFiles(mod.Folder, "*", SearchOption.AllDirectories))
-                    {
-                        fileCount++;
-                        totalBytes += new FileInfo(file).Length;
-                        if (fileCount >= 500) break;
-                    }
-                }
-            }
-            catch { }
+            // Deferred to Inspector background lookup so building the 50+ MOD snapshot never walks disk on UI thread.
+            const int fileCount = 0;
+            const long totalBytes = 0;
 
             var relatedPatches = relatedPatchMap.TryGetValue(mod.Id, out var rlist)
                 ? rlist

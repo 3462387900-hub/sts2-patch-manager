@@ -700,15 +700,10 @@ public static class NeonWidgets
             Height = 15,
             CornerRadius = new CornerRadius(7.5),
             Background = NeonPalette.BgElevated,
+            BorderBrush = NeonPalette.ToggleKnobBorder,
+            BorderThickness = new Thickness(0.75),
             SnapsToDevicePixels = false,
-            UseLayoutRounding = false,
-            Effect = new DropShadowEffect
-            {
-                Color = Colors.Black,
-                BlurRadius = 3,
-                ShadowDepth = 1,
-                Opacity = 0.22
-            }
+            UseLayoutRounding = false
         };
         Canvas.SetTop(knob, 2.5);
         NeonMotion.SetJellyKnobRest(knob, visualStartOn);
@@ -745,7 +740,7 @@ public static class NeonWidgets
             IsEnabled = !isPending,
             ToolTip = toolTip,
             VerticalAlignment = VerticalAlignment.Center,
-            Template = CreateInteractiveBareButtonTemplate(pressScale: 0.95, hoverOpacity: 0.90)
+            Template = CreateBareButtonTemplate()
         };
         AutomationProperties.SetName(btn, automationName);
 
@@ -816,15 +811,10 @@ public static class NeonWidgets
             Height = 15,
             CornerRadius = new CornerRadius(7.5),
             Background = NeonPalette.BgElevated,
+            BorderBrush = NeonPalette.ToggleKnobBorder,
+            BorderThickness = new Thickness(0.75),
             SnapsToDevicePixels = false,
-            UseLayoutRounding = false,
-            Effect = new DropShadowEffect
-            {
-                Color = Colors.Black,
-                BlurRadius = 3,
-                ShadowDepth = 1,
-                Opacity = 0.22
-            }
+            UseLayoutRounding = false
         };
         Canvas.SetTop(knob, 2.5);
         NeonMotion.SetJellyKnobRest(knob, visualStartOn);
@@ -843,12 +833,6 @@ public static class NeonWidgets
             Child = trackCanvas
         };
 
-        var template = new ControlTemplate(typeof(CheckBox));
-        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        template.VisualTree = presenter;
-
         var cb = new CheckBox
         {
             IsChecked = isChecked,
@@ -858,7 +842,7 @@ public static class NeonWidgets
             Padding = new Thickness(0),
             Cursor = Cursors.Hand,
             VerticalAlignment = VerticalAlignment.Center,
-            Template = template
+            Template = CachedSwitchCheckBoxTemplate
         };
         AutomationProperties.SetName(cb, automationName);
 
@@ -1134,21 +1118,44 @@ public static class NeonWidgets
         return btn;
     }
 
-    public static ControlTemplate CreateBareButtonTemplate()
+    static readonly ControlTemplate CachedBareButtonTemplate = BuildBareButtonTemplate();
+    static readonly Dictionary<(double Scale, double HoverOpacity), ControlTemplate> CachedInteractiveBareTemplates = new();
+    static readonly ControlTemplate CachedSwitchCheckBoxTemplate = BuildSwitchCheckBoxTemplate();
+    static readonly ControlTemplate CachedTextInputTemplate = BuildTextInputTemplate();
+
+    static ControlTemplate BuildBareButtonTemplate()
     {
         var template = new ControlTemplate(typeof(Button));
         var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
         presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
         presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         template.VisualTree = presenter;
+        template.Seal();
         return template;
     }
+
+    static ControlTemplate BuildSwitchCheckBoxTemplate()
+    {
+        var template = new ControlTemplate(typeof(CheckBox));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        template.VisualTree = presenter;
+        template.Seal();
+        return template;
+    }
+
+    public static ControlTemplate CreateBareButtonTemplate() => CachedBareButtonTemplate;
 
     /// <summary>
     /// Tactile bare template with spring scale-down on press and subtle hover dim without shifting layout.
     /// </summary>
     public static ControlTemplate CreateInteractiveBareButtonTemplate(double pressScale = 0.96, double hoverOpacity = 0.90)
     {
+        var key = (pressScale, hoverOpacity);
+        if (CachedInteractiveBareTemplates.TryGetValue(key, out var cached))
+            return cached;
+
         var template = new ControlTemplate(typeof(Button));
         var border = new FrameworkElementFactory(typeof(Border), "Bd");
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
@@ -1172,6 +1179,8 @@ public static class NeonWidgets
         pressed.Setters.Add(new Setter(NeonMotion.TactileScaleProperty, pressScale, "Bd"));
         template.Triggers.Add(pressed);
 
+        template.Seal();
+        CachedInteractiveBareTemplates[key] = template;
         return template;
     }
 
@@ -1416,7 +1425,7 @@ public static class NeonWidgets
             CaretBrush = NeonPalette.Sage,
             VerticalContentAlignment = VerticalAlignment.Center,
             Padding = new Thickness(11, 0, 11, 0),
-            Template = CreateTextInputTemplate()
+            Template = CachedTextInputTemplate
         };
 
         var ph = Text(placeholder, 12.5, NeonPalette.InkMuted, mono: mono, ellipsis: true);
@@ -1433,7 +1442,7 @@ public static class NeonWidgets
         return (grid, box, ph);
     }
 
-    static ControlTemplate CreateTextInputTemplate()
+    static ControlTemplate BuildTextInputTemplate()
     {
         var template = new ControlTemplate(typeof(TextBox));
         var gridFactory = new FrameworkElementFactory(typeof(Grid));
@@ -1468,6 +1477,7 @@ public static class NeonWidgets
         focus.Setters.Add(new Setter(Border.BorderBrushProperty, NeonPalette.Sage, "Field"));
         focus.Setters.Add(new Setter(Border.BorderBrushProperty, NeonPalette.SageFocusRing, "Halo"));
         template.Triggers.Add(focus);
+        template.Seal();
 
         return template;
     }

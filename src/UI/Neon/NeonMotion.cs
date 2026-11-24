@@ -1234,22 +1234,22 @@ public static class NeonMotion
         else
         {
             pill.Opacity = 0.0;
-            scale.ScaleX = 0.94;
-            scale.ScaleY = 0.94;
-            translate.Y = -10.0;
+            scale.ScaleX = 0.96;
+            scale.ScaleY = 0.96;
+            translate.Y = 10.0;
 
             pill.BeginAnimation(UIElement.OpacityProperty, SplineDouble(0.0, 1.0, 190));
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.94, 1.0, ScaledMs(220))
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.96, 1.0, ScaledMs(220))
             {
                 EasingFunction = TactileSpringEase,
                 FillBehavior = FillBehavior.HoldEnd
             });
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.94, 1.0, ScaledMs(220))
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1.0, ScaledMs(220))
             {
                 EasingFunction = TactileSpringEase,
                 FillBehavior = FillBehavior.HoldEnd
             });
-            translate.BeginAnimation(TranslateTransform.YProperty, SplineDouble(-10.0, 0.0, 210));
+            translate.BeginAnimation(TranslateTransform.YProperty, SplineDouble(10.0, 0.0, 210));
         }
 
         var holdTimer = new DispatcherTimer { Interval = ScaledMs(Math.Max(200, holdMs)) };
@@ -1272,7 +1272,7 @@ public static class NeonMotion
                 EasingFunction = FastExitEase,
                 FillBehavior = FillBehavior.HoldEnd
             };
-            var outSlide = new DoubleAnimation(translate.Y, -8.0, ScaledMs(210))
+            var outSlide = new DoubleAnimation(translate.Y, 8.0, ScaledMs(210))
             {
                 EasingFunction = FastExitEase,
                 FillBehavior = FillBehavior.HoldEnd

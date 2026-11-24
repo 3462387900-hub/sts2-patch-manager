@@ -19,6 +19,14 @@ public partial class MainWindow
     internal int neonTestScanDelayMs;
     bool neonScanning;
     string? neonScanStageText;
+    bool suppressNeonHealthInvalidationRefresh;
+    string? neonRecoveryCacheRoot;
+    ModEnvironmentSnapshotEntry[] neonCachedSnapshots = [];
+    string? neonCachedSnapshotsWarning;
+    NeonPatchBackupBatch? neonCachedLatestPatchBatch;
+    bool neonRecoveryCacheDirty = true;
+    bool? neonCachedOrphanAutoStop;
+    NeonGitHubNetworkState? neonCachedGitHubNetwork;
     internal Func<string, ModInventory>? neonTestScanOverride;
 
     void ShowNeonWorkbench()
@@ -149,7 +157,7 @@ public partial class MainWindow
 
         string root = selectedInstallRoot;
         string verb = enable ? "启用" : "停用";
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         if (running)
         {
             neonWorkbenchView.ShowToast($"退出游戏后可批量{verb}", NeonTone.Amber);
@@ -487,10 +495,11 @@ public partial class MainWindow
 
         if (stageError != null || staged == null || !staged.ValidationPassed)
         {
+            bool stageFailedRunning = await CheckGameRunningOffUiAsync(root);
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
                 Title: $"无法预览 MOD 更新 · {mod.Name}",
                 Subtitle: request.Source == ModUpdateStagingSource.GitHub ? $"GitHub {request.SourceIdentifier}" : $"Workshop #{request.SourceIdentifier}",
-                GameRunning: GameEnvironment.Running(root),
+                GameRunning: stageFailedRunning,
                 BlockedReason: stageError ?? staged?.FailureReason ?? "暂存下载或完整性校验未通过。",
                 AutoSnapshotNote: null,
                 BoundaryNote: "未对当前 mods 目录做任何修改。",
@@ -516,11 +525,12 @@ public partial class MainWindow
         if (staged.FileChanges.Count > 25)
             changeLines.Add(new NeonDiffLine("skip", "更多", $"其余 {staged.FileChanges.Count - 25} 个文件变动已通过校验", ""));
 
+        bool stageReadyRunning = await CheckGameRunningOffUiAsync(root);
         string stagingDir = staged.StagingDirectory ?? "";
         neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
             Title: $"确认更新 MOD · {mod.Name}",
             Subtitle: $"v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} → v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}",
-            GameRunning: GameEnvironment.Running(root),
+            GameRunning: stageReadyRunning,
             BlockedReason: null,
             AutoSnapshotNote: "确认前将自动创建完整环境快照与事务备份；若替换途中意外中断，下次启动将自动回滚或安全恢复。",
             BoundaryNote: "下载与校验均已在独立隔离暂存区完成，确认前未接触你的 mods 目录。",
@@ -769,7 +779,7 @@ public partial class MainWindow
             workshopSources: ws,
             workshopUpdates: wsUpd,
             githubDiscovery: githubDiscovery,
-            orphanAutoStopEnabled: OrphanPatchAutoStop.Enabled(NeonDataRoot),
+            orphanAutoStopEnabled: neonCachedOrphanAutoStop ??= OrphanPatchAutoStop.Enabled(NeonDataRoot),
             onlineRefreshing: onlineBusy,
             onlineSourceStatus: onlineStatus,
             onlineCatalogCount: onlineCatalog?.Patches.Count ?? Catalog.Bundled.Length,
@@ -791,8 +801,17 @@ public partial class MainWindow
     /// </summary>
     void NotifyNeonHealthInvalidated()
     {
-        if (!UiThemes.IsNeon || neonWorkbenchView == null) return;
+        if (suppressNeonHealthInvalidationRefresh || !UiThemes.IsNeon || neonWorkbenchView == null) return;
         RefreshNeonWorkbench(preserveViewport: true);
+    }
+
+    async Task<bool> CheckGameRunningOffUiAsync(string root)
+    {
+        bool running = await Task.Run(() => GameEnvironment.Running(root));
+        neonGameRunningRoot = root;
+        neonGameRunningCached = running;
+        neonLastRunningPollMs = Environment.TickCount64;
+        return running;
     }
 
     void UpdateNeonGlobalControls()
@@ -1006,12 +1025,13 @@ public partial class MainWindow
                 catch { }
             }
 
-            // Phase 1: Fast local MOD inventory + patch scan so UI displays mods right away.
+            // Phase 1: Fast local MOD inventory + patch scan + recovery cache preload so UI stays non-blocking.
             var scanned = await Task.Run(() =>
             {
                 var inv = ModManager.Scan(root);
                 var patchRep = Catalog.Scan(root, definitions, revision);
-                return (inv, patchRep);
+                var recCache = LoadRecoveryCacheSync(root);
+                return (inv, patchRep, recCache);
             });
 
             if (!root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
@@ -1021,6 +1041,11 @@ public partial class MainWindow
                 return;
             }
 
+            neonRecoveryCacheRoot = root;
+            neonCachedSnapshots = scanned.recCache.Snapshots;
+            neonCachedSnapshotsWarning = scanned.recCache.Warning;
+            neonCachedLatestPatchBatch = scanned.recCache.Batch;
+            neonRecoveryCacheDirty = false;
             modInventory = scanned.inv;
             modInventoryDirty = false;
             modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
@@ -1110,7 +1135,7 @@ public partial class MainWindow
         if (busy || transactionWriting) return;
 
         string root = selectedInstallRoot;
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         var current = modInventory.Mods.FirstOrDefault(m =>
             m.Folder.Equals(snapshotMod.Folder, StringComparison.OrdinalIgnoreCase) &&
             m.Manifest.Equals(snapshotMod.Manifest, StringComparison.OrdinalIgnoreCase));
@@ -1268,8 +1293,7 @@ public partial class MainWindow
             return;
         }
 
-        bool running = GameEnvironment.Running(root);
-        if (running)
+        if (string.Equals(neonGameRunningRoot, root, StringComparison.OrdinalIgnoreCase) && neonGameRunningCached)
         {
             const string runningMsg = "退出游戏后可启停（检测到 SlayTheSpire2.exe 正在运行）。";
             neonWorkbenchView.SetInlineToggleStatus(
@@ -1329,12 +1353,24 @@ public partial class MainWindow
                 enable ? "正在核验文件指纹并恢复启用…" : "正在核验并移入停用保留区…"),
             rerender: true);
 
-        // Stage 1: Real Preview & atomic Apply via ModToggleWorkflowService
+        // Stage 1: Authoritative running check (off UI thread) -> Preview -> atomic Apply via ModToggleWorkflowService
         ModTogglePlan? plan = null;
         try
         {
             if (neonTestRestoreStageDelayMs > 0)
                 await Task.Delay(neonTestRestoreStageDelayMs);
+            if (await CheckGameRunningOffUiAsync(root))
+            {
+                busy = false;
+                transactionWriting = false;
+                const string runningMsg = "退出游戏后可启停（检测到 SlayTheSpire2.exe 正在运行）。";
+                neonWorkbenchView.SetInlineToggleStatus(
+                    current.Id,
+                    new NeonInlineToggleStatus(current.Id, current.Name, enable, NeonInlineTogglePhase.Failed, "退出游戏后可启停", runningMsg),
+                    rerender: true);
+                neonWorkbenchView.ShowToast("退出游戏后可启停 " + current.Id, NeonTone.Amber);
+                return;
+            }
             plan = await ModToggleWorkflow.PreviewAsync(root, current.Folder, enable);
             var exec = await ModToggleWorkflow.ConfirmAndApplyAsync(
                 plan,
@@ -1356,7 +1392,7 @@ public partial class MainWindow
             return;
         }
 
-        // Apply genuinely succeeded — files are now atomically moved!
+        // Apply genuinely succeeded — files are now atomically moved! Coalesce health invalidation with the upcoming single refresh.
         installPreview = null;
         lastInstallResult = null;
         ClearSelection();
@@ -1364,7 +1400,9 @@ public partial class MainWindow
         report = null;
         states = [];
         demo = false;
-        InvalidateLifecycle("MOD 启停状态已变更，旧的补丁健康结论已自动失效，请重新核验。");
+        suppressNeonHealthInvalidationRefresh = true;
+        try { InvalidateLifecycle("MOD 启停状态已变更，旧的补丁健康结论已自动失效，请重新核验。"); }
+        finally { suppressNeonHealthInvalidationRefresh = false; }
 
         neonWorkbenchView.SetInlineToggleStatus(
             current.Id,
@@ -1507,10 +1545,11 @@ public partial class MainWindow
 
         if (error != null || plan == null || patch.LifecycleItem == null)
         {
+            bool running = await CheckGameRunningOffUiAsync(selectedInstallRoot);
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
                 Title: $"无法安全退役 · {patch.Name}",
                 Subtitle: patch.PatchId,
-                GameRunning: GameEnvironment.Running(selectedInstallRoot),
+                GameRunning: running,
                 BlockedReason: error ?? "当前不符合安全退役条件。",
                 AutoSnapshotNote: null,
                 BoundaryNote: null,
@@ -1640,15 +1679,18 @@ public partial class MainWindow
 
     NeonGitHubNetworkState BuildNeonGitHubNetworkSnapshotState()
     {
+        if (neonCachedGitHubNetwork != null)
+            return neonCachedGitHubNetwork;
         try
         {
             var cfg = GitHubNetwork.Load(installer.DataRoot);
-            return new NeonGitHubNetworkState(cfg.Mode, cfg.ProxyUrl);
+            neonCachedGitHubNetwork = new NeonGitHubNetworkState(cfg.Mode, cfg.ProxyUrl);
         }
         catch
         {
-            return new NeonGitHubNetworkState(GitHubNetwork.Default.Mode, GitHubNetwork.Default.ProxyUrl);
+            neonCachedGitHubNetwork = new NeonGitHubNetworkState(GitHubNetwork.Default.Mode, GitHubNetwork.Default.ProxyUrl);
         }
+        return neonCachedGitHubNetwork;
     }
 
     async Task NeonChooseAndDiagnoseLogAsync()
@@ -1892,6 +1934,7 @@ public partial class MainWindow
                     GitHubNetwork.Save(
                         new GitHubNetworkSettings(1, selectedMode, selectedMode == "local" ? proxyBox.Text : ""),
                         installer.DataRoot);
+                    neonCachedGitHubNetwork = new NeonGitHubNetworkState(selectedMode, selectedMode == "local" ? proxyBox.Text.Trim() : "");
                     RefreshNeonWorkbench(preserveViewport: true);
                     RecordNeonActivity("source", selectedMode == "local"
                         ? $"保存 GitHub 网络设置：本机 HTTP 代理（{proxyBox.Text.Trim()}）。"
@@ -1958,14 +2001,14 @@ public partial class MainWindow
         }
     }
 
-    void NeonPreviewRestoreModBackup(ManagedMod mod)
+    async void NeonPreviewRestoreModBackup(ManagedMod mod)
     {
         if (neonWorkbenchView == null || busy || transactionWriting || modInventoryDirty || selectedInstallRoot == null) return;
         string root = selectedInstallRoot;
-        bool running = GameEnvironment.Running(root);
+        bool running = await CheckGameRunningOffUiAsync(root);
         try
         {
-            var backups = GitHubModInstaller.Backups(root, mod);
+            var backups = await Task.Run(() => GitHubModInstaller.Backups(root, mod));
             if (backups.Length == 0)
             {
                 neonWorkbenchView.ShowToast($"没有找到「{mod.Name}」的可用历史备份。", NeonTone.Amber);
