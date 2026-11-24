@@ -33,6 +33,12 @@ public partial class MainWindow : Window
     e.Cancel=true;
     MessageBox.Show(this,"文件操作尚未结束，请等待校验或恢复完成后关闭。","正在处理文件");
    }
+   else if(neonPreviewPreparationCancellation is not null)
+   {
+    neonPreviewPreparationCancellation.Cancel();
+    e.Cancel=true;
+    neonWorkbenchView?.ShowToast("正在取消预览并清理暂存，请完成后再次关闭窗口。",NeonTone.Amber);
+   }
    else if(localZipOperationCancellation is not null)
    {
     localZipOperationCancellation.Cancel();
@@ -54,6 +60,8 @@ public partial class MainWindow : Window
       "暂存清理未完成",MessageBoxButton.OK,MessageBoxImage.Warning);
      return;
     }
+    neonWindowClosing=true;
+    NeonCancelOwnedPreview();
     preparationCancellation?.Cancel();
     managerUpdateCancellation?.Cancel();
     CancelModUpdateCheck();

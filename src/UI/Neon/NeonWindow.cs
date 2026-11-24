@@ -678,13 +678,14 @@ public partial class MainWindow
         ModUpdateStagingRequest request,
         string? releaseUrl)
     {
-        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonCanWrite(root)) return;
+        if (busy || transactionWriting || neonPreviewPreparationCancellation != null || neonWorkbenchView == null || modInventoryDirty || !NeonCanWrite(root)) return;
+        long epoch = Volatile.Read(ref neonRootEpoch);
         if (await CheckGameRunningOffUiAsync(root))
         {
             neonWorkbenchView.ShowToast("请退出游戏后再更新。", NeonTone.Amber);
             return;
         }
-        if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(root)) return;
+        if (busy || transactionWriting || modInventoryDirty || !NeonPreviewRootCurrent(root, epoch) || !NeonCanWrite(root)) return;
         if (neonFixtureDataRoot != null && neonTestStagingBackend == null)
         {
             neonWorkbenchView.ShowToast("隔离测试禁止使用真实下载后端。", NeonTone.Amber);
@@ -697,6 +698,7 @@ public partial class MainWindow
             Path.Combine(NeonDataRoot, "MOD更新暂存"));
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         preparationCancellation = cts;
+        neonPreviewPreparationCancellation = cts;
 
         ModUpdateStagingResult? staged = null;
         string? stageError = null;
@@ -711,90 +713,90 @@ public partial class MainWindow
         {
             if (ReferenceEquals(preparationCancellation, cts))
                 preparationCancellation = null;
-            busy = false;
         }
 
-        if (stageError != null || staged == null || !staged.ValidationPassed)
+        var session = NeonCreatePreviewSession(() =>
         {
-            bool stageFailedRunning = await CheckGameRunningOffUiAsync(root);
-            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
-                Title: $"无法预览 MOD 更新 · {mod.Name}",
-                Subtitle: request.Source == ModUpdateStagingSource.GitHub ? $"GitHub {request.SourceIdentifier}" : $"Workshop #{request.SourceIdentifier}",
-                GameRunning: stageFailedRunning,
-                BlockedReason: stageError ?? staged?.FailureReason ?? "暂存下载或完整性校验未通过。",
-                AutoSnapshotNote: null,
-                BoundaryNote: "未对当前 mods 目录做任何修改。",
-                Token: "UPD-STAGE-FAIL",
-                Groups: [],
-                ConfirmLabel: releaseUrl != null ? "查看作者发布页" : "",
-                CancelLabel: "关闭",
-                OnConfirmAsync: releaseUrl != null ? () => { OpenUrl(releaseUrl); return Task.CompletedTask; } : null));
-            return;
-        }
-
-        var applySvc = NeonModUpdateApplyService();
-        ModUpdateApplyPreview applyPreview;
+            if (staged?.StagingDirectory is { } dir) stagingSvc.Discard(dir);
+        });
+        bool presented = false;
         try
         {
-            if (!NeonRootMatches(root) || modInventoryDirty)
-                throw new InvalidOperationException("暂存期间游戏目录或清单已变化，请重新预览。");
-            applyPreview = applySvc.CreatePreview(root, mod, staged);
-        }
-        catch (Exception ex)
-        {
-            if (staged.StagingDirectory is { } discarded) stagingSvc.Discard(discarded);
-            neonWorkbenchView.ShowToast("更新预览未完成：" + ex.Message, NeonTone.Amber);
-            return;
-        }
-        var changeLines = staged.FileChanges.Take(25).Select(fc =>
-        {
-            string tag = fc.Kind == ModUpdateFileChangeKind.Added ? "add"
-                : fc.Kind == ModUpdateFileChangeKind.Deleted ? "del" : "mod";
-            string verb = fc.Kind == ModUpdateFileChangeKind.Added ? "新增"
-                : fc.Kind == ModUpdateFileChangeKind.Deleted ? "移除" : "更新";
-            return new NeonDiffLine(tag, verb, fc.RelativePath,
-                fc.StagedSizeBytes.HasValue ? ModEnvironmentSnapshots.FormatBytes(fc.StagedSizeBytes.Value) : "");
-        }).ToList();
-        if (staged.FileChanges.Count > 25)
-            changeLines.Add(new NeonDiffLine("skip", "更多", $"其余 {staged.FileChanges.Count - 25} 个文件变动已通过校验", ""));
+            if (cts.IsCancellationRequested || !NeonPreviewRootCurrent(root, epoch)) return;
+            if (stageError != null || staged == null || !staged.ValidationPassed)
+            {
+                bool stageFailedRunning = await CheckGameRunningOffUiAsync(root);
+                if (cts.IsCancellationRequested || !NeonPreviewRootCurrent(root, epoch)) return;
+                neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                    Title: $"无法预览 MOD 更新 · {mod.Name}",
+                    Subtitle: request.Source == ModUpdateStagingSource.GitHub ? $"GitHub {request.SourceIdentifier}" : $"Workshop #{request.SourceIdentifier}",
+                    GameRunning: stageFailedRunning,
+                    BlockedReason: stageError ?? staged?.FailureReason ?? "暂存下载或完整性校验未通过。",
+                    AutoSnapshotNote: null,
+                    BoundaryNote: "未对当前 mods 目录做任何修改。",
+                    Token: "UPD-STAGE-FAIL",
+                    Groups: [],
+                    ConfirmLabel: releaseUrl != null ? "查看作者发布页" : "",
+                    CancelLabel: "关闭",
+                    OnConfirmAsync: releaseUrl != null ? () => { OpenUrl(releaseUrl); return Task.CompletedTask; } : null));
+                return;
+            }
 
-        bool stageReadyRunning = await CheckGameRunningOffUiAsync(root);
-        string stagingDir = staged.StagingDirectory ?? "";
-        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(root))
-        {
-            if (stagingDir.Length > 0) stagingSvc.Discard(stagingDir);
-            return;
+            if (request.Source == ModUpdateStagingSource.Workshop && staged.FileChanges.Count == 0)
+            {
+                neonWorkbenchView.SetWorkshopFeedback("本地文件已与创意工坊一致，无需覆盖。", NeonTone.Sage);
+                return;
+            }
+
+            var applySvc = NeonModUpdateApplyService();
+            ModUpdateApplyPreview applyPreview;
+            try
+            {
+                if (!NeonPreviewRootCurrent(root, epoch) || modInventoryDirty)
+                    throw new InvalidOperationException("暂存期间游戏目录或清单已变化，请重新预览。");
+                applyPreview = applySvc.CreatePreview(root, mod, staged);
+            }
+            catch (Exception ex)
+            {
+                neonWorkbenchView.ShowToast("更新预览未完成：" + ex.Message, NeonTone.Amber);
+                return;
+            }
+            var changeLines = staged.FileChanges.Take(25).Select(fc =>
+            {
+                string tag = fc.Kind == ModUpdateFileChangeKind.Added ? "add"
+                    : fc.Kind == ModUpdateFileChangeKind.Deleted ? "del" : "mod";
+                string verb = fc.Kind == ModUpdateFileChangeKind.Added ? "新增"
+                    : fc.Kind == ModUpdateFileChangeKind.Deleted ? "移除" : "更新";
+                return new NeonDiffLine(tag, verb, fc.RelativePath,
+                    fc.StagedSizeBytes.HasValue ? ModEnvironmentSnapshots.FormatBytes(fc.StagedSizeBytes.Value) : "");
+            }).ToList();
+            if (staged.FileChanges.Count > 25)
+                changeLines.Add(new NeonDiffLine("skip", "更多", $"其余 {staged.FileChanges.Count - 25} 个文件变动已通过校验", ""));
+
+            bool stageReadyRunning = await CheckGameRunningOffUiAsync(root);
+            if (transactionWriting || modInventoryDirty || cts.IsCancellationRequested || !NeonPreviewRootCurrent(root, epoch)) return;
+            NeonOpenOwnedPreview(session, new NeonTransactionConfig(
+                Title: $"确认更新 MOD · {mod.Name}",
+                Subtitle: $"v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} → v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}",
+                GameRunning: stageReadyRunning,
+                BlockedReason: null,
+                AutoSnapshotNote: "确认前将自动创建完整环境快照与事务备份；若替换途中意外中断，下次启动将自动回滚或安全恢复。",
+                BoundaryNote: "下载与校验均已在独立隔离暂存区完成，确认前未接触你的 mods 目录。",
+                Token: $"UPD-{mod.Id}",
+                Groups: [new NeonDiffGroup($"文件级差异预览（共 {staged.FileChanges.Count} 处变更）", changeLines)],
+                ConfirmLabel: "确认备份并更新",
+                CancelLabel: "取消",
+                OnConfirmAsync: () => NeonConfirmStagedModUpdateAsync(root, mod, applySvc, applyPreview, request, session),
+                PlainSummary: $"已下载并通过完整哈希与清单校验，将把「{mod.Name}」从 v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} 更新至 v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}（新增 {staged.AddedCount}、修改 {staged.ModifiedCount}、移除 {staged.DeletedCount} 个文件）。",
+                OnCancel: () => NeonReleasePreview(session)));
+            presented = true;
         }
-        neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
-            Title: $"确认更新 MOD · {mod.Name}",
-            Subtitle: $"v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} → v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}",
-            GameRunning: stageReadyRunning,
-            BlockedReason: null,
-            AutoSnapshotNote: "确认前将自动创建完整环境快照与事务备份；若替换途中意外中断，下次启动将自动回滚或安全恢复。",
-            BoundaryNote: "下载与校验均已在独立隔离暂存区完成，确认前未接触你的 mods 目录。",
-            Token: $"UPD-{mod.Id}",
-            Groups: [new NeonDiffGroup($"文件级差异预览（共 {staged.FileChanges.Count} 处变更）", changeLines)],
-            ConfirmLabel: "确认备份并更新",
-            CancelLabel: "取消",
-            OnConfirmAsync: async () =>
-            {
-                // A rejected stale confirmation never transfers staging ownership to the apply service.
-                if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(root))
-                {
-                    if (stagingDir.Length > 0) stagingSvc.Discard(stagingDir);
-                    neonWorkbenchView?.ShowToast("目录或清单已变化，请重新预览。", NeonTone.Amber);
-                    return;
-                }
-                await NeonConfirmStagedModUpdateAsync(root, mod, applySvc, applyPreview, request);
-            },
-            PlainSummary: $"已下载并通过完整哈希与清单校验，将把「{mod.Name}」从 v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} 更新至 v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}（新增 {staged.AddedCount}、修改 {staged.ModifiedCount}、移除 {staged.DeletedCount} 个文件）。",
-            OnCancel: () =>
-            {
-                if (!string.IsNullOrWhiteSpace(stagingDir))
-                {
-                    try { stagingSvc.Discard(stagingDir); } catch { }
-                }
-            }));
+        finally
+        {
+            if (ReferenceEquals(neonPreviewPreparationCancellation, cts)) neonPreviewPreparationCancellation = null;
+            if (!presented) session.Dispose();
+            busy = false;
+        }
     }
 
     async Task NeonConfirmStagedModUpdateAsync(
@@ -802,89 +804,98 @@ public partial class MainWindow
         ManagedMod mod,
         ModUpdateApplyWorkflowService applySvc,
         ModUpdateApplyPreview applyPreview,
-        ModUpdateStagingRequest request)
+        ModUpdateStagingRequest request,
+        NeonPreviewSession? previewSession = null)
     {
+        using var session = previewSession ?? NeonCreatePreviewSession(() => NeonDiscardUpdateStaging(applyPreview));
+        NeonDetachPreview(session);
         if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonCanWrite(root)) return;
+        neonLastWriteReceipt = null;
         busy = true;
         transactionWriting = true;
+        bool transferred = false;
+        ModUpdateApplyResult? applied = null;
         try
         {
             if (await CheckGameRunningOffUiAsync(root))
             {
-                if (applyPreview.Staging.StagingDirectory is { } dir)
-                {
-                    using var cleanupBackend = new InfrastructureModUpdateStagingBackend();
-                    new ModUpdateStagingWorkflowService(neonTestStagingBackend ?? cleanupBackend,
-                        Path.Combine(NeonDataRoot, "MOD更新暂存")).Discard(dir);
-                }
                 neonWorkbenchView.ShowToast("游戏运行中，已取消更新。", NeonTone.Amber);
                 return;
             }
             var safety = await NeonSnapshotWorkflow(root).CreateAsync("更新前自动保护");
-            var applyResult = await applySvc.ApplyAsync(applySvc.Confirm(applyPreview, confirmed: true));
+            if (!NeonCanWrite(root)) throw new InvalidOperationException("游戏目录已变化，请重新预览。");
+            if (!session.TryTransfer()) throw new InvalidOperationException("预览已取消，请重新准备。");
+            // The transaction now owns the staging directory, including any recovery journal.
+            transferred = true;
+            applied = await applySvc.ApplyAsync(applySvc.Confirm(applyPreview, confirmed: true));
             modFileWatcher.DeferQuietPeriod();
 
-            if (!applyResult.Success)
+            if (!applied.Success)
             {
-                if (applyResult.RecoveryState == ModUpdateApplyRecoveryState.PendingManualRecovery ||
-                    applyResult.FailureKind is ModUpdateApplyFailureKind.RecoveryRequired or ModUpdateApplyFailureKind.RecoveryFailed)
+                bool pending = applied.RecoveryState == ModUpdateApplyRecoveryState.PendingManualRecovery ||
+                    applied.FailureKind is ModUpdateApplyFailureKind.RecoveryRequired or ModUpdateApplyFailureKind.RecoveryFailed;
+                if (pending)
                     NeonSetRecoveryFailure(root, NeonUpdateRecoveryKind, NeonUpdateLogDirectory,
-                        applyResult.FailureReason ?? "存在尚未恢复的在线更新事务。");
+                        applied.FailureReason ?? "存在尚未恢复的在线更新事务。");
+                NeonPublishWriteReceipt(new(pending ? NeonWriteState.PendingRecovery :
+                    applied.RolledBack ? NeonWriteState.RolledBack : NeonWriteState.NotCommitted,
+                    applied.FailureReason ?? "更新事务未完成。"));
+                // Only a definitely safe early rejection may have unconsumed staging.
+                if (!pending && !applied.RolledBack && applied.CleanupCompleted)
+                    NeonDiscardUpdateStaging(applyPreview);
                 neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
                     Title: $"MOD 更新未完成 · {mod.Name}",
-                    Subtitle: $"恢复状态：{applyResult.RecoveryState}",
+                    Subtitle: $"恢复状态：{applied.RecoveryState}",
                     GameRunning: false,
-                    BlockedReason: applyResult.FailureReason ?? "更新事务未完成。",
+                    BlockedReason: applied.FailureReason ?? "更新事务未完成。",
                     AutoSnapshotNote: null,
                     BoundaryNote: $"更新前完整保护快照：{safety.Id}",
                     Token: "UPD-APPLY-FAIL",
                     Groups: [],
                     ConfirmLabel: "",
                     CancelLabel: "关闭",
-                    PlainSummary: applyResult.RolledBack
-                        ? $"替换未成功，已自动从事务备份完整还原原版「{mod.Name}」（{applyResult.FailureReason}）。"
-                        : applyResult.FailureReason ?? "更新未完成。"));
+                    PlainSummary: applied.RolledBack
+                        ? $"替换未成功，已自动从事务备份完整还原原版「{mod.Name}」（{applied.FailureReason}）。"
+                        : applied.FailureReason ?? "更新未完成。"));
                 return;
             }
 
-            if (request.Source == ModUpdateStagingSource.Workshop &&
-                ulong.TryParse(request.SourceIdentifier, out ulong wsId) &&
-                !string.IsNullOrWhiteSpace(applyPreview.Staging.SourceManifestId))
-            {
-                try
-                {
-                    var sources = WorkshopSources();
-                    sources.Bind(mod.Id, wsId);
-                    sources.RecordBaseline(
-                        mod.Id,
-                        wsId,
-                        applyPreview.Staging.SourceManifestId!,
-                        applyResult.AfterVersion ?? mod.Version,
-                        applyPreview.Staging.StagedFileHashes);
-                    WorkshopUpdates().Invalidate(mod.Id);
-                }
-                catch { }
-            }
-            modSourceCheckWorkflow?.InvalidateAll();
-
-            InvalidateLifecycle($"已更新「{mod.Name}」，旧的补丁健康结论已失效，请重新核验。");
-            report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
-            await NeonScanAndPublishAsync(root);
-
-            string newVer = applyResult.AfterVersion ?? applyPreview.Staging.StagedVersion ?? "新版";
-            RecordNeonActivity("install", $"将「{mod.Name}」更新至 v{NeonVersionDiff.StripPrefix(newVer)}（已创建保护快照 {safety.Id[..8]}）。");
-            neonWorkbenchView.ShowToast($"MOD 更新完成：{mod.Name} → v{NeonVersionDiff.StripPrefix(newVer)}");
+            string newVer = applied.AfterVersion ?? applyPreview.Staging.StagedVersion ?? "新版";
+            await NeonCompleteCommittedWriteAsync(root, $"MOD 更新完成：{mod.Name} → v{NeonVersionDiff.StripPrefix(newVer)}",
+                () => NeonRunCacheSteps(
+                    () =>
+                    {
+                        if (request.Source == ModUpdateStagingSource.Workshop &&
+                            ulong.TryParse(request.SourceIdentifier, out ulong wsId) &&
+                            !string.IsNullOrWhiteSpace(applyPreview.Staging.SourceManifestId))
+                        {
+                            var sources = WorkshopSources();
+                            sources.Bind(mod.Id, wsId);
+                            sources.RecordBaseline(mod.Id, wsId, applyPreview.Staging.SourceManifestId!,
+                                applied.AfterVersion ?? mod.Version, applyPreview.Staging.StagedFileHashes);
+                        }
+                    },
+                    () => { if (request.Source == ModUpdateStagingSource.Workshop) WorkshopUpdates().Invalidate(mod.Id); },
+                    () => modSourceCheckWorkflow?.InvalidateAll()),
+                $"已更新「{mod.Name}」，旧的补丁健康结论已失效，请重新核验。",
+                $"将「{mod.Name}」更新至 v{NeonVersionDiff.StripPrefix(newVer)}（已创建保护快照 {safety.Id[..8]}）。",
+                applied.CleanupFailureReason);
         }
         catch (Exception ex)
         {
-            neonWorkbenchView.ShowToast("MOD 更新未完成：" + ex.Message, NeonTone.Cinnabar);
+            if (applied?.Success == true)
+                NeonPublishWriteReceipt(new(NeonWriteState.Committed, "MOD 更新已完成", true, null, ex.Message));
+            else if (applied == null && transferred)
+            {
+                NeonPublishWriteReceipt(new(NeonWriteState.PendingRecovery, "未能确认更新事务结果：" + ex.Message));
+                NeonSetRecoveryFailure(root, NeonUpdateRecoveryKind, NeonUpdateLogDirectory, ex.Message);
+            }
+            else if (applied == null)
+                NeonPublishWriteReceipt(new(NeonWriteState.NotCommitted, "MOD 更新未完成：" + ex.Message));
+            else
+                neonWorkbenchView?.ShowToast("事务结果已记录，后续界面处理未完成：" + ex.Message, NeonTone.Amber);
         }
-        finally
-        {
-            busy = false;
-            transactionWriting = false;
-            RefreshNeonWorkbench(preserveViewport: true);
-        }
+        finally { NeonFinishWrite(); }
     }
 
     async Task NeonCheckSingleModUpdateAsync(ManagedMod mod)
@@ -2295,45 +2306,34 @@ public partial class MainWindow
     async Task NeonConfirmRestoreModBackupAsync(string root, ManagedMod mod, string backupPath)
     {
         if (neonWorkbenchView == null || busy || transactionWriting || !NeonCanWrite(root)) return;
+        neonLastWriteReceipt = null;
         busy = true;
         transactionWriting = true;
-        RefreshNeonWorkbench(preserveViewport: true);
+        string? previous = null;
         try
         {
-            string previous = await Task.Run(() => GitHubModInstaller.Restore(root, mod, backupPath));
-            string baselineNote = "";
-            try
-            {
-                WorkshopSources().ClearBaseline(mod.Id);
-                WorkshopUpdates().Invalidate(mod.Id);
-                modSourceCheckWorkflow?.Invalidate(mod);
-            }
-            catch (Exception baselineError)
-            {
-                baselineNote = $"（版本基线清理未完成：{baselineError.Message}；下次检查会重新核验本地文件）";
-            }
-
-            installPreview = null;
-            lastInstallResult = null;
-            ClearSelection();
-            ClearCoop();
-            report = null;
-            states = [];
-            demo = false;
-            await NeonScanAndPublishAsync(root);
-            InvalidateLifecycle($"已恢复「{mod.Name}」的上一备份，旧的补丁健康结论已失效，请重新扫描核验。");
-            RecordNeonActivity("install", $"恢复「{mod.Name}」至备份「{Path.GetFileName(backupPath)}」（旧版本已保留在：{Path.GetFileName(previous)}）。");
-            neonWorkbenchView.ShowToast($"已恢复「{mod.Name}」备份{baselineNote}");
+            RefreshNeonWorkbench(preserveViewport: true);
+            previous = await Task.Run(() => GitHubModInstaller.RestoreWithOutcome(root, mod, backupPath));
+            await NeonCompleteCommittedWriteAsync(root, $"已恢复「{mod.Name}」备份",
+                () => NeonRunCacheSteps(
+                    () => WorkshopSources().ClearBaseline(mod.Id),
+                    () => WorkshopUpdates().Invalidate(mod.Id),
+                    () => modSourceCheckWorkflow?.Invalidate(mod)),
+                $"已恢复「{mod.Name}」的上一备份，旧的补丁健康结论已失效，请重新扫描核验。",
+                $"恢复「{mod.Name}」至备份「{Path.GetFileName(backupPath)}」（旧版本已保留在：{Path.GetFileName(previous)}）。");
         }
         catch (Exception ex)
         {
-            neonWorkbenchView.ShowToast("恢复 MOD 备份未完成：" + ex.Message, NeonTone.Cinnabar);
+            if (previous != null) NeonPublishWriteReceipt(new(NeonWriteState.Committed, $"已恢复「{mod.Name}」备份", true, null, ex.Message));
+            else if (ex is GitHubModRestoreException restoreError)
+            {
+                NeonPublishWriteReceipt(new(restoreError.RolledBack ? NeonWriteState.RolledBack : NeonWriteState.PendingRecovery,
+                    restoreError.Message));
+                modInventoryDirty = true;
+                InvalidateLifecycle("历史备份恢复未提交，请重新核对本地文件。");
+            }
+            else NeonPublishWriteReceipt(new(NeonWriteState.NotCommitted, "恢复 MOD 备份未完成：" + ex.Message));
         }
-        finally
-        {
-            busy = false;
-            transactionWriting = false;
-            RefreshNeonWorkbench(preserveViewport: true);
-        }
+        finally { NeonFinishWrite(); }
     }
 }

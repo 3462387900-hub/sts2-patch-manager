@@ -15,7 +15,7 @@ public partial class MainWindow
   var heading=T("界面风格  ·  BETA",11,muted);
   heading.Margin=new Thickness(2,0,0,7);
   root.Children.Add(heading);
-  neonThemeButton=Btn("Neon 工作台（推荐）",()=>ChangeUiTheme(UiThemes.Neon),"ModSegment");
+  neonThemeButton=Btn("Neon 工作台（可选）",()=>ChangeUiTheme(UiThemes.Neon),"ModSegment");
   neonThemeButton.ToolTip="Neon 工作台：暖纸质工作台、果冻开关直启停与因果依恋检视";
   neonThemeButton.FontSize=12;neonThemeButton.Padding=new Thickness(8,7,8,7);
   neonThemeButton.HorizontalAlignment=HorizontalAlignment.Stretch;
@@ -82,6 +82,7 @@ public partial class MainWindow
    return;
   }
   bool wasNeon=uiTheme==UiThemes.Neon;
+  if(wasNeon)NeonCancelOwnedPreview();
   uiTheme=theme;
   UiThemes.Active=theme;
   selectedModDetailFolder=null;

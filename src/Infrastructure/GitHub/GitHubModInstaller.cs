@@ -17,6 +17,11 @@ internal sealed record GitHubModPackage(
 }
 internal sealed record GitHubModInstallResult(string ModId,string Version,string BackupFolder);
 
+internal sealed class GitHubModRestoreException(bool rolledBack, string message, Exception inner) : IOException(message, inner)
+{
+ internal bool RolledBack {get;}=rolledBack;
+}
+
 internal sealed class GitHubModInstaller : IDisposable
 {
  const long MaxArchive=120L*1024*1024;
@@ -367,7 +372,9 @@ internal sealed class GitHubModInstaller : IDisposable
    catch(UnauthorizedAccessException){}
   }
  }
- internal static string Restore(string gameRoot,ManagedMod mod,string backup)
+ internal static string Restore(string gameRoot,ManagedMod mod,string backup) => RestoreCore(gameRoot,mod,backup,false);
+ internal static string RestoreWithOutcome(string gameRoot,ManagedMod mod,string backup) => RestoreCore(gameRoot,mod,backup,true);
+ static string RestoreCore(string gameRoot,ManagedMod mod,string backup,bool structuredFailures)
  {
   string root=GameEnvironment.Root(gameRoot);
   return GameEnvironment.WithLock(root,()=>
@@ -398,10 +405,16 @@ internal sealed class GitHubModInstaller : IDisposable
    var current=Path.Combine(backupRoot,DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff")+"-restore-"+Guid.NewGuid().ToString("N"));
    Directory.Move(mod.Folder,current);
    try{Directory.Move(backup,mod.Folder);}
-   catch
+   catch(Exception restoreError)
    {
     try{Directory.Move(current,mod.Folder);}
-    catch(Exception ex){throw new IOException("恢复失败且回滚失败。更新前文件仍位于："+current,ex);}
+    catch(Exception ex)
+    {
+     string message="恢复失败且回滚失败。更新前文件仍位于："+current;
+     if(structuredFailures)throw new GitHubModRestoreException(false,message,new AggregateException(restoreError,ex));
+     throw new IOException(message,ex);
+    }
+    if(structuredFailures)throw new GitHubModRestoreException(true,"备份恢复失败，原 MOD 已恢复："+restoreError.Message,restoreError);
     throw;
    }
    return current;

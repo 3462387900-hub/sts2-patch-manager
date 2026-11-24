@@ -23,7 +23,7 @@ internal static class UiThemes
   try
   {
    string file=SettingsPath(root);
-   if(!File.Exists(file))return Neon;
+   if(!File.Exists(file))return Workspace;
    var pref=JsonSerializer.Deserialize<UiThemePreference>(File.ReadAllText(file));
    if(pref?.Schema==1&&pref.Theme is Classic or Workspace or Neon)return pref.Theme;
   }

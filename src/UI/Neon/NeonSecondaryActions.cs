@@ -687,15 +687,17 @@ public partial class MainWindow
 
     async Task NeonPreviewWorkshopInstallAsync(ulong workshopId)
     {
-        if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
+        if (busy || transactionWriting || neonPreviewPreparationCancellation != null || selectedInstallRoot == null || neonWorkbenchView == null) return;
         if (modInventoryDirty)
         {
             neonWorkbenchView.SetWorkshopFeedback("本地 MOD 清单尚未稳定，请刷新后再试。", NeonTone.Cinnabar);
             return;
         }
         string gameRoot = selectedInstallRoot;
+        long epoch = Volatile.Read(ref neonRootEpoch);
         if (!NeonCanWrite(gameRoot)) return;
         bool running = await CheckGameRunningOffUiAsync(gameRoot);
+        if (!NeonPreviewRootCurrent(gameRoot, epoch)) return;
         if (running)
         {
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
@@ -712,7 +714,7 @@ public partial class MainWindow
             return;
         }
 
-        if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(gameRoot)) return;
+        if (busy || transactionWriting || modInventoryDirty || !NeonPreviewRootCurrent(gameRoot, epoch) || !NeonCanWrite(gameRoot)) return;
         string? boundId = WorkshopSources().ModIdFor(workshopId);
         if (boundId != null)
         {
@@ -730,20 +732,31 @@ public partial class MainWindow
                 return;
             }
         }
-        if (neonFixtureDataRoot != null)
+        if (neonFixtureDataRoot != null && neonTestWorkshopPrepare == null)
         {
             neonWorkbenchView.ShowToast("隔离测试禁止使用真实 Workshop 下载。", NeonTone.Amber);
             return;
         }
         busy = true;
         WorkshopModPrepared? prepared = null;
+        NeonPreviewSession? session = null;
         string? error = null;
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        neonPreviewPreparationCancellation = cts;
         try
         {
-            using var wsInstaller = new WorkshopModInstaller();
-            prepared = await wsInstaller.PrepareAsync(gameRoot, workshopId, progress: msg =>
-                Dispatcher.BeginInvoke(() => neonWorkbenchView?.SetWorkshopFeedback(msg, NeonTone.Sage)));
-            if (gameRoot != selectedInstallRoot)
+            if (neonTestWorkshopPrepare != null && neonFixtureDataRoot != null)
+                prepared = await neonTestWorkshopPrepare(gameRoot, workshopId, cts.Token);
+            else
+            {
+                using var wsInstaller = new WorkshopModInstaller();
+                prepared = await wsInstaller.PrepareAsync(gameRoot, workshopId, progress: msg =>
+                    Dispatcher.BeginInvoke(() => neonWorkbenchView?.SetWorkshopFeedback(msg, NeonTone.Sage)), cancellationToken: cts.Token);
+            }
+            var owned = prepared;
+            session = NeonCreatePreviewSession(() => NeonCleanupWorkshopPreview(owned));
+            cts.Token.ThrowIfCancellationRequested();
+            if (!NeonPreviewRootCurrent(gameRoot, epoch))
                 throw new InvalidOperationException("游戏目录已切换，已取消本次安装。");
             string? boundModId = WorkshopSources().ModIdFor(workshopId);
             if (boundModId != null && !boundModId.Equals(prepared.ModId, StringComparison.OrdinalIgnoreCase))
@@ -752,12 +765,22 @@ public partial class MainWindow
         catch (Exception ex)
         {
             error = ex.Message;
-            WorkshopModInstaller.Cleanup(prepared);
+            session?.Dispose();
             prepared = null;
         }
-        finally { busy = false; }
+        finally
+        {
+            if (ReferenceEquals(neonPreviewPreparationCancellation, cts)) neonPreviewPreparationCancellation = null;
+            busy = false;
+        }
 
-        if (error != null || prepared == null)
+        if (!NeonPreviewRootCurrent(gameRoot, epoch) || cts.IsCancellationRequested)
+        {
+            session?.Dispose();
+            return;
+        }
+
+        if (error != null || prepared == null || session == null)
         {
             neonWorkbenchView.SetWorkshopFeedback("获取预览失败：" + (error ?? "未知错误"), NeonTone.Cinnabar);
             neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
@@ -774,103 +797,127 @@ public partial class MainWindow
             return;
         }
 
-        // Preparation can discover an installed target without a verified cached manifest.
-        // The old installer may identify it, but cannot perform the overwrite.
-        if (prepared.IsUpdate)
+        bool presented = false;
+        try
         {
-            var matches = modInventory?.Mods.Where(m => m.Id.Equals(prepared.ModId, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(m.Folder, prepared.ExistingFolder, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
-            var request = NeonWorkshopUpdateRequest(workshopId, prepared.ManifestId);
-            var priorBinding = WorkshopSources().Get(prepared.ModId);
-            WorkshopModInstaller.Cleanup(prepared);
-            if (matches.Length != 1 || modInventoryDirty || !NeonRootMatches(gameRoot) ||
-                (priorBinding.HasValue && priorBinding.Value != workshopId))
+            // Preparation can discover an installed target without a verified cached manifest.
+            // The old installer may identify it, but cannot perform the overwrite.
+            if (prepared.IsUpdate)
             {
-                neonWorkbenchView.ShowToast("目标 MOD 或已绑定来源发生变化，请先重新核验。", NeonTone.Amber);
+                var matches = modInventory?.Mods.Where(m => m.Id.Equals(prepared.ModId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(m.Folder, prepared.ExistingFolder, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+                var request = NeonWorkshopUpdateRequest(workshopId, prepared.ManifestId);
+                var priorBinding = WorkshopSources().Get(prepared.ModId);
+                session.Dispose();
+                if (matches.Length != 1 || modInventoryDirty || !NeonRootMatches(gameRoot) ||
+                    (priorBinding.HasValue && priorBinding.Value != workshopId))
+                {
+                    neonWorkbenchView.ShowToast("目标 MOD 或已绑定来源发生变化，请先重新核验。", NeonTone.Amber);
+                    return;
+                }
+                if (prepared.IsUnchanged)
+                {
+                    neonWorkbenchView.SetWorkshopFeedback("本地文件已与创意工坊一致，无需覆盖。", NeonTone.Sage);
+                    return;
+                }
+                await NeonStageAndPreviewModUpdateAsync(gameRoot, matches[0], request, null);
                 return;
             }
+            if (!NeonPreviewRootCurrent(gameRoot, epoch) || modInventoryDirty) return;
             if (prepared.IsUnchanged)
             {
                 neonWorkbenchView.SetWorkshopFeedback("本地文件已与创意工坊一致，无需覆盖。", NeonTone.Sage);
                 return;
             }
-            await NeonStageAndPreviewModUpdateAsync(gameRoot, matches[0], request, null);
-            return;
-        }
-        if (!NeonRootMatches(gameRoot) || modInventoryDirty)
-        {
-            WorkshopModInstaller.Cleanup(prepared);
-            return;
-        }
-        neonWorkbenchView.SetWorkshopFeedback($"已通过 Chunk 与文件 SHA-1 校验：{prepared.ModName} ({prepared.Version})", NeonTone.Sage);
-        var ready = prepared;
-        string relDest = Path.GetRelativePath(gameRoot, ready.DestinationDirectory);
-        var lines = new List<NeonDiffLine>
-        {
-            new(ready.IsUnchanged ? "skip" : ready.IsUpdate ? "mod" : "add",
-                ready.IsUnchanged ? "已一致" : ready.IsUpdate ? "更新" : "新增",
-                $"{ready.ModName} ({ready.ModId})",
-                ready.IsUpdate ? $"{ready.ExistingVersion ?? "未知"} → {ready.Version}" : $"v{ready.Version}"),
-            new("add", "目标目录", relDest, $"{ready.FileCount} 文件 · {ModEnvironmentSnapshots.FormatBytes(ready.TotalBytes)}"),
-            new("skip", "Manifest", ready.ManifestId, $"Workshop #{ready.WorkshopId}")
-        };
+            neonWorkbenchView.SetWorkshopFeedback($"已通过 Chunk 与文件 SHA-1 校验：{prepared.ModName} ({prepared.Version})", NeonTone.Sage);
+            var ready = prepared;
+            string relDest = Path.GetRelativePath(gameRoot, ready.DestinationDirectory);
+            var lines = new List<NeonDiffLine>
+            {
+                new(ready.IsUnchanged ? "skip" : ready.IsUpdate ? "mod" : "add",
+                    ready.IsUnchanged ? "已一致" : ready.IsUpdate ? "更新" : "新增",
+                    $"{ready.ModName} ({ready.ModId})",
+                    ready.IsUpdate ? $"{ready.ExistingVersion ?? "未知"} → {ready.Version}" : $"v{ready.Version}"),
+                new("add", "目标目录", relDest, $"{ready.FileCount} 文件 · {ModEnvironmentSnapshots.FormatBytes(ready.TotalBytes)}"),
+                new("skip", "Manifest", ready.ManifestId, $"Workshop #{ready.WorkshopId}")
+            };
 
-        neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
-            Title: ready.IsUnchanged ? $"创意工坊 MOD 已是最新 · {ready.ModName}"
-                 : ready.IsUpdate ? $"预览更新创意工坊 MOD · {ready.ModName}"
-                 : $"预览安装创意工坊 MOD · {ready.ModName}",
-            Subtitle: $"来源：尖塔补给站 · Workshop #{ready.WorkshopId} · Chunk/SHA-1 已校验",
-            GameRunning: false,
-            BlockedReason: ready.IsUnchanged ? "本地文件与创意工坊内容完全一致，无需重复替换。" : null,
-            AutoSnapshotNote: ready.IsUnchanged ? null : "确认后将先自动创建一份完整环境快照（更新前自动保护），再执行替换或新增。",
-            BoundaryNote: "Manifest 签名验证与本机游戏分支匹配尚未执行，请仅安装信任的创意工坊内容。",
-            Token: ready.InitialInventoryToken,
-            Groups: [new NeonDiffGroup("校验结果与写入范围", lines)],
-            ConfirmLabel: ready.IsUnchanged ? "" : ready.IsUpdate ? "确认更新（先自动快照）" : "确认安装（先自动快照）",
-            OnConfirmAsync: ready.IsUnchanged ? null : () => NeonConfirmWorkshopInstallAsync(gameRoot, ready),
-            OnCancel: () => WorkshopModInstaller.Cleanup(ready)));
+            NeonOpenOwnedPreview(session, new NeonTransactionConfig(
+                Title: ready.IsUnchanged ? $"创意工坊 MOD 已是最新 · {ready.ModName}"
+                     : ready.IsUpdate ? $"预览更新创意工坊 MOD · {ready.ModName}"
+                     : $"预览安装创意工坊 MOD · {ready.ModName}",
+                Subtitle: $"来源：尖塔补给站 · Workshop #{ready.WorkshopId} · Chunk/SHA-1 已校验",
+                GameRunning: false,
+                BlockedReason: ready.IsUnchanged ? "本地文件与创意工坊内容完全一致，无需重复替换。" : null,
+                AutoSnapshotNote: ready.IsUnchanged ? null : "确认后将先自动创建一份完整环境快照（更新前自动保护），再执行替换或新增。",
+                BoundaryNote: "Manifest 签名验证与本机游戏分支匹配尚未执行，请仅安装信任的创意工坊内容。",
+                Token: ready.InitialInventoryToken,
+                Groups: [new NeonDiffGroup("校验结果与写入范围", lines)],
+                ConfirmLabel: ready.IsUnchanged ? "" : ready.IsUpdate ? "确认更新（先自动快照）" : "确认安装（先自动快照）",
+                OnConfirmAsync: () => NeonConfirmWorkshopInstallAsync(gameRoot, ready, session),
+                OnCancel: () => NeonReleasePreview(session)));
+            presented = true;
+        }
+        finally { if (!presented) session.Dispose(); }
     }
 
-    async Task NeonConfirmWorkshopInstallAsync(string gameRoot, WorkshopModPrepared prepared)
+    async Task NeonConfirmWorkshopInstallAsync(string gameRoot, WorkshopModPrepared prepared, NeonPreviewSession session)
     {
-        if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(gameRoot) || prepared.IsUpdate || prepared.IsUnchanged)
+        using (session)
         {
-            WorkshopModInstaller.Cleanup(prepared);
-            neonWorkbenchView?.ShowToast("只允许全新安装进入此入口；覆盖更新请重新预览。", NeonTone.Amber);
-            return;
-        }
-        busy = true;
-        transactionWriting = true;
-        try
-        {
-            var safety = await Task.Run(() => ModEnvironmentSnapshots.Create(gameRoot, NeonDataRoot, "更新前自动保护"));
-            var result = await Task.Run(() => WorkshopModInstaller.Commit(gameRoot, prepared));
+            NeonDetachPreview(session);
+            if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(gameRoot) || prepared.IsUpdate || prepared.IsUnchanged)
+            {
+                neonWorkbenchView?.ShowToast("只允许全新安装进入此入口；覆盖更新请重新预览。", NeonTone.Amber);
+                return;
+            }
+            neonLastWriteReceipt = null;
+            busy = true;
+            transactionWriting = true;
+            bool transferred = false;
+            WorkshopModInstallResult? committed = null;
             try
             {
-                var sources = WorkshopSources();
-                sources.Bind(result.ModId, prepared.WorkshopId);
-                sources.RecordBaseline(result.ModId, prepared.WorkshopId, prepared.ManifestId, result.Version, prepared.PayloadSnapshot);
-                WorkshopUpdates().Invalidate(result.ModId);
+                var safety = await Task.Run(() => ModEnvironmentSnapshots.Create(gameRoot, NeonDataRoot, "更新前自动保护"));
+                if (!NeonCanWrite(gameRoot)) throw new InvalidOperationException("游戏目录已变化，请重新预览。");
+                // The legacy installer is permitted only for a new directory move.
+                if (!session.TryTransfer()) throw new InvalidOperationException("预览已取消，请重新准备。");
+                transferred = true;
+                committed = await Task.Run(() => WorkshopModInstaller.Commit(gameRoot, prepared));
+                var result = committed;
+                await NeonCompleteCommittedWriteAsync(gameRoot, $"创意工坊 MOD 安装成功：{result.ModName}",
+                    () => NeonRunCacheSteps(
+                        () =>
+                        {
+                            var sources = WorkshopSources();
+                            sources.Bind(result.ModId, prepared.WorkshopId);
+                            sources.RecordBaseline(result.ModId, prepared.WorkshopId, prepared.ManifestId, result.Version, prepared.PayloadSnapshot);
+                        },
+                        () => WorkshopUpdates().Invalidate(result.ModId),
+                        () => modSourceCheckWorkflow?.InvalidateAll()),
+                    "创意工坊 MOD 已安装，旧的补丁健康结论已失效，请重新核验。",
+                    $"通过尖塔补给站安装了「{result.ModName}」v{result.Version}（已自动创建保护快照 {safety.Id[..8]}）。");
             }
-            catch { }
-
-            await NeonScanAndPublishAsync(gameRoot);
-            report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; lastInstallResult = null;
-            InvalidateLifecycle("创意工坊 MOD 已安装或更新，旧的补丁健康结论已失效，请重新核验。");
-            RecordNeonActivity("install",
-                $"通过尖塔补给站{(result.BackupFolder != null ? "更新" : "安装")}了「{result.ModName}」v{result.Version}（已自动创建保护快照 {safety.Id[..8]}）。");
-            neonWorkbenchView?.ShowToast($"创意工坊 MOD {(result.BackupFolder != null ? "更新" : "安装")}成功：{result.ModName}");
-        }
-        catch (Exception ex)
-        {
-            neonWorkbenchView?.ShowToast("创意工坊安装未完成：" + ex.Message, NeonTone.Cinnabar);
-        }
-        finally
-        {
-            WorkshopModInstaller.Cleanup(prepared);
-            busy = false;
-            transactionWriting = false;
-            RefreshNeonWorkbench(preserveViewport: true);
+            catch (Exception ex)
+            {
+                if (committed != null) NeonPublishWriteReceipt(new(NeonWriteState.Committed, "创意工坊 MOD 安装成功", true, null, ex.Message));
+                else NeonPublishWriteReceipt(new(NeonWriteState.NotCommitted, "创意工坊安装未完成：" + ex.Message));
+            }
+            finally
+            {
+                // A new install has no overwrite recovery journal. Only its transaction owner cleans.
+                if (transferred)
+                {
+                    try { NeonCleanupWorkshopPreview(prepared); }
+                    catch (Exception error)
+                    {
+                        if (neonLastWriteReceipt is { State: NeonWriteState.Committed } receipt)
+                            NeonPublishWriteReceipt(receipt with { RefreshWarning = JoinWarning(receipt.RefreshWarning, error.Message) });
+                        else neonWorkbenchView?.ShowToast("暂存清理未完成：" + error.Message, NeonTone.Amber);
+                    }
+                }
+                NeonFinishWrite();
+            }
         }
     }
 

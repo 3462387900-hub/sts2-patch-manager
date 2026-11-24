@@ -56,6 +56,13 @@ public partial class App : Application
             if(e.Args.Contains("--online-check")) { using var source=new OnlineSource();using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(3));var data=await source.LoadAsync(timeout.Token);var destination=Path.Combine(Path.GetDirectoryName(e.Args.Last())!,data.Bundle.FileName);await source.DownloadAsync(data.Bundle,destination,ct:timeout.Token);File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(new{count=data.Patches.Count,data.Commit,download=destination,sha256=Catalog.Hash(destination),anonymous=true}));Shutdown(0);return; }
             if(e.Args.Contains("--online-scan-check")) { using var source=new OnlineSource();var catalog=await source.LoadAsync();var report=await Task.Run(()=>Catalog.Scan(e.Args[1],catalog.Patches,catalog.Commit));File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(report,new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));Shutdown(0);return; }
             if(e.Args.Contains("--scan-check")) { var report=await Task.Run(()=>Catalog.Scan(e.Args[1])); File.WriteAllText(e.Args.Last(),System.Text.Json.JsonSerializer.Serialize(report,new System.Text.Json.JsonSerializerOptions{WriteIndented=true})); Shutdown(0);return; }
+            if(e.Args.Contains("--neon-p2-self-test"))
+            {
+                var testWindow=new MainWindow(onlineStartup:false);MainWindow=testWindow;
+                testWindow.WindowStartupLocation=WindowStartupLocation.Manual;testWindow.Left=-15000;testWindow.Top=-15000;testWindow.ShowActivated=false;
+                testWindow.Show();
+                await testWindow.RunNeonP2ChecksAsync(e.Args.Last());Shutdown(0);return;
+            }
             if(e.Args.Contains("--neon-p1-self-test"))
             {
                 var testWindow=new MainWindow(onlineStartup:false);MainWindow=testWindow;

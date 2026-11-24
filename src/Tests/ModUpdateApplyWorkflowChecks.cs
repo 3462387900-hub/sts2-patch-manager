@@ -11,7 +11,7 @@ namespace SpirePatch;
 
 internal static class ModUpdateApplyWorkflowChecks
 {
-    private sealed class FaultFiles : IModUpdateApplyFileOperations
+    internal sealed class FaultFiles : IModUpdateApplyFileOperations
     {
         readonly PhysicalModUpdateApplyFileOperations inner = new();
         public int MoveCount { get; private set; }
@@ -195,6 +195,7 @@ internal static class ModUpdateApplyWorkflowChecks
             result=await service.ApplyAsync(service.Confirm(Preview(service,f),true));
             check(result.FailureKind==ModUpdateApplyFailureKind.RollbackFailed &&
                 result.RecoveryState==ModUpdateApplyRecoveryState.PendingManualRecovery &&
+                Directory.Exists(f.Stage) && Directory.Exists(f.Payload) &&
                 result.BackupDirectory is not null && Directory.Exists(result.BackupDirectory) &&
                 File.Exists(Path.Combine(Path.GetDirectoryName(result.BackupDirectory)!,"transaction.json")),
                 "回滚异常时保留完整备份、事务标记及人工恢复路径");

@@ -19,6 +19,8 @@ public partial class MainWindow
    environmentSession.DirectoryChanging+=(_,e)=>
    {
     Interlocked.Increment(ref neonRootEpoch);
+    neonPreviewPreparationCancellation?.Cancel();
+    NeonCancelOwnedPreview();
     CancelModUpdateCheck();
     modInventoryRefresh?.Cancel();
     localZipOperationCancellation?.Cancel();

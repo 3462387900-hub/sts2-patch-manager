@@ -1279,6 +1279,7 @@ internal sealed partial class NeonWorkbenchView
         modalExecuting = false;
 
         bool blocked = !string.IsNullOrWhiteSpace(config.BlockedReason);
+        if (blocked || config.GameRunning) activeModalConfirmAsync = null;
 
         void AddAlertBlock(NeonTone tone, string lead, string text, Panel? target = null)
         {
@@ -1471,16 +1472,7 @@ internal sealed partial class NeonWorkbenchView
                 this,
                 config.ConfirmLabel,
                 config.Danger ? "NeonDangerButton" : "NeonPrimaryButton",
-                async () =>
-                {
-                    if (modalExecuting || activeModalConfirmAsync == null) return;
-                    var handler = activeModalConfirmAsync;
-                    activeModalCancelAction = null;
-                    modalExecuting = true;
-                    CloseTransactionModal();
-                    try { await handler(); }
-                    finally { modalExecuting = false; }
-                });
+                async () => await ConfirmTransactionModalAsync());
             confirmBtn.Margin = new Thickness(8, 0, 0, 0);
             confirmBtn.IsEnabled = !blocked && !config.GameRunning;
             AutomationProperties.SetName(confirmBtn, config.ConfirmLabel);
@@ -1506,16 +1498,19 @@ internal sealed partial class NeonWorkbenchView
             () => myGen == modalAnimGeneration);
     }
 
+    internal async Task ConfirmTransactionModalAsync()
+    {
+        if (modalExecuting || activeModalConfirmAsync == null) return;
+        var handler = activeModalConfirmAsync;
+        activeModalCancelAction = null;
+        modalExecuting = true;
+        CloseTransactionModal();
+        try { await handler(); }
+        finally { modalExecuting = false; }
+    }
+
     public void CloseTransactionModal()
     {
-        if (!modalOpenLogical && !modalClosing && modalBackdrop.Visibility != Visibility.Visible)
-        {
-            activeModalConfirmAsync = null;
-            return;
-        }
-
-        var returnTarget = modalReturnFocus;
-        modalReturnFocus = null;
         activeModalConfirmAsync = null;
         var cancelAction = activeModalCancelAction;
         activeModalCancelAction = null;
@@ -1523,6 +1518,10 @@ internal sealed partial class NeonWorkbenchView
         {
             try { cancelAction(); } catch { }
         }
+        if (!modalOpenLogical && !modalClosing && modalBackdrop.Visibility != Visibility.Visible) return;
+
+        var returnTarget = modalReturnFocus;
+        modalReturnFocus = null;
         modalOpenLogical = false;
         modalClosing = true;
         modalBackdrop.IsHitTestVisible = false;
