@@ -22,7 +22,17 @@ internal sealed partial class NeonWorkbenchView
                 VerifiedInstalledPatchesCount = 0, RetirablePatchesCount = 0, AvailableUpdatesCount = 0,
                 FilterCounts = previous.FilterCounts.ToDictionary(kv => kv.Key, _ => 0),
                 Recovery = new([], null, null, [], []),
-                Coop = new(false, null, null, null, false, null, [], null, "")
+                Coop = new(
+                    HasPeer: false,
+                    LocalScanTimeLabel: null,
+                    PeerLabel: null,
+                    PeerTimeLabel: null,
+                    PeerManagerVersion: null,
+                    PeerIsLegacy: false,
+                    ComparisonSummary: null,
+                    Rows: [],
+                    LastOutcome: null,
+                    StatusText: "")
             }, preserveViewport: false);
             return;
         }

@@ -218,7 +218,8 @@ public partial class MainWindow
                 ResetHeartbeat();
                 timer.Restart();
                 ui.Restart();
-                var enable = NeonDirectToggleModAsync(view.CurrentSnapshot.AllRows.Single(x => x.Mod.Id == selected).Mod, selected);
+                var enableSnapshot = view.CurrentSnapshot ?? throw new InvalidOperationException("Missing snapshot before enable.");
+                var enable = NeonDirectToggleModAsync(enableSnapshot.AllRows.Single(x => x.Mod.Id == selected).Mod, selected);
                 ui.Stop();
                 await enable;
                 await LayoutAsync();
