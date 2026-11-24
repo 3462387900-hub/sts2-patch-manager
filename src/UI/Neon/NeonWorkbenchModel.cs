@@ -180,7 +180,9 @@ internal sealed record NeonWorkbenchSnapshot(
     NeonCoopSnapshotState Coop,
     NeonRecoverySnapshotState Recovery,
     NeonManagerUpdateState? ManagerUpdate = null,
-    NeonGitHubNetworkState? GitHubNetwork = null);
+    NeonGitHubNetworkState? GitHubNetwork = null,
+    bool IsScanning = false,
+    string? ScanStageText = null);
 
 internal static class NeonWorkbenchBuilder
 {
@@ -245,7 +247,9 @@ internal static class NeonWorkbenchBuilder
         NeonCoopSnapshotState? coopState = null,
         NeonRecoverySnapshotState? recoveryState = null,
         NeonManagerUpdateState? managerUpdateState = null,
-        NeonGitHubNetworkState? githubNetworkState = null)
+        NeonGitHubNetworkState? githubNetworkState = null,
+        bool isScanning = false,
+        string? scanStageText = null)
     {
         bool hasRoot = !string.IsNullOrWhiteSpace(gameRoot);
         bool hasInventory = hasRoot && inventory != null;
@@ -966,7 +970,9 @@ internal static class NeonWorkbenchBuilder
             Coop: defaultCoop,
             Recovery: defaultRecovery,
             ManagerUpdate: managerUpdateState,
-            GitHubNetwork: githubNetworkState);
+            GitHubNetwork: githubNetworkState,
+            IsScanning: isScanning,
+            ScanStageText: scanStageText);
     }
 
     internal static NeonPatchBackupBatch? ReadLatestPatchBackupBatch(string? gameRoot)

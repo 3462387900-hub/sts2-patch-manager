@@ -16,9 +16,10 @@ internal static class LifecycleEvidenceSource
  internal static readonly LifecycleRegistry Empty=new(1,[]);
  static readonly Regex IdRule=new(@"\A[A-Za-z0-9_.-]+\z",RegexOptions.CultureInvariant);
  static readonly Regex HashRule=new(@"\A[0-9a-fA-F]{64}\z",RegexOptions.CultureInvariant);
- static readonly HttpClient Client=new(){Timeout=TimeSpan.FromSeconds(20)};
+ static readonly HttpClient Client=GitHubNetwork.CreateClient();
  static LifecycleEvidenceSource()
  {
+  Client.Timeout=TimeSpan.FromSeconds(10);
   Client.DefaultRequestHeaders.UserAgent.ParseAdd("SpirePatch/"+ManagerUpdates.CurrentVersion);
  }
  static string Required(JsonElement e,string name)

@@ -221,6 +221,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     readonly TextBlock footerScanStatus;
     readonly StackPanel footerRightStack;
     readonly Button footerSimWatcherButton;
+    readonly Button footerRescanButton;
 
     // Overlays (Modal, Tools Drawer, Toast)
     readonly Border modalBackdrop;
@@ -975,7 +976,8 @@ internal sealed partial class NeonWorkbenchView : Grid
         footerSimWatcherButton.Visibility = Visibility.Collapsed;
         footerRightStack.Children.Add(footerSimWatcherButton);
         footerRightStack.Children.Add(BuildFooterLink("打开 mods 目录", () => RequestOpenModsFolder?.Invoke(), "打开当前游戏的 mods 文件夹"));
-        footerRightStack.Children.Add(BuildFooterLink("刷新扫描", () => RequestRescanAndVerifyHealth?.Invoke(), "重新扫描本地清单与补丁健康状态"));
+        footerRescanButton = BuildFooterLink("刷新扫描", () => RequestRescanAndVerifyHealth?.Invoke(), "重新扫描本地清单与补丁健康状态");
+        footerRightStack.Children.Add(footerRescanButton);
         Grid.SetColumn(footerRightStack, 1);
         footerGrid.Children.Add(footerRightStack);
         footer.Child = footerGrid;
@@ -1685,24 +1687,48 @@ internal sealed partial class NeonWorkbenchView : Grid
         watcherBanner.Visibility = showStaleBanner ? Visibility.Visible : Visibility.Collapsed;
         if (showStaleBanner)
         {
-            watcherTitleText.Text = s.ModInventoryDirty ? "检测到外部文件变动：" : "补丁健康结论已过期：";
-            watcherBodyText.Text = !string.IsNullOrWhiteSpace(s.LifecycleStatus)
-                ? s.LifecycleStatus
-                : "mods 目录发生变化，旧的补丁健康结论已自动失效，请重新扫描核验。";
+            if (s.IsScanning)
+            {
+                watcherTitleText.Text = "正在扫描核验：";
+                watcherBodyText.Text = s.ScanStageText ?? "正在重新读取本地 MOD 清单与补丁健康状态，请稍候…";
+            }
+            else
+            {
+                watcherTitleText.Text = s.ModInventoryDirty ? "检测到外部文件变动：" : "补丁健康结论已过期：";
+                watcherBodyText.Text = !string.IsNullOrWhiteSpace(s.LifecycleStatus)
+                    ? s.LifecycleStatus
+                    : "mods 目录发生变化，旧的补丁健康结论已自动失效，请重新扫描核验。";
+            }
         }
+        watcherRescanButton.Content = s.IsScanning ? "扫描中…" : "重新扫描并核验";
+        watcherRescanButton.IsEnabled = !s.IsScanning;
+        watcherRescanButton.Cursor = s.IsScanning ? Cursors.Arrow : Cursors.Hand;
 
         // Quiet Footer
-        string timeLabel = s.LastScanTime.HasValue ? s.LastScanTime.Value.ToString("HH:mm:ss") : "尚未扫描";
-        string healthNote = s.GameRoot == null
-            ? "尚未选择游戏目录"
-            : s.ModInventoryDirty || s.LifecycleStale
-                ? "检测到文件变化，健康结论已失效"
-                : s.IsLifecycleHealthValid
-                    ? "清单完整 · 健康结论有效"
-                    : s.IsPatchScanValid
-                        ? "清单完整 · 待补丁健康核验"
-                        : "清单已读取 · 补丁待扫描";
-        footerScanStatus.Text = $"上次扫描：{timeLabel} · {healthNote}";
+        if (s.IsScanning)
+        {
+            footerScanStatus.Text = s.ScanStageText ?? "正在扫描本地 MOD 清单与补丁状态…";
+            footerRescanButton.Content = "正在扫描…";
+            footerRescanButton.IsEnabled = false;
+            footerRescanButton.Cursor = Cursors.Arrow;
+        }
+        else
+        {
+            string timeLabel = s.LastScanTime.HasValue ? s.LastScanTime.Value.ToString("HH:mm:ss") : "尚未扫描";
+            string healthNote = s.GameRoot == null
+                ? "尚未选择游戏目录"
+                : s.ModInventoryDirty || s.LifecycleStale
+                    ? "检测到文件变化，健康结论已失效"
+                    : s.IsLifecycleHealthValid
+                        ? "清单完整 · 健康结论有效"
+                        : s.IsPatchScanValid
+                            ? "清单完整 · 待补丁健康核验"
+                            : "清单已读取 · 补丁待扫描";
+            footerScanStatus.Text = $"上次扫描：{timeLabel} · {healthNote}";
+            footerRescanButton.Content = "刷新扫描";
+            footerRescanButton.IsEnabled = true;
+            footerRescanButton.Cursor = Cursors.Hand;
+        }
     }
 
     void ApplyLaunchButtonStyle(bool caution, string label)
@@ -1749,6 +1775,31 @@ internal sealed partial class NeonWorkbenchView : Grid
             return;
         }
 
+        if (!s.HasInventory)
+        {
+            launchGateBorder.Background = NeonPalette.BgSurface;
+            launchGateBorder.BorderBrush = s.IsScanning ? NeonPalette.AmberBorder : NeonPalette.BorderSubtle;
+            var pendingRow = s.IsScanning
+                ? BuildGateHeaderRow(
+                    NeonTone.Amber,
+                    "正在扫描游戏目录",
+                    s.ScanStageText ?? "正在读取本地 MOD 清单、依赖关系与补丁状态…",
+                    "扫描中…",
+                    () => { },
+                    padding: new Thickness(15, 11, 15, 11),
+                    actionDisabled: true)
+                : BuildGateHeaderRow(
+                    NeonTone.Neutral,
+                    "尚未读取本地 MOD 清单",
+                    "点击立即扫描读取当前目录的 MOD、依赖声明与补丁状态。",
+                    "立即扫描",
+                    () => RequestRescanAll?.Invoke(),
+                    padding: new Thickness(15, 11, 15, 11),
+                    primaryAction: true);
+            launchGateStack.Children.Add(pendingRow);
+            return;
+        }
+
         if (s.GateMode == NeonGateMode.Ready)
         {
             launchGateBorder.Background = NeonPalette.ReadyGateBg;
@@ -1764,6 +1815,10 @@ internal sealed partial class NeonWorkbenchView : Grid
                     : "";
                 metaText = $"{s.EnabledModsCount} 项 MOD 已启用 · 全部声明依赖已满足 · {s.VerifiedInstalledPatchesCount} 项修复校验通过{retireExtra}";
             }
+            else if (s.LifecycleScanning)
+            {
+                metaText = $"{s.EnabledModsCount} 项 MOD 已启用 · 全部声明依赖已满足 · {s.ScanStageText ?? "正在核验补丁健康…"}";
+            }
             else if (s.LifecycleStale || s.ModInventoryDirty)
             {
                 metaText = $"{s.EnabledModsCount} 项 MOD 已启用 · 全部声明依赖已满足 · 旧健康结论已撤下，需重新扫描核验";
@@ -1775,13 +1830,14 @@ internal sealed partial class NeonWorkbenchView : Grid
 
             string title = s.IsLifecycleHealthValid ? "当前环境就绪" : "声明依赖已满足";
             var readyRow = BuildGateHeaderRow(
-                s.LifecycleStale || s.ModInventoryDirty ? NeonTone.Amber : NeonTone.Sage,
+                s.LifecycleStale || s.ModInventoryDirty || s.IsScanning ? NeonTone.Amber : NeonTone.Sage,
                 title,
                 metaText,
-                "重新扫描",
+                s.IsScanning ? "扫描中…" : "重新扫描",
                 () => RequestRescanAndVerifyHealth?.Invoke(),
                 padding: new Thickness(15, 9, 15, 9),
-                rightNote: "仅覆盖清单声明与已收录补丁");
+                rightNote: "仅覆盖清单声明与已收录补丁",
+                actionDisabled: s.IsScanning);
             launchGateStack.Children.Add(readyRow);
             return;
         }
@@ -1810,9 +1866,10 @@ internal sealed partial class NeonWorkbenchView : Grid
             blocked ? NeonTone.Cinnabar : NeonTone.Amber,
             headerTitle,
             headerSub,
-            "重新扫描",
+            s.IsScanning ? "扫描中…" : "重新扫描",
             () => RequestRescanAndVerifyHealth?.Invoke(),
-            padding: new Thickness(15, 11, 15, 11)));
+            padding: new Thickness(15, 11, 15, 11),
+            actionDisabled: s.IsScanning));
 
         // Surgical Fault Chips (Uniform horizontal grid when <=3, WrapPanel if more)
         Panel faultsHost;
@@ -1849,7 +1906,8 @@ internal sealed partial class NeonWorkbenchView : Grid
         Action onAction,
         Thickness padding,
         string? rightNote = null,
-        bool primaryAction = false)
+        bool primaryAction = false,
+        bool actionDisabled = false)
     {
         var grid = new Grid { Margin = padding };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1899,12 +1957,14 @@ internal sealed partial class NeonWorkbenchView : Grid
             Foreground = primaryAction ? NeonPalette.SageOnPrimary : NeonPalette.InkSecondary,
             BorderBrush = primaryAction ? NeonPalette.Sage : Brushes.Transparent,
             BorderThickness = new Thickness(1),
-            Cursor = Cursors.Hand,
+            IsEnabled = !actionDisabled,
+            Cursor = actionDisabled ? Cursors.Arrow : Cursors.Hand,
             Template = CreateRoundedButtonTemplate(6,
                 primaryAction ? NeonPalette.SageHover : NeonPalette.BgWell,
                 primaryAction ? NeonPalette.SageHover : Brushes.Transparent)
         };
-        btn.Click += (_, _) => onAction();
+        if (!actionDisabled)
+            btn.Click += (_, _) => onAction();
         right.Children.Add(btn);
         Grid.SetColumn(right, 1);
         grid.Children.Add(right);
@@ -2295,12 +2355,27 @@ internal sealed partial class NeonWorkbenchView : Grid
 
         if (!currentSnapshot.HasInventory)
         {
-            listSummaryMeta.Text = "正在等待读取…";
-            deskContentStack.Children.Add(BuildEmptyState(
-                "尚未读取本地 MOD 清单",
-                "点击刷新读取当前游戏目录的 MOD 清单与依赖关系。",
-                "立即扫描",
-                () => RequestRescanAll?.Invoke()));
+            if (currentSnapshot.IsScanning)
+            {
+                string stageText = currentSnapshot.ScanStageText ?? "正在读取 mods 目录、依赖声明与补丁状态，请稍候…";
+                listSummaryMeta.Text = currentSnapshot.ScanStageText ?? "正在扫描本地清单…";
+                deskContentStack.Children.Add(BuildEmptyState(
+                    "正在扫描本地 MOD 清单…",
+                    stageText,
+                    "正在扫描…",
+                    onCta: null,
+                    actionDisabled: true,
+                    showProgress: true));
+            }
+            else
+            {
+                listSummaryMeta.Text = "尚未读取清单";
+                deskContentStack.Children.Add(BuildEmptyState(
+                    "尚未读取本地 MOD 清单",
+                    "点击下方按钮读取当前游戏目录的 MOD 清单与依赖关系。",
+                    "立即扫描",
+                    () => RequestRescanAll?.Invoke()));
+            }
             SetBatchDockVisible(false);
             return;
         }
@@ -3570,7 +3645,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         }
     }
 
-    Border BuildEmptyState(string title, string sub, string? ctaLabel, Action? onCta)
+    Border BuildEmptyState(string title, string sub, string? ctaLabel, Action? onCta, bool actionDisabled = false, bool showProgress = false)
     {
         var stack = new StackPanel
         {
@@ -3584,7 +3659,23 @@ internal sealed partial class NeonWorkbenchView : Grid
         s.HorizontalAlignment = HorizontalAlignment.Center;
         s.Margin = new Thickness(0, 6, 0, 12);
         stack.Children.Add(s);
-        if (ctaLabel != null && onCta != null)
+        if (showProgress)
+        {
+            bool animate = NeonMotion.CanAnimate(this);
+            var bar = new ProgressBar
+            {
+                Width = 220,
+                Height = 4,
+                Margin = new Thickness(0, 2, 0, 12),
+                Foreground = NeonPalette.Sage,
+                Background = NeonPalette.BgWell,
+                BorderThickness = new Thickness(0),
+                IsIndeterminate = animate,
+                Value = animate ? 0 : 50
+            };
+            stack.Children.Add(bar);
+        }
+        if (ctaLabel != null && (onCta != null || actionDisabled))
         {
             var btn = new Button
             {
@@ -3598,10 +3689,12 @@ internal sealed partial class NeonWorkbenchView : Grid
                 BorderBrush = NeonPalette.BorderMedium,
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Cursor = Cursors.Hand,
+                IsEnabled = !actionDisabled,
+                Cursor = actionDisabled ? Cursors.Arrow : Cursors.Hand,
                 Template = CreateRoundedButtonTemplate(6, NeonPalette.BgHover, NeonPalette.BorderStrong)
             };
-            btn.Click += (_, _) => onCta();
+            if (!actionDisabled && onCta != null)
+                btn.Click += (_, _) => onCta();
             stack.Children.Add(btn);
         }
         return new Border { Child = stack };

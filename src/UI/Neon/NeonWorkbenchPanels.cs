@@ -1706,7 +1706,13 @@ internal sealed partial class NeonWorkbenchView
                 : "补丁健康核验尚未运行或已过期；点击下方按钮重新核对本地文件指纹。",
             12, NeonPalette.InkSecondary, wrap: true));
         var diagBtns = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var scanHealth = NeonWidgets.CreateStyledButton(this, "重新扫描并核验补丁健康", "NeonSecondaryButton", () => { CloseToolsDrawer(); RequestRescanAndVerifyHealth?.Invoke(); }, "sm");
+        var scanHealth = NeonWidgets.CreateStyledButton(
+            this,
+            s.IsScanning ? "正在扫描核验…" : "重新扫描并核验补丁健康",
+            "NeonSecondaryButton",
+            () => { CloseToolsDrawer(); RequestRescanAndVerifyHealth?.Invoke(); },
+            "sm");
+        scanHealth.IsEnabled = !s.IsScanning;
         scanHealth.Margin = new Thickness(0, 0, 7, 4);
         var logDiag = NeonWidgets.CreateStyledButton(this, "选择 godot.log 诊断", "NeonGhostButton", () => { CloseToolsDrawer(); RequestDiagnoseLog?.Invoke(); }, "sm");
         diagBtns.Children.Add(scanHealth);

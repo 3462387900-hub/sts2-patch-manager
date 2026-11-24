@@ -16,6 +16,9 @@ public partial class MainWindow
     bool neonGameRunningPollInFlight;
     long neonLastRunningPollMs;
     internal int neonTestRestoreStageDelayMs;
+    internal int neonTestScanDelayMs;
+    bool neonScanning;
+    string? neonScanStageText;
     internal Func<string, ModInventory>? neonTestScanOverride;
 
     void ShowNeonWorkbench()
@@ -56,8 +59,8 @@ public partial class MainWindow
             if (Directory.Exists(dir)) OpenUrl(dir);
             else view.ShowToast("此游戏目录尚未创建 mods 文件夹。", NeonTone.Amber);
         };
-        view.RequestRescanAll += () => _ = RefreshNeonFullScanAndHealthAsync(includeLifecycle: false);
-        view.RequestRescanAndVerifyHealth += () => _ = RefreshNeonFullScanAndHealthAsync(includeLifecycle: true);
+        view.RequestRescanAll += () => _ = RefreshNeonFullScanAndHealthAsync(includeLifecycle: false, userInitiated: true);
+        view.RequestRescanAndVerifyHealth += () => _ = RefreshNeonFullScanAndHealthAsync(includeLifecycle: true, userInitiated: true);
         view.RequestLaunchGame += LaunchGame;
         view.RequestPreviewToggleMod += mod => _ = NeonPreviewToggleModAsync(mod);
         view.RequestDirectToggleMod += (mod, contextModId) => _ = NeonDirectToggleModAsync(mod, contextModId);
@@ -775,7 +778,9 @@ public partial class MainWindow
             coopState: BuildNeonCoopSnapshotState(),
             recoveryState: BuildNeonRecoverySnapshotState(),
             managerUpdateState: BuildNeonManagerUpdateSnapshotState(),
-            githubNetworkState: BuildNeonGitHubNetworkSnapshotState());
+            githubNetworkState: BuildNeonGitHubNetworkSnapshotState(),
+            isScanning: neonScanning,
+            scanStageText: neonScanStageText);
 
         neonWorkbenchView.ApplySnapshot(snapshot, preserveViewport);
     }
@@ -937,17 +942,46 @@ public partial class MainWindow
             PlainSummary: $"检测到 {found.Count} 个《杀戮尖塔 2》安装目录，请任选本次要管理的一个。"));
     }
 
-    internal async Task RefreshNeonFullScanAndHealthAsync(bool includeLifecycle)
+    internal async Task RefreshNeonFullScanAndHealthAsync(bool includeLifecycle, bool userInitiated = false)
     {
-        if (busy || transactionWriting || selectedInstallRoot == null) return;
+        if (selectedInstallRoot == null)
+        {
+            if (userInitiated)
+            {
+                neonWorkbenchView?.ShowToast("尚未选择游戏目录，请先选择或自动查找《杀戮尖塔 2》目录。", NeonTone.Amber);
+                _ = DiscoverNeonGameRootsAsync();
+            }
+            return;
+        }
+        if (busy || transactionWriting)
+        {
+            if (userInitiated)
+            {
+                string busyMsg = neonScanning
+                    ? "正在扫描当前目录，请稍候片刻…"
+                    : transactionWriting
+                        ? "当前有文件改动正在执行，完成后可重新扫描。"
+                        : "当前有其他检查任务正在进行，请稍候…";
+                neonWorkbenchView?.ShowToast(busyMsg, transactionWriting ? NeonTone.Amber : NeonTone.Neutral);
+            }
+            return;
+        }
+
         string root = selectedInstallRoot;
         int watchVersion = Volatile.Read(ref modChangeVersion);
         int epoch = lifecycleEpoch;
         busy = true;
+        neonScanning = true;
+        neonScanStageText = "正在扫描本地 MOD 目录与依赖清单…";
         if (includeLifecycle) lifecycleScanning = true;
         RefreshNeonWorkbench(preserveViewport: true);
+        if (userInitiated)
+            neonWorkbenchView?.ShowToast("正在扫描本地 MOD 清单…", NeonTone.Neutral);
         try
         {
+            if (neonTestScanDelayMs > 0)
+                await Task.Delay(neonTestScanDelayMs);
+
             var definitions = sourceCurrent && onlineCatalog != null ? onlineCatalog.Patches : Catalog.Bundled;
             string revision = sourceCurrent && onlineCatalog != null ? onlineCatalog.Commit : Catalog.Revision;
 
@@ -972,14 +1006,12 @@ public partial class MainWindow
                 catch { }
             }
 
+            // Phase 1: Fast local MOD inventory + patch scan so UI displays mods right away.
             var scanned = await Task.Run(() =>
             {
                 var inv = ModManager.Scan(root);
                 var patchRep = Catalog.Scan(root, definitions, revision);
-                ModHistoryResult? hist = null;
-                if (includeLifecycle && inv.Issues.Count == 0 && patchRep.InventoryComplete)
-                    hist = ModHistory.CompareAndStore(root, NeonDataRoot);
-                return (inv, patchRep, hist);
+                return (inv, patchRep);
             });
 
             if (!root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
@@ -998,8 +1030,19 @@ public partial class MainWindow
             states = scanned.patchRep.Patches;
             demo = false;
 
-            if (includeLifecycle && scanned.hist != null)
+            // Phase 2: History hashing + upstream lifecycle evidence check (list already visible!).
+            if (includeLifecycle && scanned.inv.Issues.Count == 0 && scanned.patchRep.InventoryComplete)
             {
+                neonScanStageText = "本地清单已读取，正在核对文件指纹与补丁健康…";
+                RefreshNeonWorkbench(preserveViewport: true);
+
+                var hist = await Task.Run(() => ModHistory.CompareAndStore(root, NeonDataRoot));
+                if (epoch != lifecycleEpoch || !root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
+                {
+                    InvalidateLifecycle("核验期间环境已变化，请重新扫描。");
+                    return;
+                }
+
                 LifecycleRegistry evidence;
                 string evidenceStatus;
                 if (neonOverrideLifecycleEvidence != null)
@@ -1009,9 +1052,12 @@ public partial class MainWindow
                 }
                 else
                 {
+                    neonScanStageText = "本地指纹已核对，正在联网查询上游修复证据…";
+                    RefreshNeonWorkbench(preserveViewport: true);
                     try
                     {
-                        evidence = await LifecycleEvidenceSource.FetchAsync();
+                        using var evidenceCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                        evidence = await LifecycleEvidenceSource.FetchAsync(evidenceCts.Token);
                         evidenceStatus = $"已检查补丁库：{evidence.Entries.Length} 条有证据的上游记录。";
                     }
                     catch (Exception ex)
@@ -1021,7 +1067,7 @@ public partial class MainWindow
                     }
                 }
 
-                var evaluated = PatchLifecycle.Evaluate(root, scanned.hist, evidence, evidenceStatus, scanned.patchRep, scanned.inv);
+                var evaluated = PatchLifecycle.Evaluate(root, hist, evidence, evidenceStatus, scanned.patchRep, scanned.inv);
                 if (epoch != lifecycleEpoch || !root.Equals(selectedInstallRoot, StringComparison.OrdinalIgnoreCase) || watchVersion != Volatile.Read(ref modChangeVersion))
                 {
                     InvalidateLifecycle("核验期间环境已变化，请重新扫描。");
@@ -1030,10 +1076,10 @@ public partial class MainWindow
                 lifecycleEvidence = evidence;
                 lifecycleReport = evaluated;
                 lifecycleStale = false;
-                lifecycleStatus = scanned.hist.FirstScan
+                lifecycleStatus = hist.FirstScan
                     ? "已完成本地指纹与健康基线核验；适配结论仅覆盖已收录条件。"
-                    : $"核验完成：发现变化 {scanned.hist.Changes.Length} 项 · 待人工核对 {scanned.hist.PendingReview.Length} 项。";
-                RecordNeonActivity("scan", $"完成补丁健康核验（{scanned.inv.Mods.Count(m => !ModPresentation.IsIndependentPatch(m))} 项普通 MOD · 变化 {scanned.hist.Changes.Length} 项）。");
+                    : $"核验完成：发现变化 {hist.Changes.Length} 项 · 待人工核对 {hist.PendingReview.Length} 项。";
+                RecordNeonActivity("scan", $"完成补丁健康核验（{scanned.inv.Mods.Count(m => !ModPresentation.IsIndependentPatch(m))} 项普通 MOD · 变化 {hist.Changes.Length} 项）。");
                 neonWorkbenchView?.ShowToast("重新扫描与补丁健康核验已完成");
             }
             else
@@ -1050,6 +1096,8 @@ public partial class MainWindow
         }
         finally
         {
+            neonScanning = false;
+            neonScanStageText = null;
             lifecycleScanning = false;
             busy = false;
             RefreshNeonWorkbench(preserveViewport: true);

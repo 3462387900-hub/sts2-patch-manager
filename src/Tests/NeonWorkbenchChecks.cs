@@ -1297,6 +1297,50 @@ public partial class MainWindow
         await Task.Delay(260);
         await Idle();
 
+        // --- 15. Explicit scanning progress feedback & anti-silent-swallow guard ---
+        modInventory = null;
+        report = null;
+        RefreshNeonWorkbench(preserveViewport: false);
+        await Idle();
+
+        string emptyDeskText = AllText(view.DeskContentControl);
+        string emptyGateText = AllText(view.LaunchGateControl);
+        Check(emptyDeskText.Contains("尚未读取本地 MOD 清单") &&
+              emptyDeskText.Contains("立即扫描") &&
+              !emptyGateText.Contains("声明依赖已满足"),
+            "未读取本地 MOD 清单时提示立即扫描，且顶部不误报「声明依赖已满足」");
+
+        neonTestScanDelayMs = 800;
+        view.ClearToasts();
+        var scanNowBtn = Descendants<Button>(view.DeskContentControl)
+            .Single(b => (b.Content?.ToString() ?? "") == "立即扫描");
+        Click(scanNowBtn);
+        await Task.Delay(120);
+        await Idle();
+
+        string scanningDeskText = AllText(view.DeskContentControl);
+        bool hasProgressBar = Descendants<ProgressBar>(view.DeskContentControl).Any();
+        await RefreshNeonFullScanAndHealthAsync(includeLifecycle: false, userInitiated: true);
+        await Idle();
+        string scanningToastText = AllText(view.ToastRackControl);
+
+        Check(view.CurrentSnapshot!.IsScanning &&
+              scanningDeskText.Contains("正在扫描本地 MOD 清单…") &&
+              scanningDeskText.Contains("正在扫描…") &&
+              hasProgressBar,
+            "点击「立即扫描」后立刻渲染正在扫描标题、进度条与禁用态「正在扫描…」按钮");
+        Check(scanningToastText.Contains("正在扫描当前目录"),
+            "扫描进行中再次点击扫描给出明确 Toast 反馈而非静默无响应");
+        await ShotAtScaleAsync("25-wpf-scanning-feedback-100", 1.0, 1280, 850);
+
+        for (int i = 0; i < 120 && (busy || neonScanning || modInventoryRefreshRunning); i++) await Task.Delay(40);
+        neonTestScanDelayMs = 0;
+        await Idle();
+        Check(view.CurrentSnapshot!.HasInventory &&
+              !view.CurrentSnapshot.IsScanning &&
+              view.CurrentSnapshot.AllRows.Length > 0,
+            "扫描完成后恢复真实 MOD 清单并清除扫描态");
+
         CloseModWatch();
     }
 }
