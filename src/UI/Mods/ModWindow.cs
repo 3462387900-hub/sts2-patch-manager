@@ -693,12 +693,20 @@ public partial class MainWindow
   if(!UiThemes.IsNeon&&(page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
-   var localZipWorkflow=LocalZipSession();
-   var recovery=await Task.Run(()=>localZipWorkflow.RecoverPendingTransactions(
-    root,()=>modFileWatcher.DeferQuietPeriod(),
-    progress=>ReportLocalZipProgress(root,progress)));
-   var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery,localZipWorkflow.TransactionLogDirectory);
-   ApplyLocalZipInvalidationPlan(root,recoveryPlan);
+   if(UiThemes.IsNeon)
+   {
+    await NeonRecoverTransactionsAsync(root);
+    if(!NeonRootMatches(root)){NeonRejectStaleScan();return;}
+   }
+   else
+   {
+    var localZipWorkflow=LocalZipSession();
+    var recovery=await Task.Run(()=>localZipWorkflow.RecoverPendingTransactions(
+     root,()=>modFileWatcher.DeferQuietPeriod(),
+     progress=>ReportLocalZipProgress(root,progress)));
+    var recoveryPlan=HandleLocalZipRecoveryReport(root,recovery,localZipWorkflow.TransactionLogDirectory);
+    ApplyLocalZipInvalidationPlan(root,recoveryPlan);
+   }
 
    var neonStamp=NeonCaptureScanStamp(root);
    var initialStamp=new ModInventoryRefreshStamp(
@@ -711,7 +719,7 @@ public partial class MainWindow
     (confirmation,token)=>Task.FromResult(
      confirmation.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
      confirmation.ChangeVersion==(UiThemes.IsNeon?modFileWatcher.ChangeVersion:Volatile.Read(ref modChangeVersion))&&
-     (!UiThemes.IsNeon||NeonScanStampCurrent(neonStamp))&&
+     (!UiThemes.IsNeon||(NeonScanStampCurrent(neonStamp)&&!NeonRecoveryBlocked(root)))&&
      OrphanPatchAutoStop.Enabled(installer.DataRoot)),
     ()=>modFileWatcher.DeferQuietPeriod(),
     checkpoint=>

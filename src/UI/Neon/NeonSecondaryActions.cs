@@ -327,7 +327,7 @@ public partial class MainWindow
 
     async Task NeonConfirmOrganizePatchesAsync(PatchOrganizationPlan plan)
     {
-        if (busy || transactionWriting) return;
+        if (busy || transactionWriting || !NeonCanWrite(plan.Root)) return;
         busy = true;
         transactionWriting = true;
         try
@@ -452,7 +452,7 @@ public partial class MainWindow
 
     async Task NeonConfirmPatchTransactionAsync(InstallResult preview)
     {
-        if (busy || transactionWriting || preparedPackage == null) return;
+        if (busy || transactionWriting || preparedPackage == null || !NeonCanWrite(preview.Root)) return;
         bool undo = preview.Mode == "RollbackPreview";
         busy = true;
         transactionWriting = true;
@@ -694,6 +694,7 @@ public partial class MainWindow
             return;
         }
         string gameRoot = selectedInstallRoot;
+        if (!NeonCanWrite(gameRoot)) return;
         bool running = await CheckGameRunningOffUiAsync(gameRoot);
         if (running)
         {
@@ -711,7 +712,7 @@ public partial class MainWindow
             return;
         }
 
-        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(gameRoot)) return;
+        if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(gameRoot)) return;
         string? boundId = WorkshopSources().ModIdFor(workshopId);
         if (boundId != null)
         {
@@ -837,7 +838,7 @@ public partial class MainWindow
 
     async Task NeonConfirmWorkshopInstallAsync(string gameRoot, WorkshopModPrepared prepared)
     {
-        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(gameRoot) || prepared.IsUpdate || prepared.IsUnchanged)
+        if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(gameRoot) || prepared.IsUpdate || prepared.IsUnchanged)
         {
             WorkshopModInstaller.Cleanup(prepared);
             neonWorkbenchView?.ShowToast("只允许全新安装进入此入口；覆盖更新请重新预览。", NeonTone.Amber);
@@ -894,6 +895,7 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string gameRoot = selectedInstallRoot;
+        if (!NeonCanWrite(gameRoot)) return;
         bool running = await CheckGameRunningOffUiAsync(gameRoot);
         var session = NeonLocalZipSession();
 
@@ -1034,7 +1036,11 @@ public partial class MainWindow
         LocalModZipPreview preview,
         Func<LocalZipHistoricalBindingPolicy> readPolicy)
     {
-        if (busy || transactionWriting) return;
+        if (busy || transactionWriting || !NeonCanWrite(gameRoot))
+        {
+            session.DiscardPreview();
+            return;
+        }
         busy = true;
         transactionWriting = true;
         localZipOperationCancellation?.Cancel();
@@ -1064,9 +1070,13 @@ public partial class MainWindow
             string summary = LocalZipUiResultPresenter.FormatApplyResult(result);
             if (result.RecoveryState == LocalZipInstallRecoveryState.PendingRecovery)
             {
+                NeonSetRecoveryFailure(gameRoot, NeonZipRecoveryKind, session.TransactionLogDirectory, summary);
                 var recovery = await Task.Run(() => session.RecoverPendingTransactions(
                     gameRoot, () => modFileWatcher.DeferQuietPeriod()));
                 var recPlan = HandleLocalZipRecoveryReport(gameRoot, recovery, session.TransactionLogDirectory);
+                NeonRecordRecoveryStatus(gameRoot, new(NeonZipRecoveryKind, session.TransactionLogDirectory,
+                    recovery.HasPendingRecovery || localZipRecoveryBlocked
+                        ? localZipRecoveryNotice ?? "存在待人工核对的 ZIP 事务。" : null));
                 plan = new LocalZipUiInvalidationPlan(
                     plan.RefreshInventory || recPlan.RefreshInventory,
                     plan.InvalidateSourceCache || recPlan.InvalidateSourceCache,
@@ -1342,7 +1352,7 @@ public partial class MainWindow
 
     async Task NeonConfirmCoopApplyAsync(CoopWorkflowPreparedPlan prepared)
     {
-        if (busy || transactionWriting) return;
+        if (busy || transactionWriting || !NeonCanWrite(selectedInstallRoot)) return;
         busy = true;
         transactionWriting = true;
         coopPlan = null;
@@ -1480,7 +1490,7 @@ public partial class MainWindow
 
     async Task NeonConfirmEnvironmentRestoreAsync(string gameRoot, ModEnvironmentSnapshotPreview preview)
     {
-        if (busy || transactionWriting) return;
+        if (busy || transactionWriting || !NeonCanWrite(gameRoot)) return;
         string[] previousIds = modInventory?.Mods.Select(m => m.Id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() ?? [];
         busy = true;
         transactionWriting = true;

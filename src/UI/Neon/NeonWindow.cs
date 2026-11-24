@@ -108,6 +108,106 @@ public partial class MainWindow
         }
     }
 
+    const string NeonZipRecoveryKind = "本地 ZIP 安装";
+    const string NeonUpdateRecoveryKind = "在线 MOD 更新";
+    internal sealed record NeonRecoveryStatus(string Operation, string LogDirectory, string? FailureReason)
+    {
+        public bool Blocked => FailureReason != null;
+    }
+    readonly Dictionary<string, Dictionary<string, NeonRecoveryStatus>> neonRecoveryStates = new(StringComparer.OrdinalIgnoreCase);
+    string NeonZipLogDirectory => Path.Combine(NeonDataRoot, "LocalModZipInstallTransactions");
+    string NeonUpdateLogDirectory => Path.Combine(NeonDataRoot, "MOD更新事务");
+
+    internal static async Task<NeonRecoveryStatus> NeonRunRecoveryStepAsync(
+        string operation, string logDirectory, Func<Task<string?>> recover)
+    {
+        try { return new(operation, logDirectory, await recover()); }
+        catch (Exception error) { return new(operation, logDirectory, error.GetType().Name + "：" + error.Message); }
+    }
+
+    void NeonRecordRecoveryStatus(string root, NeonRecoveryStatus status)
+    {
+        if (!neonRecoveryStates.TryGetValue(root, out var statesForRoot))
+            neonRecoveryStates[root] = statesForRoot = new(StringComparer.Ordinal);
+        statesForRoot[status.Operation] = status;
+        if (NeonRootMatches(root))
+            neonWorkbenchView?.SetRecoveryWarning(NeonRecoveryWarning(root));
+    }
+
+    void NeonSetRecoveryFailure(string root, string operation, string logDirectory, string reason) =>
+        NeonRecordRecoveryStatus(root, new(operation, logDirectory, reason));
+
+    bool NeonRecoveryChecked(string root) =>
+        neonRecoveryStates.TryGetValue(root, out var state) &&
+        state.ContainsKey(NeonZipRecoveryKind) && state.ContainsKey(NeonUpdateRecoveryKind);
+
+    bool NeonRecoveryBlocked(string root) =>
+        neonRecoveryStates.TryGetValue(root, out var state) && state.Values.Any(s => s.Blocked);
+
+    string? NeonRecoveryWarning(string? root)
+    {
+        if (root == null || !neonRecoveryStates.TryGetValue(root, out var state)) return null;
+        var failures = state.Values.Where(s => s.Blocked).Select(s =>
+            $"{s.Operation}事务恢复未完成：{s.FailureReason}\n日志目录：{s.LogDirectory}").ToArray();
+        return failures.Length == 0 ? null :
+            "事务恢复待处理 · 已阻断可能改动 MOD / 补丁文件的操作。修复日志或访问权限后点击刷新扫描重试。\n" +
+            string.Join("\n", failures);
+    }
+
+    bool NeonCanWrite(string? root)
+    {
+        if (root == null || !NeonRootMatches(root)) return false;
+        if (!NeonRecoveryChecked(root) || NeonRecoveryBlocked(root))
+        {
+            neonWorkbenchView?.ShowToast(NeonRecoveryBlocked(root)
+                ? "存在未解决的事务恢复异常，已阻断文件改动，请查看持续警告。"
+                : "尚未完成当前目录的事务恢复检查，请先刷新扫描。", NeonTone.Amber);
+            return false;
+        }
+        return true;
+    }
+
+    async Task NeonRecoverTransactionsAsync(string root)
+    {
+        // Each family owns its own exception boundary. One unreadable journal must
+        // never prevent the other family from being inspected or recovered.
+        var zipStatus = await NeonRunRecoveryStepAsync(NeonZipRecoveryKind, NeonZipLogDirectory, async () =>
+        {
+            var session = NeonLocalZipSession();
+            var recovery = await Task.Run(() => session.RecoverPendingTransactions(root, () => modFileWatcher.DeferQuietPeriod()));
+            if (NeonRootMatches(root))
+            {
+                var plan = HandleLocalZipRecoveryReport(root, recovery, session.TransactionLogDirectory);
+                ApplyLocalZipInvalidationPlan(root, plan);
+                if (recovery.CompletedCount > 0) neonRecoveryCacheDirty = true;
+            }
+            return recovery.HasPendingRecovery
+                ? LocalZipUiResultPresenter.FormatRecoveryReport(recovery, session.TransactionLogDirectory)
+                    ?? "发现待人工核对的本地 ZIP 安装事务。"
+                : null;
+        });
+        NeonRecordRecoveryStatus(root, zipStatus);
+        var updateStatus = await NeonRunRecoveryStepAsync(NeonUpdateRecoveryKind, NeonUpdateLogDirectory, async () =>
+        {
+            var recovery = await Task.Run(() => NeonModUpdateApplyService().RecoverPendingTransactions(root));
+            if (recovery.ChangedTargetOrCleanedTransaction && NeonRootMatches(root))
+            {
+                modSourceCheckWorkflow?.InvalidateAll();
+                neonRecoveryCacheDirty = true;
+                modInventoryDirty = true;
+                report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; modTogglePreview = null;
+                InvalidateLifecycle("在线 MOD 事务已恢复，旧的健康及来源结论已失效。");
+            }
+            return recovery.HasPendingRecovery
+                ? string.Join("\n", recovery.Items.Where(i => i.Pending).Select(i =>
+                    $"{i.TransactionId} · {i.State}：{i.Error ?? "需要人工核对"}"))
+                : null;
+        });
+        NeonRecordRecoveryStatus(root, updateStatus);
+        if (NeonRootMatches(root) && NeonRecoveryBlocked(root))
+            InvalidateLifecycle("存在未解决的事务恢复异常，暂停文件写入与健康确认。");
+    }
+
     void ShowNeonWorkbench()
     {
         if (neonWorkbenchView == null)
@@ -122,7 +222,7 @@ public partial class MainWindow
         Content = neonWorkbenchView;
         RefreshNeonWorkbench(preserveViewport: true);
 
-        if (selectedInstallRoot != null && (modInventory == null || modInventoryDirty) && !busy && !transactionWriting)
+        if (selectedInstallRoot != null && (modInventory == null || modInventoryDirty || !NeonRecoveryChecked(selectedInstallRoot)) && !busy && !transactionWriting)
             _ = RefreshNeonFullScanAndHealthAsync(includeLifecycle: false);
     }
 
@@ -321,6 +421,7 @@ public partial class MainWindow
     {
         if (busy || transactionWriting || selectedInstallRoot == null || neonWorkbenchView == null) return;
         string root = preview.Root;
+        if (!NeonCanWrite(root)) return;
         string verb = preview.Enable ? "启用" : "停用";
         bool writing = false;
         busy = true;
@@ -554,13 +655,13 @@ public partial class MainWindow
         ModUpdateStagingRequest request,
         string? releaseUrl)
     {
-        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonRootMatches(root)) return;
+        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonCanWrite(root)) return;
         if (await CheckGameRunningOffUiAsync(root))
         {
             neonWorkbenchView.ShowToast("请退出游戏后再更新。", NeonTone.Amber);
             return;
         }
-        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(root)) return;
+        if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(root)) return;
         if (neonFixtureDataRoot != null && neonTestStagingBackend == null)
         {
             neonWorkbenchView.ShowToast("隔离测试禁止使用真实下载后端。", NeonTone.Amber);
@@ -655,7 +756,7 @@ public partial class MainWindow
             OnConfirmAsync: async () =>
             {
                 // A rejected stale confirmation never transfers staging ownership to the apply service.
-                if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(root))
+                if (busy || transactionWriting || modInventoryDirty || !NeonCanWrite(root))
                 {
                     if (stagingDir.Length > 0) stagingSvc.Discard(stagingDir);
                     neonWorkbenchView?.ShowToast("目录或清单已变化，请重新预览。", NeonTone.Amber);
@@ -680,7 +781,7 @@ public partial class MainWindow
         ModUpdateApplyPreview applyPreview,
         ModUpdateStagingRequest request)
     {
-        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonRootMatches(root)) return;
+        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonCanWrite(root)) return;
         busy = true;
         transactionWriting = true;
         try
@@ -691,6 +792,10 @@ public partial class MainWindow
 
             if (!applyResult.Success)
             {
+                if (applyResult.RecoveryState == ModUpdateApplyRecoveryState.PendingManualRecovery ||
+                    applyResult.FailureKind is ModUpdateApplyFailureKind.RecoveryRequired or ModUpdateApplyFailureKind.RecoveryFailed)
+                    NeonSetRecoveryFailure(root, NeonUpdateRecoveryKind, NeonUpdateLogDirectory,
+                        applyResult.FailureReason ?? "存在尚未恢复的在线更新事务。");
                 neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
                     Title: $"MOD 更新未完成 · {mod.Name}",
                     Subtitle: $"恢复状态：{applyResult.RecoveryState}",
@@ -915,6 +1020,7 @@ public partial class MainWindow
             scanStageText: neonScanStageText);
 
         neonWorkbenchView.ApplySnapshot(snapshot, preserveViewport);
+        neonWorkbenchView.SetRecoveryWarning(NeonRecoveryWarning(selectedInstallRoot));
         NeonSchedulePendingRescan();
     }
 
@@ -1126,26 +1232,7 @@ public partial class MainWindow
             var definitions = sourceCurrent && onlineCatalog != null ? onlineCatalog.Patches : Catalog.Bundled;
             string revision = sourceCurrent && onlineCatalog != null ? onlineCatalog.Commit : Catalog.Revision;
 
-            if (!transactionWriting)
-            {
-                try
-                {
-                    var zipSession = NeonLocalZipSession();
-                    var zipRecovery = await Task.Run(() => zipSession.RecoverPendingTransactions(root, () => modFileWatcher.DeferQuietPeriod()));
-                    if (zipRecovery.HasPendingRecovery)
-                    {
-                        string msg = LocalZipUiResultPresenter.FormatRecoveryReport(zipRecovery, zipSession.TransactionLogDirectory)
-                            ?? "发现待人工核对的本地 ZIP 安装事务。";
-                        neonWorkbenchView?.ShowToast(msg, NeonTone.Amber);
-                    }
-                    var updRecovery = await Task.Run(() => NeonModUpdateApplyService().RecoverPendingTransactions(root));
-                    if (updRecovery.HasPendingRecovery)
-                        neonWorkbenchView?.ShowToast($"发现 {updRecovery.Items.Count(i => i.Pending)} 项待核对的 MOD 更新事务。", NeonTone.Amber);
-                    else if (updRecovery.RecoveredCount > 0)
-                        neonWorkbenchView?.ShowToast($"已自动恢复 {updRecovery.RecoveredCount} 项中断的 MOD 更新事务。", NeonTone.Amber);
-                }
-                catch { }
-            }
+            await NeonRecoverTransactionsAsync(root);
 
             // Recovery may itself write files. Capture the scan generation only after it has finished.
             if (!NeonRootMatches(root)) { NeonRejectStaleScan(); return; }
@@ -1175,7 +1262,7 @@ public partial class MainWindow
             neonWorkbenchView?.ClearAllPendingScanStates();
 
             // Phase 2: History hashing + upstream lifecycle evidence check (list already visible!).
-            if (includeLifecycle && scanned.inv.Issues.Count == 0 && scanned.patchRep.InventoryComplete)
+            if (includeLifecycle && !NeonRecoveryBlocked(root) && scanned.inv.Issues.Count == 0 && scanned.patchRep.InventoryComplete)
             {
                 neonScanStageText = "本地清单已读取，正在核对文件指纹与补丁健康…";
                 RefreshNeonWorkbench(preserveViewport: true);
@@ -1350,7 +1437,7 @@ public partial class MainWindow
 
     async Task NeonApplyTogglePlanAsync(ModTogglePlan plan, string displayName)
     {
-        if (busy || transactionWriting) return;
+        if (busy || transactionWriting || !NeonCanWrite(plan.Root)) return;
         busy = true;
         transactionWriting = true;
         modTogglePreview = null;
@@ -1401,6 +1488,7 @@ public partial class MainWindow
             return;
 
         string root = selectedInstallRoot;
+        if (!NeonCanWrite(root)) return;
         var current = modInventory.Mods.FirstOrDefault(m =>
             m.Folder.Equals(snapshotMod.Folder, StringComparison.OrdinalIgnoreCase) &&
             m.Manifest.Equals(snapshotMod.Manifest, StringComparison.OrdinalIgnoreCase));
@@ -1714,7 +1802,7 @@ public partial class MainWindow
 
     async Task NeonConfirmRetirePatchAsync(ModTogglePlan plan, LifecyclePatchItem item)
     {
-        if (busy || transactionWriting || selectedInstallRoot == null) return;
+        if (busy || transactionWriting || !NeonCanWrite(plan.Root)) return;
         retirePreview = null;
         retiringItem = null;
         busy = true;
@@ -2172,7 +2260,7 @@ public partial class MainWindow
 
     async Task NeonConfirmRestoreModBackupAsync(string root, ManagedMod mod, string backupPath)
     {
-        if (neonWorkbenchView == null || busy || transactionWriting) return;
+        if (neonWorkbenchView == null || busy || transactionWriting || !NeonCanWrite(root)) return;
         busy = true;
         transactionWriting = true;
         RefreshNeonWorkbench(preserveViewport: true);

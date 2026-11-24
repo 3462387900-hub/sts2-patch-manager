@@ -303,6 +303,21 @@ internal sealed partial class NeonWorkbenchView : Grid
         }
     }
 
+    readonly TextBlock neonRecoveryWarningText = new()
+    {
+        TextWrapping = TextWrapping.Wrap,
+        Foreground = NeonPalette.Cinnabar,
+        FontSize = 12
+    };
+    readonly Border neonRecoveryWarningPanel = new() { Visibility = Visibility.Collapsed };
+
+    internal void SetRecoveryWarning(string? warning)
+    {
+        neonRecoveryWarningText.Text = warning ?? "";
+        neonRecoveryWarningPanel.Visibility = string.IsNullOrWhiteSpace(warning)
+            ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public NeonWorkbenchView(string appVersion)
     {
         var neonResources = new ResourceDictionary
@@ -1069,6 +1084,23 @@ internal sealed partial class NeonWorkbenchView : Grid
         footer.Child = footerGrid;
         Grid.SetRow(footer, 2);
         appShell.Children.Add(footer);
+
+        // Persistent across all tabs. Unlike a toast it remains visible until
+        // the failed recovery family is checked successfully again.
+        appShell.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        neonRecoveryWarningPanel.Background = NeonPalette.BgSurface;
+        neonRecoveryWarningPanel.BorderBrush = NeonPalette.Cinnabar;
+        neonRecoveryWarningPanel.BorderThickness = new Thickness(0, 1, 0, 0);
+        neonRecoveryWarningPanel.Padding = new Thickness(18, 8, 18, 8);
+        neonRecoveryWarningPanel.Child = new ScrollViewer
+        {
+            Content = neonRecoveryWarningText,
+            MaxHeight = 155,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(neonRecoveryWarningPanel, 3);
+        appShell.Children.Add(neonRecoveryWarningPanel);
 
         Children.Add(appShell);
 

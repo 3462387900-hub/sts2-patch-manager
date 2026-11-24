@@ -58,6 +58,13 @@ public partial class MainWindow
  void ChangeUiTheme(string theme)
  {
   if(theme==uiTheme)return;
+  // Do not let an unresolved Neon recovery warning be bypassed by switching
+  // to an old layout with different write entry points.
+  if(UiThemes.IsNeon&&selectedInstallRoot is string root&&NeonRecoveryBlocked(root))
+  {
+   neonWorkbenchView?.ShowToast("存在未解决的事务恢复异常，恢复完成前不能切换至旧界面。",NeonTone.Amber);
+   return;
+  }
   if(busy||transactionWriting)
   {
    if(UiThemes.IsNeon)neonWorkbenchView?.ShowToast("文件操作进行中，暂不能切换界面布局。",NeonTone.Amber);
