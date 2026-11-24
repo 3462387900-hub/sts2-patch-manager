@@ -26,6 +26,12 @@ internal sealed partial class NeonWorkbenchView
             }, preserveViewport: false);
             return;
         }
+        if (!previous.HasInventory && previous.IsScanning != scanning)
+        {
+            ApplySnapshot(previous with { IsScanning = scanning,
+                ScanStageText = scanning ? "正在读取本地 MOD 清单与依赖关系…" : null }, preserveViewport: true);
+            previous = currentSnapshot!;
+        }
         if ((!dirty || previous.ModInventoryDirty) &&
             (!healthStale || !previous.IsLifecycleHealthValid) &&
             (!dirty || !previous.IsPatchScanValid)) return;

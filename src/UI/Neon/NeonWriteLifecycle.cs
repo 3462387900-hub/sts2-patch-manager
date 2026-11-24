@@ -146,7 +146,9 @@ public partial class MainWindow
 
     async Task NeonFinishWriteAsync()
     {
-        busy = false;
+        // The write is finished, but keep the UI operation busy until its own refresh
+        // and receipt are completed. The watcher can resume without enabling a new write.
+        busy = true;
         transactionWriting = false;
         try
         {
@@ -159,5 +161,6 @@ public partial class MainWindow
                 NeonPublishWriteReceipt(receipt with { RefreshWarning = JoinWarning(receipt.RefreshWarning, ex.Message) });
             else neonWorkbenchView?.ShowToast("界面刷新未完成：" + ex.Message, NeonTone.Amber);
         }
+        finally { busy = false; NeonSchedulePendingRescan(); }
     }
 }

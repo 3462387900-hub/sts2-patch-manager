@@ -1048,7 +1048,11 @@ public partial class MainWindow
             if (UiThemes.IsNeon && neonWorkbenchView != null &&
                 string.Equals(selectedInstallRoot, root, StringComparison.OrdinalIgnoreCase))
             {
-                neonWorkbenchView.UpdateRunningStateOnly(running);
+                if (neonWorkbenchView.CurrentSnapshot?.GameRunning != running)
+                {
+                    neonWorkbenchView.UpdateRunningStateOnly(running);
+                    RefreshNeonWorkbench(preserveViewport: true);
+                }
             }
         }
         catch { }
@@ -1320,8 +1324,8 @@ public partial class MainWindow
             neonScanning = false;
             neonScanStageText = null;
             lifecycleScanning = false;
-            busy = false;
-            await RefreshNeonWorkbenchAsync(preserveViewport: true);
+            try { await RefreshNeonWorkbenchAsync(preserveViewport: true); }
+            finally { busy = false; NeonSchedulePendingRescan(); }
         }
     }
 
@@ -1599,6 +1603,8 @@ public partial class MainWindow
         suppressNeonHealthInvalidationRefresh = true;
         try { InvalidateLifecycle("MOD 启停状态已变更，旧的补丁健康结论已自动失效，请重新核验。"); }
         finally { suppressNeonHealthInvalidationRefresh = false; }
+        // Withdraw verified health now; do not wait for the post-apply scan or projection.
+        neonWorkbenchView.WithdrawObsoleteNeonHealth(root, true, true, lifecycleStatus, false);
 
         neonWorkbenchView.SetInlineToggleStatus(
             current.Id,
@@ -1660,14 +1666,24 @@ public partial class MainWindow
         modStatus = current.Name + (enable ? " 已恢复启用。" : " 已停用，文件已完整保留。");
         RecordNeonActivity("toggle", enable ? $"恢复启用了「{current.Name}」。" : $"停用并保留了「{current.Name}」。");
         neonWorkbenchView.ClearInlineToggleStatus(current.Id, rerender: false);
-        busy = false;
         transactionWriting = false;
 
-        // Wait for the latest-generation projection before deriving dependency receipts.
-        bool projectionReady = await RefreshNeonWorkbenchAsync(preserveViewport: true);
-        if (!projectionReady || !NeonRootMatches(root) || modInventoryDirty)
+        // Keep the operation busy until the post-write view is committed, so another
+        // write or theme switch cannot steal this receipt during the new await.
+        bool projectionReady;
+        try { projectionReady = await RefreshNeonWorkbenchAsync(preserveViewport: true); }
+        finally { busy = false; NeonSchedulePendingRescan(); }
+        if (!projectionReady || !NeonRootMatches(root) || modInventoryDirty ||
+            neonWorkbenchView.CurrentSnapshot?.ModInventoryDirty != false)
         {
-            neonWorkbenchView.ShowToast("文件启停已完成，但后续界面刷新未完成，请手动刷新。", NeonTone.Amber);
+            if (NeonRootMatches(root))
+            {
+                const string message = "文件启停已完成，但后续界面刷新未完成，请手动刷新。";
+                neonWorkbenchView.SetInlineToggleStatus(current.Id,
+                    new NeonInlineToggleStatus(current.Id, current.Name, enable,
+                        NeonInlineTogglePhase.AppliedScanFailed, message, message), rerender: true);
+                neonWorkbenchView.ShowToast(message, NeonTone.Amber);
+            }
             return;
         }
 

@@ -21,6 +21,7 @@ internal sealed partial class NeonWorkbenchView
     internal int NeonRealizedModRows => neonPageRows.Count;
     internal long NeonModRowBuildCount => neonRowBuildCount;
     internal int NeonCurrentModPage => neonModPage;
+    internal void SetNeonPerfNameSort() => sortCombo.SelectedIndex = 1;
 
     void ResetNeonListChildren()
     {

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Windows.Threading;
 
@@ -13,6 +14,8 @@ public partial class MainWindow
     NeonDependencyCache? neonDependencyCache;
     internal long NeonDependencyBuildCount { get; private set; }
     internal long NeonSnapshotDiscardCount { get; private set; }
+    internal double NeonLastSnapshotApplyMs { get; private set; }
+    internal double NeonLastSnapshotCaptureMs { get; private set; }
     internal Action? neonTestSnapshotBuildHook;
 
     sealed record NeonDependencyCache(ModInventory Identity, long RootEpoch, int Generation,
@@ -33,8 +36,18 @@ public partial class MainWindow
         neonSnapshotRequest++;
         neonSnapshotPreserveViewport = preserveViewport;
         // Safety is synchronous even though the expensive projection is not.
-        neonWorkbenchView.WithdrawObsoleteNeonHealth(selectedInstallRoot, modInventoryDirty,
-            lifecycleStale || !HasValidLifecycleReport, lifecycleStatus, neonScanning);
+        try
+        {
+            bool dirty = modInventoryDirty || (selectedInstallRoot != null && modInventory != null &&
+                modFileWatcher.ChangeVersion != modInventoryCleanVersion);
+            neonWorkbenchView.WithdrawObsoleteNeonHealth(selectedInstallRoot, dirty,
+                lifecycleStale || !HasValidLifecycleReport, lifecycleStatus, neonScanning);
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("界面状态撤销未完成：" + ex.Message, NeonTone.Amber);
+            return Task.FromResult(false);
+        }
         neonWorkbenchView.SetRecoveryWarning(NeonRecoveryWarning(selectedInstallRoot));
         NeonSchedulePendingRescan();
         if (neonSnapshotPump == null || neonSnapshotPump.IsCompleted)
@@ -45,10 +58,13 @@ public partial class MainWindow
     async Task<bool> DrainNeonSnapshotsAsync()
     {
         // Coalesce synchronous refresh bursts and ensure the pump field is assigned first.
-        await Dispatcher.Yield(DispatcherPriority.Background);
+        await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
         while (UiThemes.IsNeon && neonWorkbenchView != null && !neonWindowClosing && !Dispatcher.HasShutdownStarted)
         {
             long request = neonSnapshotRequest;
+            try
+            {
+            var captureWatch = Stopwatch.StartNew();
             bool preserve = neonSnapshotPreserveViewport;
             string? root = selectedInstallRoot;
             long rootEpoch = Volatile.Read(ref neonRootEpoch);
@@ -59,7 +75,7 @@ public partial class MainWindow
             bool dirty = modInventoryDirty || (root != null && identity != null && generation != modInventoryCleanVersion);
             // Scan publishes new inventory objects; copy mutable containers before releasing the UI thread.
             ModInventory? inventory = identity == null ? null :
-                new(identity.Mods.ToList(), identity.Issues.ToList());
+                new(identity.Mods.Select(mod => mod with { Dependencies = mod.Dependencies.ToArray() }).ToList(), identity.Issues.ToList());
             var patchReport = report;
             var healthReport = HasValidLifecycleReport && !dirty ? lifecycleReport : null;
             bool healthStale = lifecycleStale || dirty;
@@ -101,8 +117,7 @@ public partial class MainWindow
             int onlineCount = onlineCatalog?.Patches.Count ?? Catalog.Bundled.Length;
             var depCache = neonDependencyCache;
             var testHook = neonFixtureDataRoot != null ? neonTestSnapshotBuildHook : null;
-            try
-            {
+            NeonLastSnapshotCaptureMs = captureWatch.Elapsed.TotalMilliseconds;
                 var built = await Task.Run(() =>
                 {
                     testHook?.Invoke();
@@ -178,13 +193,16 @@ public partial class MainWindow
                     generation == modFileWatcher.ChangeVersion && healthEpoch == lifecycleEpoch &&
                     recoveryRevision == neonRecoveryRevision &&
                     string.Equals(root, selectedInstallRoot, StringComparison.OrdinalIgnoreCase) &&
-                    ReferenceEquals(identity, modInventory) &&
+                    ReferenceEquals(identity, modInventory) && ReferenceEquals(patchReport, report) &&
+                    scanning == neonScanning && healthScanning == lifecycleScanning &&
                     dirty == (modInventoryDirty || (root != null && modInventory != null && generation != modInventoryCleanVersion));
 
                 bool published = false;
                 void Publish()
                 {
                     if (!Current()) return;
+                    bool latestRunning = root != null && string.Equals(neonGameRunningRoot, root, StringComparison.OrdinalIgnoreCase) && neonGameRunningCached;
+                    if (latestRunning != running) return;
                     neonDependencyCache = built.cache;
                     neonRecoveryCacheRoot = root;
                     neonCachedSnapshots = built.loaded.Snapshots;
@@ -193,17 +211,27 @@ public partial class MainWindow
                     neonRecoveryCacheDirty = false;
                     neonCachedGitHubNetwork ??= built.network;
                     neonCachedOrphanAutoStop ??= built.orphan;
-                    bool latestRunning = root != null && string.Equals(neonGameRunningRoot, root, StringComparison.OrdinalIgnoreCase) && neonGameRunningCached;
-                    // A process-state change while building requires rebuilding row lock reasons.
-                    if (latestRunning != running) return;
+                    var applyWatch = Stopwatch.StartNew();
                     neonWorkbenchView!.ApplySnapshot(built.snapshot, preserve);
+                    NeonLastSnapshotApplyMs = applyWatch.Elapsed.TotalMilliseconds;
                     neonWorkbenchView.SetRecoveryWarning(NeonRecoveryWarning(root));
                     published = true;
                 }
                 if (root == null) Publish();
-                else modFileWatcher.TryRunIfCurrent(root, generation, Publish);
+                else if (string.Equals(root, modFileWatcher.CurrentRoot, StringComparison.OrdinalIgnoreCase))
+                    modFileWatcher.TryRunIfCurrent(root, generation, Publish);
+                else if (dirty && modFileWatcher.CurrentRoot == null)
+                    modFileWatcher.TryRunIfCurrent(root, generation, Publish);
                 if (published && request == neonSnapshotRequest) return true;
-                if (!published) NeonSnapshotDiscardCount++;
+                if (!published)
+                {
+                    NeonSnapshotDiscardCount++;
+                    if (UiThemes.IsNeon && !neonWindowClosing && root != null &&
+                        string.Equals(root, selectedInstallRoot, StringComparison.OrdinalIgnoreCase) &&
+                        generation != modFileWatcher.ChangeVersion)
+                        neonWorkbenchView?.WithdrawObsoleteNeonHealth(root, true, true,
+                            "文件监测世代已变化，旧快照已丢弃。", neonScanning);
+                }
                 if (request == neonSnapshotRequest && (!UiThemes.IsNeon || neonWindowClosing)) return false;
                 // A stopped/mismatched watcher cannot certify a clean view; let the next
                 // root/scan request restart the pump rather than spinning.
@@ -216,7 +244,7 @@ public partial class MainWindow
                 neonWorkbenchView?.ShowToast("界面快照刷新未完成：" + ex.Message + "，请手动刷新。", NeonTone.Amber);
                 return false;
             }
-            await Dispatcher.Yield(DispatcherPriority.Background);
+            await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
         }
         return false;
     }

@@ -82,7 +82,7 @@ public partial class MainWindow
    return;
   }
   bool wasNeon=uiTheme==UiThemes.Neon;
-  if(wasNeon)NeonCancelOwnedPreview();
+  if(wasNeon){neonSnapshotRequest++;NeonCancelOwnedPreview();}
   uiTheme=theme;
   UiThemes.Active=theme;
   selectedModDetailFolder=null;

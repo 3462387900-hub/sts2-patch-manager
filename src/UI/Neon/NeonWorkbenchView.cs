@@ -800,7 +800,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         {
             sortBy = sortCombo.SelectedIndex switch { 1 => "name", 2 => "enabled", _ => "priority" };
             if (currentSnapshot != null)
-                RenderWorkbenchContent(preserveScroll: false, animateSettle: true);
+                RenderWorkbenchContent(preserveScroll: true, animateSettle: true);
         };
         toolbarControls.Children.Add(sortCombo);
 
@@ -1731,6 +1731,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         bool wasAlreadyOpen = inspectorPane.Visibility == Visibility.Visible && !inspectorClosing && selectedModId != null;
         bool wasClosing = inspectorClosing;
         selectedModId = modId;
+        EnsureNeonPageForMod(modId);
         RenderWorkbenchContent(preserveScroll: false);
         if (wasAlreadyOpen)
         {
@@ -1752,6 +1753,7 @@ internal sealed partial class NeonWorkbenchView : Grid
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
+            if (!string.Equals(selectedModId, modId, StringComparison.OrdinalIgnoreCase)) return;
             ScrollModRowIntoView(modId);
             if (openUpdatePreview)
             {

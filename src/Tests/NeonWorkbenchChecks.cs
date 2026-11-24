@@ -452,6 +452,7 @@ public partial class MainWindow
 
         async Task Idle()
         {
+            if (neonSnapshotPump is { } pending) await pending;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             UpdateLayout();
         }
@@ -1302,7 +1303,7 @@ public partial class MainWindow
         // --- 15. Explicit scanning progress feedback & anti-silent-swallow guard ---
         modInventory = null;
         report = null;
-        RefreshNeonWorkbench(preserveViewport: false);
+        await RefreshNeonWorkbenchAsync(preserveViewport: false);
         await Idle();
 
         string emptyDeskText = AllText(view.DeskContentControl);
