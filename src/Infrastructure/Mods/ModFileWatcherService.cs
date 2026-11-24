@@ -9,9 +9,22 @@ internal sealed class ModFileChangeEventArgs : EventArgs
     public bool TreeChanged { get; }
     public int Version { get; }
     public bool FirstInBurst { get; }
-    public ModFileChangeEventArgs(string root, bool overflow, bool treeChanged, int version, bool firstInBurst)
+    // Native notifications do not identify the precise flag that fired. Retain the
+    // event kind, path and configured mask for diagnostics without re-reading files.
+    public string? WatchPath { get; }
+    public string? ChangedPath { get; }
+    public string? OldPath { get; }
+    public WatcherChangeTypes? ChangeType { get; }
+    public NotifyFilters? NotifyMask { get; }
+    public string? Error { get; }
+
+    public ModFileChangeEventArgs(string root, bool overflow, bool treeChanged, int version, bool firstInBurst,
+        string? watchPath = null, string? changedPath = null, string? oldPath = null,
+        WatcherChangeTypes? changeType = null, NotifyFilters? notifyMask = null, string? error = null)
     {
         Root = root; Overflow = overflow; TreeChanged = treeChanged; Version = version; FirstInBurst = firstInBurst;
+        WatchPath = watchPath; ChangedPath = changedPath; OldPath = oldPath;
+        ChangeType = changeType; NotifyMask = notifyMask; Error = error;
     }
 }
 
@@ -53,9 +66,13 @@ internal interface IModFileWatcherService : IDisposable
 /// </summary>
 internal sealed class ModFileWatcherService : IModFileWatcherService
 {
-    static readonly NotifyFilters WatchedChanges =
-        NotifyFilters.FileName | NotifyFilters.DirectoryName |
-        NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime;
+    // The root watcher only needs to detect appearance, removal or replacement
+    // of the two owned trees. Their recursive watchers own content notifications.
+    // Creation timestamps and access timestamps are not MOD content/version
+    // inputs. In particular, do not subscribe to redundant creation-time metadata
+    // on freshly copied files: Windows can deliver deferred metadata notifications.
+    const NotifyFilters TreeNames = NotifyFilters.FileName | NotifyFilters.DirectoryName;
+    const NotifyFilters ContentChanges = TreeNames | NotifyFilters.LastWrite | NotifyFilters.Size;
 
     readonly object gate = new();
     readonly List<FileSystemWatcher> watchers = [];
@@ -217,7 +234,7 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
         var watcher = new FileSystemWatcher(folder)
         {
             IncludeSubdirectories = recursive,
-            NotifyFilter = WatchedChanges,
+            NotifyFilter = onlyTopFolders ? TreeNames : ContentChanges,
             InternalBufferSize = 32 * 1024
         };
 
@@ -228,17 +245,25 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
             watcher.Filters.Add(ModManager.StorageName);
         }
 
-        watcher.Changed += (_, _) => QueueChange(root, overflow: false, treeChanged: onlyTopFolders);
-        watcher.Created += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
-        watcher.Deleted += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
-        watcher.Renamed += (_, _) => QueueChange(root, overflow: false, onlyTopFolders);
-        watcher.Error += (_, _) => QueueChange(root, overflow: true, treeChanged: onlyTopFolders);
+        void FileChanged(FileSystemEventArgs e) =>
+            QueueChange(root, overflow: false, treeChanged: onlyTopFolders,
+                watchPath: folder, changedPath: e.FullPath, oldPath: (e as RenamedEventArgs)?.OldFullPath,
+                changeType: e.ChangeType, notifyMask: watcher.NotifyFilter);
+
+        watcher.Changed += (_, e) => FileChanged(e);
+        watcher.Created += (_, e) => FileChanged(e);
+        watcher.Deleted += (_, e) => FileChanged(e);
+        watcher.Renamed += (_, e) => FileChanged(e);
+        watcher.Error += (_, e) => QueueChange(root, overflow: true, treeChanged: onlyTopFolders,
+            watchPath: folder, notifyMask: watcher.NotifyFilter, error: e.GetException()?.ToString());
 
         watchers.Add(watcher);
         watcher.EnableRaisingEvents = true;
     }
 
-    void QueueChange(string root, bool overflow, bool treeChanged)
+    void QueueChange(string root, bool overflow, bool treeChanged,
+        string? watchPath = null, string? changedPath = null, string? oldPath = null,
+        WatcherChangeTypes? changeType = null, NotifyFilters? notifyMask = null, string? error = null)
     {
         ModFileChangeEventArgs args;
         lock (gate)
@@ -251,7 +276,8 @@ internal sealed class ModFileWatcherService : IModFileWatcherService
             this.overflow |= overflow;
             this.treeChanged |= treeChanged;
             changeVersion++;
-            args = new(root, overflow, treeChanged, changeVersion, first);
+            args = new(root, overflow, treeChanged, changeVersion, first,
+                watchPath, changedPath, oldPath, changeType, notifyMask, error);
             debounce.Change(debounceDelay, Timeout.InfiniteTimeSpan);
         }
 

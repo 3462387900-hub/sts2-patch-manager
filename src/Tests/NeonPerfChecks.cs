@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -18,6 +19,21 @@ public partial class MainWindow
         string parent = Path.Combine(Path.GetTempPath(), "spire-neon-perf-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(parent);
         var lines = new List<string>();
+        // Watcher callbacks run off the Dispatcher. Never write the report or
+        // touch WPF state from those callbacks. Only the test thread drains them.
+        var watcherEvents = new ConcurrentQueue<ModFileChangeEventArgs>();
+        void CaptureWatcherEvent(object? sender, ModFileChangeEventArgs e) => watcherEvents.Enqueue(e);
+        void DrainWatcherEvents(string label)
+        {
+            var batch = new List<string>();
+            while (watcherEvents.TryDequeue(out var e))
+                batch.Add($"INFO watcher_event phase={label} generation={e.Version} kind={e.ChangeType} " +
+                    $"mask={e.NotifyMask} root=\"{e.Root}\" watch=\"{e.WatchPath}\" path=\"{e.ChangedPath}\" " +
+                    $"old_path=\"{e.OldPath}\" overflow={e.Overflow} tree_changed={e.TreeChanged} error={e.Error}");
+            if (batch.Count == 0) return;
+            lines.AddRange(batch);
+            File.WriteAllLines(reportPath, lines);
+        }
         void Log(string line)
         {
             lines.Add(line);
@@ -37,7 +53,11 @@ public partial class MainWindow
             $"refresh_running={modInventoryRefreshRunning} status=\"{modStatus}\"";
 
         Action<NeonScanStamp, string> ScanDiagnostic(string label) =>
-            (stamp, phase) => Log($"INFO scan={label} phase={phase} {ScanState(stamp)}");
+            (stamp, phase) =>
+            {
+                DrainWatcherEvents(label + "-" + phase);
+                Log($"INFO scan={label} phase={phase} {ScanState(stamp)}");
+            };
 
         // Use the real watcher. Wait for a full quiet interval, not an arbitrary
         // generation value or a reset of the clean watermark. Never stop the watcher.
@@ -73,6 +93,53 @@ public partial class MainWindow
                 await Task.Delay(50);
             }
             throw new TimeoutException($"{label}: watcher did not settle. {ScanState(stamp)}");
+        }
+
+        // Real file notifications must still be accepted, including same-length
+        // writes and moves. The separate watcher exercises the production filters,
+        // without touching the benchmark root or the application's scan state.
+        async Task VerifyContentNotificationsAsync()
+        {
+            string root = Path.Combine(parent, "watcher-regression");
+            string mods = Path.Combine(root, "mods");
+            string disabled = Path.Combine(root, ModManager.StorageName);
+            Directory.CreateDirectory(mods);
+            Directory.CreateDirectory(disabled);
+            string file = Path.Combine(mods, "content.dll");
+            string moved = Path.Combine(mods, "renamed.dll");
+            string disabledFile = Path.Combine(disabled, "record.json");
+            File.WriteAllText(file, "AAAA");
+            File.WriteAllText(disabledFile, "AAAA");
+            File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(-5));
+            File.SetLastWriteTimeUtc(disabledFile, DateTime.UtcNow.AddMinutes(-5));
+            using var watcher = new ModFileWatcherService();
+            var observed = new ConcurrentQueue<ModFileChangeEventArgs>();
+            watcher.ChangeDetected += (_, e) => observed.Enqueue(e);
+            watcher.Start(root);
+            Check(string.Equals(watcher.CurrentRoot, root, StringComparison.OrdinalIgnoreCase), "watcher regression mounted");
+            async Task Expect(string name, string path, WatcherChangeTypes kind, Action change)
+            {
+                int before = watcher.ChangeVersion;
+                await Task.Run(change);
+                var timeout = Stopwatch.StartNew();
+                while (timeout.Elapsed < TimeSpan.FromSeconds(5) &&
+                    !observed.Any(e => e.Version > before && e.ChangeType == kind &&
+                        string.Equals(e.ChangedPath, path, StringComparison.OrdinalIgnoreCase)))
+                    await Task.Delay(25);
+                bool accepted = observed.Any(e => e.Version > before && e.ChangeType == kind &&
+                    string.Equals(e.ChangedPath, path, StringComparison.OrdinalIgnoreCase));
+                Check(accepted && watcher.ChangeVersion > before, "watcher real " + name);
+            }
+            await Expect("same-size active content write", file, WatcherChangeTypes.Changed,
+                () => File.WriteAllText(file, "BBBB"));
+            await Expect("same-size disabled content write", disabledFile, WatcherChangeTypes.Changed,
+                () => File.WriteAllText(disabledFile, "BBBB"));
+            await Expect("file rename", moved, WatcherChangeTypes.Renamed, () => File.Move(file, moved));
+            await Expect("file delete", moved, WatcherChangeTypes.Deleted, () => File.Delete(moved));
+            await Expect("file create", file, WatcherChangeTypes.Created, () => File.WriteAllText(file, "CCCC"));
+            // The top-level name watcher must still notice the owned tree disappearing.
+            await Expect("owned tree removal", disabled, WatcherChangeTypes.Deleted,
+                () => Directory.Delete(disabled, recursive: true));
         }
 
         async Task LayoutAsync()
@@ -157,6 +224,8 @@ public partial class MainWindow
             neonFixtureDataRoot = Path.Combine(parent, "manager-data");
             Directory.CreateDirectory(neonFixtureDataRoot);
             neonTestHoldRescan = true;
+            await VerifyContentNotificationsAsync();
+            modFileWatcher.ChangeDetected += CaptureWatcherEvent;
             // Build every fixture before starting the watcher for its root.
             var roots = await Task.Run(() => new[] { 50, 200, 500 }.ToDictionary(n => n, MakeRoot));
             heartbeat.Start();
@@ -188,8 +257,35 @@ public partial class MainWindow
                         string.Equals(modFileWatcher.CurrentRoot, root, StringComparison.OrdinalIgnoreCase) &&
                         Volatile.Read(ref neonRootEpoch) == mounted.RootEpoch,
                         $"{n} no competing refresh and root session unchanged");
-                    Check(await NeonScanAndPublishAsync(root, ScanDiagnostic($"{n} initial")),
-                        $"{n} initial guarded inventory publication");
+                    // Observe the removed CreationTime category separately on the
+                    // first real scan. This probe never feeds the production generation.
+                    // If Windows still emits content events, retain those paths instead
+                    // of guessing which NotifyFilter was responsible.
+                    var creationEvents = new ConcurrentQueue<string>();
+                    using var creationProbe = n == 50 ? new FileSystemWatcher(Path.Combine(root, "mods"))
+                    {
+                        IncludeSubdirectories = true, NotifyFilter = NotifyFilters.CreationTime
+                    } : null;
+                    if (creationProbe != null)
+                    {
+                        creationProbe.Changed += (_, e) => creationEvents.Enqueue(e.FullPath);
+                        creationProbe.EnableRaisingEvents = true;
+                    }
+                    var initial = NeonCaptureScanStamp(root);
+                    bool accepted = await NeonScanAndPublishAsync(root, ScanDiagnostic($"{n} initial"));
+                    // Catch notifications delivered shortly after the scan, not just
+                    // those that happened before its guarded publication.
+                    await Task.Delay(1100);
+                    DrainWatcherEvents($"{n}-initial-after-quiet");
+                    if (creationProbe != null)
+                    {
+                        creationProbe.EnableRaisingEvents = false;
+                        Log($"INFO creation_time_probe count={creationEvents.Count}");
+                        foreach (string path in creationEvents) Log($"INFO creation_time_probe path=\"{path}\"");
+                    }
+                    Check(accepted, $"{n} initial guarded inventory publication");
+                    Check(NeonScanStampCurrent(initial) && !modInventoryDirty,
+                        $"{n} read-only scan leaves watcher generation unchanged");
                 }
                 finally { busy = false; }
                 Check(modInventory?.Mods.Count == n, $"{n} exact fixture inventory");
@@ -416,12 +512,14 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
+            DrainWatcherEvents("failure");
             Log("FAIL " + ex);
             throw;
         }
         finally
         {
             heartbeat.Stop();
+            modFileWatcher.ChangeDetected -= CaptureWatcherEvent;
             busy = false;
             neonTestSnapshotBuildHook = null;
             neonTestHoldRescan = false;
