@@ -34,6 +34,7 @@ public partial class MainWindow
     long neonRootEpoch;
     bool neonRescanPending;
     bool neonRescanQueued;
+    internal bool neonTestHoldRescan;
     internal readonly record struct NeonScanStamp(string Root, int Generation, long RootEpoch);
 
     NeonScanStamp NeonCaptureScanStamp(string root) =>
@@ -78,6 +79,7 @@ public partial class MainWindow
 
     void NeonSchedulePendingRescan()
     {
+        if (neonFixtureDataRoot != null && neonTestHoldRescan) return;
         if (!neonRescanPending || neonRescanQueued || busy || transactionWriting ||
             !UiThemes.IsNeon || selectedInstallRoot == null || Dispatcher.HasShutdownStarted) return;
         neonRescanQueued = true;
@@ -810,8 +812,11 @@ public partial class MainWindow
             if (await CheckGameRunningOffUiAsync(root))
             {
                 if (applyPreview.Staging.StagingDirectory is { } dir)
-                    new ModUpdateStagingWorkflowService(neonTestStagingBackend ?? new InfrastructureModUpdateStagingBackend(),
+                {
+                    using var cleanupBackend = new InfrastructureModUpdateStagingBackend();
+                    new ModUpdateStagingWorkflowService(neonTestStagingBackend ?? cleanupBackend,
                         Path.Combine(NeonDataRoot, "MOD更新暂存")).Discard(dir);
+                }
                 neonWorkbenchView.ShowToast("游戏运行中，已取消更新。", NeonTone.Amber);
                 return;
             }
@@ -1485,11 +1490,11 @@ public partial class MainWindow
             report = null;
             states = [];
             demo = false;
-            await NeonScanAndPublishAsync(plan.Root);
+            bool fresh = await NeonScanAndPublishAsync(plan.Root);
             modStatus = displayName + (plan.Enable ? " 已恢复启用。" : " 已停用，文件已完整保留。");
             InvalidateLifecycle("MOD 启停状态已变更，旧的补丁健康结论已自动失效，请重新核验。");
             RecordNeonActivity("toggle", $"{(plan.Enable ? "恢复启用" : "停用保留")}了「{displayName}」。");
-            neonWorkbenchView?.ShowToast($"{(plan.Enable ? "已恢复启用" : "已安全停用")} {displayName}，相关行与筛选计数已同步更新");
+            neonWorkbenchView?.ShowToast($"{(plan.Enable ? "已恢复启用" : "已安全停用")} {displayName}" + (fresh ? "，相关行与筛选计数已同步更新" : "，清单仍待重新扫描。"), fresh ? NeonTone.Sage : NeonTone.Amber);
         }
         catch (Exception ex)
         {

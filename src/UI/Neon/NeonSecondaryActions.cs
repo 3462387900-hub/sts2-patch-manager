@@ -1363,7 +1363,7 @@ public partial class MainWindow
             if (!comparisonCurrent) NeonRejectStaleScan();
             if (applied.Comparison != null && comparisonCurrent)
             {
-                ApplyCoopComparison(applied.Comparison);
+                ApplyCoopComparison(applied.Comparison,comparisonStamp);
                 neonCoopPeerLabel = savedLabel;
             }
             else

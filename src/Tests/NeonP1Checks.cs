@@ -153,6 +153,91 @@ public partial class MainWindow
                     "P1-03 permission failure produces structured failure");
             }
             finally { busy = false; }
+
+            // Exercise all four actual Neon write entry points, not only the helper.
+            neonTestHoldRescan = true;
+            async Task SettleInventory()
+            {
+                neonRescanPending = false;
+                await Task.Delay(1250);
+                for (int i = 0; i < 200 && (busy || modInventoryRefreshRunning); i++) await Task.Delay(25);
+                if (!await NeonScanAndPublishAsync(root))
+                    throw new InvalidOperationException("测试操作前清单未稳定。");
+            }
+            async Task RaceWrite(string name, Func<Task> operation, Func<Task> interfere)
+            {
+                await SettleInventory();
+                var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                neonTestScanOverride = game =>
+                {
+                    var inventory = ModManager.Scan(game);
+                    entered.TrySetResult(true);
+                    release.Task.GetAwaiter().GetResult();
+                    return inventory;
+                };
+                var task = operation();
+                try
+                {
+                    await entered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                    int capturedClean = modInventoryCleanVersion;
+                    await interfere();
+                    release.TrySetResult(true);
+                    await task;
+                    Check(modInventoryDirty && neonRescanPending &&
+                        (selectedInstallRoot != root || modInventoryCleanVersion == capturedClean),
+                        "P1-02 " + name + " rejects stale post-write scan and requests rescan");
+                }
+                finally
+                {
+                    release.TrySetResult(true);
+                    await task;
+                    neonTestScanOverride = null;
+                    neonRescanPending = false;
+                }
+            }
+            Task Overflow()
+            {
+                modFileWatcher.SimulateBufferOverflowForTests(root);
+                return Task.CompletedTask;
+            }
+            async Task ExternalWrite()
+            {
+                int generation = modFileWatcher.ChangeVersion;
+                File.WriteAllText(Path.Combine(root, "mods", "p1-external-" + Guid.NewGuid().ToString("N") + ".txt"), "outside");
+                for (int i = 0; i < 200 && modFileWatcher.ChangeVersion == generation; i++) await Task.Delay(25);
+                Check(modFileWatcher.ChangeVersion != generation, "P1-02 actual entry external write observed");
+            }
+            await RaceWrite("single toggle", () =>
+                NeonDirectToggleModAsync(modInventory!.Mods.Single(x => x.Id == "CombatStats"), null), ExternalWrite);
+            await RaceWrite("batch toggle", async () =>
+            {
+                var selected = modInventory!.Mods.Where(x => x.Id == "intentgraph2" || x.Id == "RemoveMultiplayerPlayerLimit").ToArray();
+                if (selected.Length == 0) throw new InvalidOperationException("批量测试样本缺失。");
+                var batch = await ModToggleWorkflow.PrepareBatchAsync(root, modInventory, selected, enable: false);
+                await NeonConfirmBatchToggleAsync(batch);
+            }, Overflow);
+            string historical = Path.Combine(root, "尖塔修补站_MOD备份", hex.Id, "fixture-before-update");
+            CopyTree(hex.Folder, historical);
+            await RaceWrite("online update", async () =>
+            {
+                var current = modInventory!.Mods.Single(x => x.Id == hex.Id);
+                var request = NeonWorkshopUpdateRequest(3748937859, manifest);
+                var service = new ModUpdateStagingWorkflowService(recording, staging);
+                var staged = await service.StageAndPreviewAsync(root, current, request);
+                var apply = NeonModUpdateApplyService();
+                await NeonConfirmStagedModUpdateAsync(root, current, apply, apply.CreatePreview(root, current, staged), request);
+            }, ExternalWrite);
+            string otherRoot = Path.Combine(parent, "switch-target");
+            Directory.CreateDirectory(Path.Combine(otherRoot, "mods"));
+            Directory.CreateDirectory(Path.Combine(otherRoot, "data_sts2_windows_x86_64"));
+            File.WriteAllBytes(Path.Combine(otherRoot, "SlayTheSpire2.exe"), []);
+            File.WriteAllText(Path.Combine(otherRoot, ".spirepatch-fixture"), "isolated");
+            File.WriteAllText(Path.Combine(otherRoot, "data_sts2_windows_x86_64", "sts2.dll"), "sts2-fixture-0.111.0");
+            await RaceWrite("historical backup restore with actual root switch", () =>
+                NeonConfirmRestoreModBackupAsync(root, modInventory!.Mods.Single(x => x.Id == hex.Id), historical),
+                () => { UseGameRoot(otherRoot); return Task.CompletedTask; });
+            Check(modInventory == null, "P1-02 old root inventory not published after switching to isolated second root");
         }
         catch (Exception ex)
         {
@@ -163,6 +248,7 @@ public partial class MainWindow
         finally
         {
             neonTestStagingBackend = null;
+            neonTestHoldRescan = false;
             neonTestScanOverride = null;
             neonRescanPending = false;
             CloseModWatch();

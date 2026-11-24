@@ -30,17 +30,30 @@ public partial class MainWindow
   report=null;states=[];ClearSelection();installPreview=null;lastInstallResult=null;modInventory=null;
  }
 
- void ApplyCoopFreshReport(CoopWorkflowFreshReport fresh)
+ NeonScanStamp? CaptureNeonCoopStamp()=>UiThemes.IsNeon&&!demo&&selectedInstallRoot is string root
+  ?NeonCaptureScanStamp(root):null;
+
+ void ApplyCoopFreshReport(CoopWorkflowFreshReport fresh,NeonScanStamp? stamp=null)
  {
   if(demo||fresh.Report is null||fresh.Inventory is null)return;
+  if(UiThemes.IsNeon)
+  {
+   if(!stamp.HasValue){NeonRejectStaleScan();throw new InvalidOperationException("联机扫描缺少目录世代。");}
+   if(!NeonTryPublishInventory(stamp.Value,fresh.Inventory,()=>
+   {
+    report=fresh.Report;states=fresh.Report.Patches;
+    scannedCatalog=fresh.Definitions??Catalog.Bundled;
+   }))throw new InvalidOperationException("联机扫描期间目录或文件监测世代已变化。");
+   return;
+  }
   report=fresh.Report;states=report.Patches;
   scannedCatalog=fresh.Definitions??Catalog.Bundled;
   modInventory=fresh.Inventory;
  }
 
- void ApplyCoopComparison(CoopWorkflowComparison comparison)
+ void ApplyCoopComparison(CoopWorkflowComparison comparison,NeonScanStamp? stamp=null)
  {
-  ApplyCoopFreshReport(comparison.Fresh);
+  ApplyCoopFreshReport(comparison.Fresh,stamp);
   coopComparison=comparison.Summary;
   coopRows=comparison.Rows?.ToList();
   coopPeer=comparison.Peer;
@@ -58,8 +71,9 @@ public partial class MainWindow
  {
   ClearCoop();
   PrepareUiForCoopScan();
+  var stamp=CaptureNeonCoopStamp();
   var fresh=await CoopWorkflow.CreateFreshReportAsync(CurrentCoopContext());
-  ApplyCoopFreshReport(fresh);
+  ApplyCoopFreshReport(fresh,stamp);
   return fresh.Snapshot;
  }
 
@@ -67,24 +81,27 @@ public partial class MainWindow
  {
   ClearCoop();
   PrepareUiForCoopScan();
+  var stamp=CaptureNeonCoopStamp();
   var fresh=await CoopWorkflow.ExportFreshReportAsync(path,CurrentCoopContext());
-  ApplyCoopFreshReport(fresh);
+  ApplyCoopFreshReport(fresh,stamp);
  }
 
  internal async Task CompareFreshReportAsync(string path)
  {
   ClearCoop();
   PrepareUiForCoopScan();
+  var stamp=CaptureNeonCoopStamp();
   var comparison=await CoopWorkflow.CompareReportFileAsync(path,CurrentCoopContext());
-  ApplyCoopComparison(comparison);
+  ApplyCoopComparison(comparison,stamp);
  }
 
  async Task SetCoopComparisonAsync(JsonElement peer)
  {
   ClearCoop();
   PrepareUiForCoopScan();
+  var stamp=CaptureNeonCoopStamp();
   var comparison=await CoopWorkflow.CompareAsync(peer,CurrentCoopContext());
-  ApplyCoopComparison(comparison);
+  ApplyCoopComparison(comparison,stamp);
  }
  async Task RunReportActionAsync(Func<Task> action)
  {

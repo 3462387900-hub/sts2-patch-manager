@@ -34,6 +34,7 @@ public partial class MainWindow
    environmentSession.DirectoryChanged+=(_,e)=>
    {
     selectedInstallRoot=e.CurrentRoot;
+    neonRecoveryStates.Remove(e.CurrentRoot);
     watchedGameRoot=e.CurrentRoot;
     if(modInventoryRefreshRunning)pendingModInventoryRefreshRoot=e.CurrentRoot;
     modInventoryDirty=UiThemes.IsNeon;modWatchOverflow=false;modWatchTreeChanged=false;modChangeVersion=0;
