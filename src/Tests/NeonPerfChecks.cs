@@ -130,10 +130,17 @@ public partial class MainWindow
                     string.Equals(e.ChangedPath, path, StringComparison.OrdinalIgnoreCase));
                 Check(accepted && watcher.ChangeVersion > before, "watcher real " + name);
             }
+            static void OverwriteInPlace(string path)
+            {
+                // No truncation or size change: exercise LastWrite independently.
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read);
+                stream.Write("BBBB"u8);
+                stream.Flush(flushToDisk: true);
+            }
             await Expect("same-size active content write", file, WatcherChangeTypes.Changed,
-                () => File.WriteAllText(file, "BBBB"));
+                () => OverwriteInPlace(file));
             await Expect("same-size disabled content write", disabledFile, WatcherChangeTypes.Changed,
-                () => File.WriteAllText(disabledFile, "BBBB"));
+                () => OverwriteInPlace(disabledFile));
             await Expect("file rename", moved, WatcherChangeTypes.Renamed, () => File.Move(file, moved));
             await Expect("file delete", moved, WatcherChangeTypes.Deleted, () => File.Delete(moved));
             await Expect("file create", file, WatcherChangeTypes.Created, () => File.WriteAllText(file, "CCCC"));
@@ -257,31 +264,42 @@ public partial class MainWindow
                         string.Equals(modFileWatcher.CurrentRoot, root, StringComparison.OrdinalIgnoreCase) &&
                         Volatile.Read(ref neonRootEpoch) == mounted.RootEpoch,
                         $"{n} no competing refresh and root session unchanged");
-                    // Observe the removed CreationTime category separately on the
-                    // first real scan. This probe never feeds the production generation.
-                    // If Windows still emits content events, retain those paths instead
-                    // of guessing which NotifyFilter was responsible.
-                    var creationEvents = new ConcurrentQueue<string>();
-                    using var creationProbe = n == 50 ? new FileSystemWatcher(Path.Combine(root, "mods"))
-                    {
-                        IncludeSubdirectories = true, NotifyFilter = NotifyFilters.CreationTime
-                    } : null;
-                    if (creationProbe != null)
-                    {
-                        creationProbe.Changed += (_, e) => creationEvents.Enqueue(e.FullPath);
-                        creationProbe.EnableRaisingEvents = true;
-                    }
+                    // Independent single-mask probes on the first isolated scan:
+                    // do not feed production generation, do not open watched files.
+                    // Record even when publication fails, so the next log identifies
+                    // whether the filesystem emitted CreationTime, LastWrite or Size.
+                    var probeEvents = new ConcurrentQueue<(NotifyFilters Mask, string Path)>();
+                    var probes = new List<FileSystemWatcher>();
                     var initial = NeonCaptureScanStamp(root);
-                    bool accepted = await NeonScanAndPublishAsync(root, ScanDiagnostic($"{n} initial"));
-                    // Catch notifications delivered shortly after the scan, not just
-                    // those that happened before its guarded publication.
-                    await Task.Delay(1100);
-                    DrainWatcherEvents($"{n}-initial-after-quiet");
-                    if (creationProbe != null)
+                    bool accepted;
+                    try
                     {
-                        creationProbe.EnableRaisingEvents = false;
-                        Log($"INFO creation_time_probe count={creationEvents.Count}");
-                        foreach (string path in creationEvents) Log($"INFO creation_time_probe path=\"{path}\"");
+                        if (n == 50)
+                        {
+                            foreach (var mask in new[] { NotifyFilters.CreationTime, NotifyFilters.LastWrite, NotifyFilters.Size })
+                            {
+                                var probe = new FileSystemWatcher(Path.Combine(root, "mods"))
+                                { IncludeSubdirectories = true, NotifyFilter = mask };
+                                probes.Add(probe);
+                                probe.Changed += (_, e) => probeEvents.Enqueue((mask, e.FullPath));
+                                probe.EnableRaisingEvents = true;
+                            }
+                        }
+                        accepted = await NeonScanAndPublishAsync(root, ScanDiagnostic($"{n} initial"));
+                        // Catch notifications delivered shortly after the scan, not
+                        // just those that happened before guarded publication.
+                        await Task.Delay(1100);
+                    }
+                    finally
+                    {
+                        foreach (var probe in probes) probe.Dispose();
+                        DrainWatcherEvents($"{n}-initial-after-quiet");
+                        if (n == 50)
+                        {
+                            foreach (var mask in new[] { NotifyFilters.CreationTime, NotifyFilters.LastWrite, NotifyFilters.Size })
+                                Log($"INFO native_probe mask={mask} count={probeEvents.Count(e => e.Mask == mask)}");
+                            foreach (var e in probeEvents) Log($"INFO native_probe mask={e.Mask} path=\"{e.Path}\"");
+                        }
                     }
                     Check(accepted, $"{n} initial guarded inventory publication");
                     Check(NeonScanStampCurrent(initial) && !modInventoryDirty,
