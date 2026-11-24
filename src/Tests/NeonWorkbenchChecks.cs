@@ -163,6 +163,7 @@ public partial class MainWindow
         Directory.CreateDirectory(dataRoot);
         neonFixtureRoot = root;
         neonFixtureDataRoot = dataRoot;
+        modInventoryRefresh = null;
         neonLastUpdateCheckTimeLabel = DateTime.Now.ToString("HH:mm:ss");
         neonActivityLog.Clear();
         UseGameRoot(root);
@@ -253,9 +254,9 @@ public partial class MainWindow
         for (int i = 0; i < 80 && (busy || modInventoryRefreshRunning); i++) await Task.Delay(40);
 
         // Run real ModManager.Scan, GitHub update checks, and Workshop update check (HextechRunes)
-        modInventory = ModManager.Scan(root);
-        modInventoryDirty = false;
-        modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+        await NeonRecoverTransactionsAsync(root);
+        if (!await NeonScanAndPublishAsync(root))
+            throw new InvalidOperationException("隔离样本初始扫描失效。");
         foreach (string id in new[] { "BaseLib", "CznCore", "Sts2ModTranslator", "intentgraph2", "EndlessMod" })
         {
             var m = modInventory.Mods.Single(x => x.Id == id);

@@ -121,7 +121,22 @@ public partial class MainWindow
     internal static async Task<NeonRecoveryStatus> NeonRunRecoveryStepAsync(
         string operation, string logDirectory, Func<Task<string?>> recover)
     {
-        try { return new(operation, logDirectory, await recover()); }
+        try
+        {
+            // Directory.Exists hides access errors; only a genuinely missing directory is benign.
+            await Task.Run(() =>
+            {
+                try
+                {
+                    if ((File.GetAttributes(logDirectory) & FileAttributes.Directory) == 0)
+                        throw new IOException("事务日志路径不是目录。");
+                    _ = Directory.EnumerateFileSystemEntries(logDirectory).Take(1).ToArray();
+                }
+                catch (DirectoryNotFoundException) { }
+                catch (FileNotFoundException) { }
+            });
+            return new(operation, logDirectory, await recover());
+        }
         catch (Exception error) { return new(operation, logDirectory, error.GetType().Name + "：" + error.Message); }
     }
 
@@ -169,6 +184,10 @@ public partial class MainWindow
 
     async Task NeonRecoverTransactionsAsync(string root)
     {
+        bool wasWriting = transactionWriting;
+        transactionWriting = true;
+        try
+        {
         // Each family owns its own exception boundary. One unreadable journal must
         // never prevent the other family from being inspected or recovered.
         var zipStatus = await NeonRunRecoveryStepAsync(NeonZipRecoveryKind, NeonZipLogDirectory, async () =>
@@ -181,7 +200,7 @@ public partial class MainWindow
                 ApplyLocalZipInvalidationPlan(root, plan);
                 if (recovery.CompletedCount > 0) neonRecoveryCacheDirty = true;
             }
-            return recovery.HasPendingRecovery
+            return recovery.HasPendingRecovery || (NeonRootMatches(root) && localZipRecoveryBlocked)
                 ? LocalZipUiResultPresenter.FormatRecoveryReport(recovery, session.TransactionLogDirectory)
                     ?? "发现待人工核对的本地 ZIP 安装事务。"
                 : null;
@@ -206,6 +225,8 @@ public partial class MainWindow
         NeonRecordRecoveryStatus(root, updateStatus);
         if (NeonRootMatches(root) && NeonRecoveryBlocked(root))
             InvalidateLifecycle("存在未解决的事务恢复异常，暂停文件写入与健康确认。");
+        }
+        finally { transactionWriting = wasWriting; modFileWatcher.DeferQuietPeriod(); }
     }
 
     void ShowNeonWorkbench()
@@ -786,6 +807,14 @@ public partial class MainWindow
         transactionWriting = true;
         try
         {
+            if (await CheckGameRunningOffUiAsync(root))
+            {
+                if (applyPreview.Staging.StagingDirectory is { } dir)
+                    new ModUpdateStagingWorkflowService(neonTestStagingBackend ?? new InfrastructureModUpdateStagingBackend(),
+                        Path.Combine(NeonDataRoot, "MOD更新暂存")).Discard(dir);
+                neonWorkbenchView.ShowToast("游戏运行中，已取消更新。", NeonTone.Amber);
+                return;
+            }
             var safety = await NeonSnapshotWorkflow(root).CreateAsync("更新前自动保护");
             var applyResult = await applySvc.ApplyAsync(applySvc.Confirm(applyPreview, confirmed: true));
             modFileWatcher.DeferQuietPeriod();

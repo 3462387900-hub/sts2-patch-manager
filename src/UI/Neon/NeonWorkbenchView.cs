@@ -311,6 +311,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     };
     readonly Border neonRecoveryWarningPanel = new() { Visibility = Visibility.Collapsed };
 
+    internal bool RecoveryWarningVisible => neonRecoveryWarningPanel.Visibility == Visibility.Visible;
     internal void SetRecoveryWarning(string? warning)
     {
         neonRecoveryWarningText.Text = warning ?? "";

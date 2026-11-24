@@ -723,13 +723,8 @@ public partial class MainWindow
                 return;
             }
             if (matches.Length == 1 && WorkshopUpdates().Cached(boundId) is { } cached &&
-                cached.WorkshopId == workshopId && ulong.TryParse(cached.RemoteManifestId, out var manifest) && manifest != 0)
+                cached.Status == "有更新" && cached.WorkshopId == workshopId && ulong.TryParse(cached.RemoteManifestId, out var manifest) && manifest != 0)
             {
-                if (cached.Status == "已是最新")
-                {
-                    neonWorkbenchView.SetWorkshopFeedback("已核验 Manifest 与本地基线一致，无需更新。", NeonTone.Sage);
-                    return;
-                }
                 await NeonStageAndPreviewModUpdateAsync(gameRoot, matches[0],
                     NeonWorkshopUpdateRequest(workshopId, cached.RemoteManifestId), null);
                 return;

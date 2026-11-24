@@ -46,7 +46,7 @@ internal static class ModUpdateApplyWorkflowChecks
         .OrderBy(p=>p.Key,StringComparer.OrdinalIgnoreCase).Select(p=>p.Key+":"+p.Value));
 
     static (string Game,string Target,ManagedMod Mod,string Stage,string Payload,
-        ModUpdateStagingResult Staging) Fixture(string root)
+        ModUpdateStagingResult Staging) Fixture(string root, bool workshop)
     {
         string game=Path.Combine(root,"game");
         string target=Path.Combine(game,"mods","Fixture");
@@ -65,8 +65,8 @@ internal static class ModUpdateApplyWorkflowChecks
         var mod=new ManagedMod("fixture.mod","Fixture","1.0.0","test","",target,
             Path.Combine(target,"mod_manifest.json"),true,[]);
         var staging=new ModUpdateStagingResult(ModUpdateStagingState.Succeeded,
-            ModUpdateStagingSource.GitHub,"fixture.mod","fixture/repo",target,stage,payload,
-            "1.0.0","2.0.0",true,null,true,[],1,1,1,
+            workshop?ModUpdateStagingSource.Workshop:ModUpdateStagingSource.GitHub,"fixture.mod",workshop?"123456":"fixture/repo",target,stage,payload,
+            "1.0.0","2.0.0",true,workshop?"987654":null,true,[],1,1,1,
             ModUpdateStagingFailureKind.None,null,null,DateTimeOffset.UtcNow)
         {
             CurrentFileHashes=Snapshot(target),
@@ -83,13 +83,13 @@ internal static class ModUpdateApplyWorkflowChecks
         (string Game,string Target,ManagedMod Mod,string Stage,string Payload,
         ModUpdateStagingResult Staging) f) => service.CreatePreview(f.Game,f.Mod,f.Staging);
 
-    public static async Task RunAsync(string parent, Action<bool,string> check)
+    public static async Task RunAsync(string parent, Action<bool,string> check, bool workshop = false)
     {
         string root=Path.Combine(parent,"MOD 更新覆盖事务测试-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
-            var f=Fixture(root);
+            var f=Fixture(root,workshop);
             string original=Fingerprint(f.Target);
             int writingStarts=0, writingEnds=0, quietDefers=0;
             bool watcherWriting=false;
@@ -127,7 +127,7 @@ internal static class ModUpdateApplyWorkflowChecks
                 $"watcherWriting={watcherWriting}; quietDefers={quietDefers}]");
 
             // Decline does not create a backup or touch the target.
-            f=Fixture(Path.Combine(root,"decline")); original=Fingerprint(f.Target);
+            f=Fixture(Path.Combine(root,"decline"),workshop); original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"decline"));
             result=await service.ApplyAsync(service.Confirm(Preview(service,f),false));
             check(!result.Success && result.FailureKind==ModUpdateApplyFailureKind.UserDeclined &&
@@ -136,7 +136,7 @@ internal static class ModUpdateApplyWorkflowChecks
                 "拒绝确认不会创建备份或修改目标 MOD");
 
             // Each independent pre-commit guard rejects before touching the target.
-            f=Fixture(Path.Combine(root,"changed")); original=Fingerprint(f.Target);
+            f=Fixture(Path.Combine(root,"changed"),workshop); original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"changed"));
             preview=Preview(service,f);
             File.WriteAllText(Path.Combine(f.Target,"outside.txt"),"external");
@@ -145,13 +145,13 @@ internal static class ModUpdateApplyWorkflowChecks
             check(result.FailureKind==ModUpdateApplyFailureKind.TargetChanged &&
                 Fingerprint(f.Target)==changed,"预览后目标 MOD 外部修改会拦截写入");
 
-            f=Fixture(Path.Combine(root,"running")); original=Fingerprint(f.Target);
+            f=Fixture(Path.Combine(root,"running"),workshop); original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"running"),_=>true);
             result=await service.ApplyAsync(service.Confirm(Preview(service,f),true));
             check(result.FailureKind==ModUpdateApplyFailureKind.GameRunning &&
                 Fingerprint(f.Target)==original,"游戏运行时拒绝覆盖写入");
 
-            f=Fixture(Path.Combine(root,"identity")); original=Fingerprint(f.Target);
+            f=Fixture(Path.Combine(root,"identity"),workshop); original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"identity"));
             preview=Preview(service,f);
             var wrong=preview with { Target=preview.Target with { Id="another.mod" } };
@@ -159,7 +159,7 @@ internal static class ModUpdateApplyWorkflowChecks
             check(result.FailureKind==ModUpdateApplyFailureKind.SourceIdentityMismatch &&
                 Fingerprint(f.Target)==original,"来源与 MOD ID 不匹配时拒绝写入");
 
-            f=Fixture(Path.Combine(root,"tampered")); original=Fingerprint(f.Target);
+            f=Fixture(Path.Combine(root,"tampered"),workshop); original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"tampered"));
             preview=Preview(service,f);
             File.WriteAllText(Path.Combine(f.Payload,"new.dll"),"tampered");
@@ -169,19 +169,19 @@ internal static class ModUpdateApplyWorkflowChecks
                 Fingerprint(f.Target)==tampered,"暂存产物篡改会在写入前被拦截");
 
             // Cancellation before the critical boundary leaves the original tree intact.
-            f=Fixture(Path.Combine(root,"cancel"));
+            f=Fixture(Path.Combine(root,"cancel"),workshop); original=Fingerprint(f.Target);
             service=Service(Path.Combine(root,"cancel"));
             using(var cts=new CancellationTokenSource())
             {
                 cts.Cancel();
                 result=await service.ApplyAsync(service.Confirm(Preview(service,f),true),cts.Token);
             }
-            check(result.Cancelled && Fingerprint(f.Target)==Fingerprint(f.Target) &&
+            check(result.Cancelled && Fingerprint(f.Target)==original &&
                 !Directory.Exists(Path.Combine(root,"cancel","isolated-backups")),
                 "关键提交前取消不会创建备份或改变目标");
 
             // A commit failure restores the exact original tree.
-            f=Fixture(Path.Combine(root,"rollback")); original=Fingerprint(f.Target);
+            f=Fixture(Path.Combine(root,"rollback"),workshop); original=Fingerprint(f.Target);
             var fault=new FaultFiles{FailMoveAt=2};
             service=Service(Path.Combine(root,"rollback"),fault:fault);
             result=await service.ApplyAsync(service.Confirm(Preview(service,f),true));
@@ -189,7 +189,7 @@ internal static class ModUpdateApplyWorkflowChecks
                 Fingerprint(f.Target)==original,"提交中途失败后自动回滚，原 MOD 哈希完全一致");
 
             // If rollback itself fails, the only complete backup remains available.
-            f=Fixture(Path.Combine(root,"rollback-fails"));
+            f=Fixture(Path.Combine(root,"rollback-fails"),workshop);
             fault=new FaultFiles{FailEveryMoveAfterFirst=true};
             service=Service(Path.Combine(root,"rollback-fails"),fault:fault);
             result=await service.ApplyAsync(service.Confirm(Preview(service,f),true));
@@ -200,7 +200,7 @@ internal static class ModUpdateApplyWorkflowChecks
                 "回滚异常时保留完整备份、事务标记及人工恢复路径");
 
             // Simulate a crash after the original folder was moved aside.
-            f=Fixture(Path.Combine(root,"crash"));
+            f=Fixture(Path.Combine(root,"crash"),workshop);
             string backupRoot=Path.Combine(root,"crash","isolated-backups");
             string tx=Guid.NewGuid().ToString("N");
             string txDir=Path.Combine(backupRoot,tx), backup=Path.Combine(txDir,"backup");
@@ -226,7 +226,7 @@ internal static class ModUpdateApplyWorkflowChecks
                 !Directory.Exists(txDir),"中断恢复可将半写入目录还原为原始 MOD");
 
             // Cancellation arriving during the commit is intentionally ignored until completion.
-            f=Fixture(Path.Combine(root,"cancel-during"));
+            f=Fixture(Path.Combine(root,"cancel-during"),workshop);
             using var during=new CancellationTokenSource();
             bool signalled=false;
             fault=new FaultFiles();

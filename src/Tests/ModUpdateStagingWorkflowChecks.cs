@@ -147,13 +147,13 @@ internal static class ModUpdateStagingWorkflowChecks
             true);
     }
 
-    private static FakeBackend WorkshopBackend(string workshopId, string manifestId) =>
-        new(async (_, workspace, _, cancellationToken) =>
+    internal static IModUpdateStagingBackend WorkshopBackend(string workshopId, string manifestId, string modId = "fixture.mod", string version = "1.1.0") =>
+        new FakeBackend(async (_, workspace, _, cancellationToken) =>
         {
             string payload = Path.Combine(workspace, "workshop-assembled");
             Directory.CreateDirectory(payload);
 
-            string manifest = Manifest("fixture.mod", "1.1.0");
+            string manifest = Manifest(modId, version);
             const string dll = "workshop update";
             await File.WriteAllTextAsync(
                 Path.Combine(payload, "mod_manifest.json"), manifest, cancellationToken);

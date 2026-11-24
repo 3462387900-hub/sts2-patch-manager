@@ -13,7 +13,7 @@ public partial class MainWindow
  string? orphanPatchNotice;
  ModInventoryRefreshWorkflowService? modInventoryRefresh;
  ModInventoryRefreshWorkflowService ModInventoryRefresh=>
-  modInventoryRefresh??=new ModInventoryRefreshWorkflowService(installer.DataRoot);
+  modInventoryRefresh??=new ModInventoryRefreshWorkflowService(NeonDataRoot);
  ModToggleWorkflowService? modToggleWorkflow;
  ModToggleWorkflowService ModToggleWorkflow=>
   modToggleWorkflow??=new ModToggleWorkflowService();
@@ -190,7 +190,8 @@ public partial class MainWindow
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
   if(workshopModUpdates==null||!string.Equals(workshopUpdatesRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
   {
-   workshopModUpdates=new WorkshopModUpdates();
+   workshopModUpdates=neonFixtureDataRoot==null?new WorkshopModUpdates():
+    new WorkshopModUpdates(()=>new SpireSupplyStationClient(new UpdateChecks.Handler(_=>throw new InvalidOperationException("隔离测试禁止未预置的 Workshop HTTP 请求。"))));
    workshopUpdatesRoot=selectedInstallRoot;
   }
   return workshopModUpdates;
@@ -200,7 +201,7 @@ public partial class MainWindow
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
   if(workshopModSources==null||!string.Equals(workshopSourceRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
   {
-   workshopModSources=new WorkshopModSources(installer.DataRoot,selectedInstallRoot);
+   workshopModSources=new WorkshopModSources(NeonDataRoot,selectedInstallRoot);
    workshopSourceRoot=selectedInstallRoot;
   }
   return workshopModSources;
@@ -210,7 +211,8 @@ public partial class MainWindow
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
   if(githubModUpdates==null||!string.Equals(githubRoot,selectedInstallRoot,StringComparison.OrdinalIgnoreCase))
   {
-   githubModUpdates?.Dispose();githubModUpdates=new GitHubModUpdates(installer.DataRoot,selectedInstallRoot);
+   githubModUpdates?.Dispose();githubModUpdates=neonFixtureDataRoot==null?new GitHubModUpdates(NeonDataRoot,selectedInstallRoot):
+    new GitHubModUpdates(NeonDataRoot,selectedInstallRoot,new UpdateChecks.Handler(_=>throw new InvalidOperationException("隔离测试禁止未预置的 GitHub HTTP 请求。")));
    githubRoot=selectedInstallRoot;
   }
   return githubModUpdates;
@@ -693,7 +695,7 @@ public partial class MainWindow
   if(!UiThemes.IsNeon&&(page=="模组管理"||page=="本地补丁")&&(currentVisit?.Key==page))ShowMods();
   try
   {
-   if(UiThemes.IsNeon)
+   if(UiThemes.IsNeon||neonFixtureDataRoot!=null)
    {
     await NeonRecoverTransactionsAsync(root);
     if(!NeonRootMatches(root)){NeonRejectStaleScan();return;}
@@ -720,7 +722,7 @@ public partial class MainWindow
      confirmation.Root.Equals(selectedInstallRoot,StringComparison.OrdinalIgnoreCase)&&
      confirmation.ChangeVersion==(UiThemes.IsNeon?modFileWatcher.ChangeVersion:Volatile.Read(ref modChangeVersion))&&
      (!UiThemes.IsNeon||(NeonScanStampCurrent(neonStamp)&&!NeonRecoveryBlocked(root)))&&
-     OrphanPatchAutoStop.Enabled(installer.DataRoot)),
+     OrphanPatchAutoStop.Enabled(NeonDataRoot)),
     ()=>modFileWatcher.DeferQuietPeriod(),
     checkpoint=>
     {
