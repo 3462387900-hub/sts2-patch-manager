@@ -29,6 +29,16 @@ public partial class MainWindow
     NeonGitHubNetworkState? neonCachedGitHubNetwork;
     internal Func<string, ModInventory>? neonTestScanOverride;
 
+    // Snapshot listing, guarded scans and transaction recovery can all acquire
+    // GameEnvironment's fail-fast named mutex. Serialize our own background IO
+    // at its call boundary; do not change the Domain mutex or wait on the UI.
+    readonly object neonRecoveryIoGate = new();
+
+    T WithNeonRecoveryIo<T>(Func<T> operation)
+    {
+        lock (neonRecoveryIoGate) return operation();
+    }
+
     // A watcher generation can restart at zero after a directory switch; the session
     // epoch prevents an old A -> B -> A scan from ever being accepted.
     long neonRootEpoch;
@@ -100,7 +110,8 @@ public partial class MainWindow
         bool published;
         try
         {
-            var inventory = await Task.Run(() => neonTestScanOverride != null ? neonTestScanOverride(root) : ModManager.Scan(root));
+            var inventory = await Task.Run(() => WithNeonRecoveryIo(() =>
+                neonTestScanOverride != null ? neonTestScanOverride(root) : ModManager.Scan(root)));
             published = NeonTryPublishInventory(stamp, inventory);
         }
         catch (Exception error)
@@ -200,7 +211,8 @@ public partial class MainWindow
         var zipStatus = await NeonRunRecoveryStepAsync(NeonZipRecoveryKind, NeonZipLogDirectory, async () =>
         {
             var session = NeonLocalZipSession();
-            var recovery = await Task.Run(() => session.RecoverPendingTransactions(root, () => modFileWatcher.DeferQuietPeriod()));
+            var recovery = await Task.Run(() => WithNeonRecoveryIo(() =>
+                session.RecoverPendingTransactions(root, () => modFileWatcher.DeferQuietPeriod())));
             if (NeonRootMatches(root))
             {
                 var plan = HandleLocalZipRecoveryReport(root, recovery, session.TransactionLogDirectory);
@@ -215,7 +227,8 @@ public partial class MainWindow
         NeonRecordRecoveryStatus(root, zipStatus);
         var updateStatus = await NeonRunRecoveryStepAsync(NeonUpdateRecoveryKind, NeonUpdateLogDirectory, async () =>
         {
-            var recovery = await Task.Run(() => NeonModUpdateApplyService().RecoverPendingTransactions(root));
+            var recovery = await Task.Run(() => WithNeonRecoveryIo(() =>
+                NeonModUpdateApplyService().RecoverPendingTransactions(root)));
             if (recovery.ChangedTargetOrCleanedTransaction && NeonRootMatches(root))
             {
                 modSourceCheckWorkflow?.InvalidateAll();
@@ -1230,13 +1243,13 @@ public partial class MainWindow
             // Phase 1: Fast local MOD inventory + patch scan + recovery cache preload so UI stays non-blocking.
             string dataRoot = NeonDataRoot;
             long recoveryRevision = neonRecoveryRevision;
-            var scanned = await Task.Run(() =>
+            var scanned = await Task.Run(() => WithNeonRecoveryIo(() =>
             {
                 var inv = ModManager.Scan(root);
                 var patchRep = Catalog.Scan(root, definitions, revision);
                 var recCache = LoadRecoveryCacheSync(root, dataRoot);
                 return (inv, patchRep, recCache);
-            });
+            }));
 
             if (!NeonTryPublishInventory(scanStamp, scanned.inv, () =>
             {

@@ -83,7 +83,10 @@ public partial class MainWindow
         neonRecoveryRevision++;
     }
 
-    static (ModEnvironmentSnapshotEntry[] Snapshots, string? Warning, NeonPatchBackupBatch? Batch) LoadRecoveryCacheSync(string? root, string dataRoot)
+    (ModEnvironmentSnapshotEntry[] Snapshots, string? Warning, NeonPatchBackupBatch? Batch) LoadRecoveryCacheSync(string? root, string dataRoot) =>
+        WithNeonRecoveryIo(() => ReadRecoveryCache(root, dataRoot));
+
+    static (ModEnvironmentSnapshotEntry[] Snapshots, string? Warning, NeonPatchBackupBatch? Batch) ReadRecoveryCache(string? root, string dataRoot)
     {
         if (root == null) return ([], null, null);
         ModEnvironmentSnapshotEntry[] entries = [];

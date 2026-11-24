@@ -144,7 +144,44 @@ public partial class MainWindow
                 Check(view.RecoveryWarningVisible && NeonRecoveryWarning(root)!.Contains(NeonZipLogDirectory) &&
                     !NeonCanWrite(root), "P1-03 persistent warning and overlapping write gate");
                 File.Delete(corrupt);
-                await NeonRecoverTransactionsAsync(root);
+                // Reproduce the P2-02 background-list/recovery overlap with the
+                // real fail-fast game mutex held by a background cache reader.
+                // The recovery should wait for our own IO, not report a false
+                // pending recovery. Never suppress a real recovery error.
+                var readerEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                using var releaseReader = new ManualResetEventSlim(false);
+                string recoveryDataRoot = NeonDataRoot;
+                var reader = Task.Run(() => WithNeonRecoveryIo(() => GameEnvironment.WithLock(root, () =>
+                {
+                    _ = ReadRecoveryCache(root, recoveryDataRoot);
+                    readerEntered.TrySetResult(true);
+                    if (!releaseReader.Wait(TimeSpan.FromSeconds(15)))
+                        throw new TimeoutException("P1-03 recovery cache reader gate");
+                    return true;
+                })));
+                Task? retry = null;
+                bool waitedForReader = false;
+                try
+                {
+                    await readerEntered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                    retry = NeonRecoverTransactionsAsync(root);
+                    await Task.Delay(200);
+                    waitedForReader = !retry.IsCompleted;
+                }
+                finally
+                {
+                    releaseReader.Set();
+                    await reader;
+                    if (retry != null) await retry;
+                }
+                Check(waitedForReader, "P1-03 recovery retry waits for background recovery cache IO");
+                results.Add("INFO P1-03 retry: checked=" + NeonRecoveryChecked(root) +
+                    " blocked=" + NeonRecoveryBlocked(root) +
+                    " localZipBlocked=" + localZipRecoveryBlocked +
+                    " warningVisible=" + view.RecoveryWarningVisible +
+                    " rootMatches=" + NeonRootMatches(root) +
+                    " reasons=" + (NeonRecoveryWarning(root) ?? "<none>"));
+                File.WriteAllLines(reportPath, results);
                 Check(!NeonRecoveryBlocked(root) && !view.RecoveryWarningVisible && NeonCanWrite(root),
                     "P1-03 successful retry clears warning and gate");
                 var denied = await NeonRunRecoveryStepAsync("permission", NeonZipLogDirectory,
