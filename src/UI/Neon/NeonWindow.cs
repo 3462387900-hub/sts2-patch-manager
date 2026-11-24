@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 
@@ -103,7 +104,7 @@ public partial class MainWindow
             }
             catch (Exception ex) { view.ShowToast("解除关联失败：" + ex.Message, NeonTone.Cinnabar); }
         };
-        view.RequestRestoreModBackup += RestoreModBackup;
+        view.RequestRestoreModBackup += NeonPreviewRestoreModBackup;
         view.RequestOpenModFolder += mod =>
         {
             if (Directory.Exists(mod.Folder)) OpenUrl(mod.Folder);
@@ -112,7 +113,14 @@ public partial class MainWindow
         view.RequestBatchToggleDisable += folders => _ = NeonPreviewBatchToggleAsync(folders, enable: false);
         view.RequestBatchCheckUpdates += folders => _ = NeonCheckBatchModUpdatesAsync(folders);
         view.RequestPreviewRetirePatch += patch => _ = NeonPreviewRetirePatchAsync(patch);
-        view.RequestDiagnoseLog += ChooseLog;
+        view.RequestDiagnoseLog += () => _ = NeonChooseAndDiagnoseLogAsync();
+        view.RequestSelectManagerChannel += SelectManagerUpdateChannel;
+        view.RequestCheckManagerUpdate += () => _ = CheckManagerUpdatesAsync(showPage: true);
+        view.RequestOpenManagerUpdateModal += NeonOpenManagerUpdateModal;
+        view.RequestCleanupOldManagerFiles += CleanupOldManagerFiles;
+        view.RequestOpenManagerReleasePage += () => OpenUrl(managerRelease?.ReleaseUrl ?? ManagerUpdates.RepositoryUrl);
+        view.RequestOpenGitHubNetworkModal += NeonOpenGitHubNetworkModal;
+        view.RequestDiagnoseGitHubNetwork += () => _ = NeonDiagnoseGitHubNetworkAsync();
         view.RequestSwitchTheme += ChangeUiTheme;
         view.RequestSimulateExternalChange += SimulateExternalChangeInFixture;
         WireNeonSecondaryPageEvents(view);
@@ -765,7 +773,9 @@ public partial class MainWindow
             checkingModUpdates: modUpdateCheckRunning,
             lastUpdateCheckTimeLabel: neonLastUpdateCheckTimeLabel,
             coopState: BuildNeonCoopSnapshotState(),
-            recoveryState: BuildNeonRecoverySnapshotState());
+            recoveryState: BuildNeonRecoverySnapshotState(),
+            managerUpdateState: BuildNeonManagerUpdateSnapshotState(),
+            githubNetworkState: BuildNeonGitHubNetworkSnapshotState());
 
         neonWorkbenchView.ApplySnapshot(snapshot, preserveViewport);
     }
@@ -1558,6 +1568,436 @@ public partial class MainWindow
         catch (Exception ex)
         {
             neonWorkbenchView?.ShowToast("模拟外部改动失败：" + ex.Message, NeonTone.Cinnabar);
+        }
+    }
+
+    NeonManagerUpdateState BuildNeonManagerUpdateSnapshotState()
+    {
+        bool hasNewer = managerRelease != null && ManagerUpdates.IsNewer(managerRelease);
+        return new NeonManagerUpdateState(
+            CurrentVersion: ManagerUpdates.CurrentReleaseVersion,
+            Channel: managerUpdateChannel,
+            Busy: managerUpdateBusy,
+            CleanupBusy: managerCleanupBusy,
+            HasNewerRelease: hasNewer,
+            CanAutoInstall: managerRelease != null && CanInstallManagerRelease(managerRelease),
+            LatestVersion: managerRelease?.Version,
+            ReleaseNotes: managerRelease?.Notes,
+            ReleaseUrl: managerRelease?.ReleaseUrl,
+            LatestSizeBytes: managerRelease?.Size ?? 0,
+            Status: managerUpdateStatus,
+            CleanupStatus: managerCleanupStatus,
+            DownloadedArchivePath: managerDownload);
+    }
+
+    NeonGitHubNetworkState BuildNeonGitHubNetworkSnapshotState()
+    {
+        try
+        {
+            var cfg = GitHubNetwork.Load(installer.DataRoot);
+            return new NeonGitHubNetworkState(cfg.Mode, cfg.ProxyUrl);
+        }
+        catch
+        {
+            return new NeonGitHubNetworkState(GitHubNetwork.Default.Mode, GitHubNetwork.Default.ProxyUrl);
+        }
+    }
+
+    async Task NeonChooseAndDiagnoseLogAsync()
+    {
+        string defaultLogs = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SlayTheSpire2", "logs");
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择本次游戏日志",
+            Filter = "日志文件|*.log;*.txt|所有文件|*.*",
+            InitialDirectory = Directory.Exists(defaultLogs) ? defaultLogs : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        await NeonDiagnoseLogFileAsync(dialog.FileName);
+    }
+
+    internal async Task NeonDiagnoseLogFileAsync(string logPath)
+    {
+        if (neonWorkbenchView == null) return;
+        try
+        {
+            string text = await Task.Run(() =>
+            {
+                using var f = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var r = new StreamReader(f);
+                var lines = new Queue<string>();
+                while (r.ReadLine() is { } line)
+                {
+                    lines.Enqueue(line);
+                    if (lines.Count > 12000) lines.Dequeue();
+                }
+                return string.Join('\n', lines);
+            });
+
+            var matchedLines = new List<NeonDiffLine>();
+            var plainBullets = new List<string>();
+            if (text.Contains("Version mismatch: Act4FinalAscent"))
+            {
+                plainBullets.Add("明确匹配：第四幕文件校验不一致，对应「联机兼容校验更新」。仍需核对本机文件版本后再安装。");
+                matchedLines.Add(new NeonDiffLine("mod", "已知特征", "Version mismatch: Act4FinalAscent", "对应补丁：联机兼容校验更新"));
+            }
+            if (text.Contains("OverflowException") && text.Contains("NHealNumVfx"))
+            {
+                plainBullets.Add("匹配：超大回血飘字溢出，对应「超大回血数字溢出」补丁。");
+                matchedLines.Add(new NeonDiffLine("mod", "已知特征", "OverflowException + NHealNumVfx", "对应补丁：超大回血数字溢出"));
+            }
+            if (text.Contains("MutableModelException"))
+            {
+                plainBullets.Add("检测到可变模型异常。目前没有针对该异常的已验证修复，不能自动归因到某个模组。");
+                matchedLines.Add(new NeonDiffLine("del", "未收录异常", "MutableModelException", "暂无已验证修复方案"));
+            }
+
+            string summary = plainBullets.Count > 0
+                ? string.Join("\n\n", plainBullets)
+                : "最近 12,000 行未匹配到已收录的故障特征。这不代表没有故障；未响应或闪退仍需结合完整日志与其他线索排查。";
+            if (matchedLines.Count == 0)
+                matchedLines.Add(new NeonDiffLine("mod", "匹配结果", "最近 12,000 行无已收录特征", Path.GetFileName(logPath)));
+
+            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                Title: "游戏日志故障特征诊断",
+                Subtitle: $"{Path.GetFileName(logPath)} · 已扫描末尾至多 12,000 行（只读，不上传）",
+                GameRunning: false,
+                BlockedReason: null,
+                AutoSnapshotNote: null,
+                BoundaryNote: "仅在本机匹配已知崩溃/报错特征字符串；不会读取存档或上传日志。",
+                Token: "LOG-DIAGNOSIS",
+                Groups:
+                [
+                    new NeonDiffGroup("匹配到的日志特征", matchedLines)
+                ],
+                ConfirmLabel: "",
+                CancelLabel: "关闭",
+                FootNote: "诊断结果仅作参考；涉及游戏改动的操作仍在对应工坊页或主工作台确认。",
+                PlainSummary: summary,
+                ExpandTechnicalDetailsByDefault: true));
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("无法读取日志文件：" + ex.Message, NeonTone.Cinnabar);
+        }
+    }
+
+    void NeonOpenManagerUpdateModal()
+    {
+        if (neonWorkbenchView == null) return;
+        if (managerRelease == null)
+        {
+            neonWorkbenchView.ShowToast("尚未检查到可用的管理器更新信息，请先点击检查更新。", NeonTone.Amber);
+            return;
+        }
+        var rel = managerRelease;
+        bool isNewer = ManagerUpdates.IsNewer(rel);
+        bool canInstall = CanUpdateManager && CanInstallManagerRelease(rel);
+        string sizeText = rel.Size > 0 ? $"{rel.Size / 1048576.0:0.0} MB" : "未知大小";
+
+        var altActions = new StackPanel();
+        var altLabel = NeonWidgets.Text("其他获取方式（仅在主通道下载缓慢或受限时使用）", 12, NeonPalette.InkSecondary, FontWeights.SemiBold);
+        altLabel.Margin = new Thickness(0, 0, 0, 6);
+        altActions.Children.Add(altLabel);
+        var btnRow = new WrapPanel();
+
+        if (canInstall)
+        {
+            var altBtn = NeonWidgets.CreateStyledButton(neonWorkbenchView, "备用官方通道更新", "NeonSecondaryButton", () =>
+            {
+                neonWorkbenchView.CloseTransactionModal();
+                _ = DownloadAndApplyManagerUpdateCoreAsync(preferAssetApi: true, skipConfirm: true);
+            }, "sm");
+            altBtn.Margin = new Thickness(0, 0, 6, 4);
+            btnRow.Children.Add(altBtn);
+        }
+        if (CanUpdateManager)
+        {
+            var zipBtn = NeonWidgets.CreateStyledButton(neonWorkbenchView, "仅下载更新 ZIP", "NeonGhostButton", () =>
+            {
+                neonWorkbenchView.CloseTransactionModal();
+                DownloadManagerUpdate();
+            }, "sm");
+            zipBtn.Margin = new Thickness(0, 0, 6, 4);
+            btnRow.Children.Add(zipBtn);
+        }
+        var relBtn = NeonWidgets.CreateStyledButton(neonWorkbenchView, "打开发布页", "NeonGhostButton", () => OpenUrl(rel.ReleaseUrl), "sm");
+        relBtn.Margin = new Thickness(0, 0, 0, 4);
+        btnRow.Children.Add(relBtn);
+        altActions.Children.Add(btnRow);
+
+        string notesText = string.IsNullOrWhiteSpace(rel.Notes)
+            ? "未附带详细发布说明。"
+            : rel.Notes.Trim();
+
+        neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+            Title: isNewer ? $"管理器可更新至 v{rel.Version}" : $"当前发布版本 · v{rel.Version}",
+            Subtitle: $"当前运行 v{ManagerUpdates.CurrentReleaseVersion} · 频道：{(managerUpdateChannel == ManagerUpdateChannel.Beta ? "测试版 Beta" : "稳定版")} · {sizeText}",
+            GameRunning: false,
+            BlockedReason: null,
+            AutoSnapshotNote: "自动更新前会校验压缩包 SHA-256 摘要，并保留旧版备用直到新程序启动成功。",
+            BoundaryNote: "仅更新尖塔修补站管理器自身，不会修改任何《杀戮尖塔 2》游戏或 MOD 文件。",
+            Token: $"MGR-UPDATE-v{rel.Version}",
+            Groups:
+            [
+                new NeonDiffGroup("发行包与校验信息",
+                [
+                    new NeonDiffLine("add", "目标文件", rel.FileName, sizeText),
+                    new NeonDiffLine("mod", "SHA-256", string.IsNullOrWhiteSpace(rel.Sha256) ? "以清单为准" : rel.Sha256, rel.ReleaseUrl)
+                ])
+            ],
+            ConfirmLabel: canInstall && isNewer ? $"自动下载并更新至 v{rel.Version}" : "",
+            CancelLabel: "关闭",
+            FootNote: canInstall ? "确认后将下载并启动平滑替换；无需手动覆盖文件夹。" : "当前运行环境不支持原地替换，请改用仅下载 ZIP 或发布页。",
+            OnConfirmAsync: canInstall && isNewer ? () => DownloadAndApplyManagerUpdateCoreAsync(preferAssetApi: false, skipConfirm: true) : null,
+            CustomContent: altActions,
+            PlainSummary: notesText));
+    }
+
+    void NeonOpenGitHubNetworkModal() => NeonOpenGitHubNetworkModalInternal(null, null, null);
+
+    void NeonOpenGitHubNetworkModalInternal(string? errorText, string? draftMode, string? draftProxy)
+    {
+        if (neonWorkbenchView == null) return;
+        GitHubNetworkSettings existing;
+        try { existing = GitHubNetwork.Load(installer.DataRoot); }
+        catch { existing = GitHubNetwork.Default; }
+
+        string selectedMode = draftMode ?? (existing.Mode == "local" ? "local" : "system");
+        string initialProxy = draftProxy ?? (existing.Mode == "local" && !string.IsNullOrWhiteSpace(existing.ProxyUrl)
+            ? existing.ProxyUrl
+            : "http://127.0.0.1:7890");
+
+        var stack = new StackPanel();
+        if (!string.IsNullOrWhiteSpace(errorText))
+        {
+            var errAlert = NeonWidgets.CreateAlert(NeonTone.Cinnabar, NeonWidgets.Text("保存失败：" + errorText, 12, NeonPalette.InkPrimary, wrap: true));
+            errAlert.Margin = new Thickness(0, 0, 0, 10);
+            stack.Children.Add(errAlert);
+        }
+
+        var modeTitle = NeonWidgets.Text("网络模式", 12, NeonPalette.InkPrimary, FontWeights.SemiBold);
+        modeTitle.Margin = new Thickness(0, 0, 0, 6);
+        stack.Children.Add(modeTitle);
+
+        var (proxyHost, proxyBox, _) = NeonWidgets.CreateTextInput("http://127.0.0.1:7890", height: 34);
+        proxyBox.Text = initialProxy;
+        AutomationProperties.SetName(proxyBox, "本机 HTTP 代理地址");
+
+        var modeRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        Button? sysBtn = null;
+        Button? localBtn = null;
+
+        void ApplyModeVisual()
+        {
+            bool isLocal = selectedMode == "local";
+            proxyBox.IsEnabled = isLocal;
+            proxyHost.Opacity = isLocal ? 1.0 : 0.48;
+            if (sysBtn != null)
+                sysBtn.Style = (Style)neonWorkbenchView.FindResource(!isLocal ? "NeonPrimaryButton" : "NeonSecondaryButton");
+            if (localBtn != null)
+                localBtn.Style = (Style)neonWorkbenchView.FindResource(isLocal ? "NeonPrimaryButton" : "NeonSecondaryButton");
+        }
+
+        sysBtn = NeonWidgets.CreateStyledButton(neonWorkbenchView, "跟随 Windows 系统代理（默认）", "NeonPrimaryButton", () =>
+        {
+            selectedMode = "system";
+            ApplyModeVisual();
+        }, "sm");
+        sysBtn.Margin = new Thickness(0, 0, 8, 4);
+
+        localBtn = NeonWidgets.CreateStyledButton(neonWorkbenchView, "使用本机 HTTP 代理（例如 Clash / sing-box）", "NeonSecondaryButton", () =>
+        {
+            selectedMode = "local";
+            ApplyModeVisual();
+        }, "sm");
+        localBtn.Margin = new Thickness(0, 0, 0, 4);
+
+        modeRow.Children.Add(sysBtn);
+        modeRow.Children.Add(localBtn);
+        stack.Children.Add(modeRow);
+
+        var proxyLabel = NeonWidgets.Text("本机代理地址（只在选择本机 HTTP 代理时生效，仅支持 localhost / 127.0.0.1 HTTP 代理）", 11.5, NeonPalette.InkSecondary, wrap: true);
+        proxyLabel.Margin = new Thickness(0, 0, 0, 5);
+        stack.Children.Add(proxyLabel);
+        stack.Children.Add(proxyHost);
+        ApplyModeVisual();
+
+        neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+            Title: "GitHub 网络与代理设置",
+            Subtitle: "配置本管理器访问 GitHub API、Release 与源站清单的网络通道",
+            GameRunning: false,
+            BlockedReason: null,
+            AutoSnapshotNote: null,
+            BoundaryNote: "配置仅保存在管理器数据目录，不会修改 Windows 系统代理设置，也不会读取或保存任何 GitHub Token。",
+            Token: "GITHUB-NET",
+            Groups: [],
+            ConfirmLabel: "保存网络设置",
+            CancelLabel: "取消",
+            FootNote: "保存后建议重启管理器，确保所有后台下载与检查客户端切换到新设置。",
+            OnConfirmAsync: () =>
+            {
+                try
+                {
+                    GitHubNetwork.Save(
+                        new GitHubNetworkSettings(1, selectedMode, selectedMode == "local" ? proxyBox.Text : ""),
+                        installer.DataRoot);
+                    RefreshNeonWorkbench(preserveViewport: true);
+                    RecordNeonActivity("source", selectedMode == "local"
+                        ? $"保存 GitHub 网络设置：本机 HTTP 代理（{proxyBox.Text.Trim()}）。"
+                        : "保存 GitHub 网络设置：跟随 Windows 系统代理。");
+                    neonWorkbenchView.ShowToast("GitHub 网络设置已保存。请重启管理器使所有连接使用新设置。");
+                }
+                catch (Exception ex)
+                {
+                    NeonOpenGitHubNetworkModalInternal(ex.Message, selectedMode, proxyBox.Text);
+                }
+                return Task.CompletedTask;
+            },
+            CustomContent: stack,
+            PlainSummary: "如果你通过本机代理软件访问 GitHub，可切换到本机 HTTP 代理模式并填写端口（常见如 http://127.0.0.1:7890）；否则建议保持跟随 Windows 系统代理。"));
+    }
+
+    async Task NeonDiagnoseGitHubNetworkAsync()
+    {
+        if (neonWorkbenchView == null || busy || managerUpdateBusy || transactionWriting) return;
+        busy = true;
+        RefreshNeonWorkbench(preserveViewport: true);
+        neonWorkbenchView.ShowToast("正在诊断 GitHub API、Raw 文件与 Release 页面连接…", NeonTone.Neutral);
+        try
+        {
+            var entries = await GitHubNetwork.DiagnoseAsync(root: installer.DataRoot);
+            var cfg = GitHubNetwork.Load(installer.DataRoot);
+            string modeName = cfg.Mode == "local" ? $"本机 HTTP 代理（{cfg.ProxyUrl}）" : "跟随 Windows 系统网络";
+            bool allOk = entries.All(e => e.Success);
+
+            var lines = entries.Select(e => new NeonDiffLine(
+                e.Success ? "add" : "del",
+                e.Success ? "连通" : "异常",
+                $"{e.Name} ({e.Host})",
+                $"{e.Status} · {e.ElapsedMilliseconds} ms")).ToArray();
+
+            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                Title: allOk ? "GitHub 连接诊断正常" : "GitHub 部分通道连接受阻",
+                Subtitle: $"当前网络模式：{modeName}",
+                GameRunning: false,
+                BlockedReason: allOk ? null : "检测到至少一个 GitHub 端点未能顺利连通；可尝试配置本机 HTTP 代理或在更新时改用备用通道。",
+                AutoSnapshotNote: null,
+                BoundaryNote: "此探测仅测试 GitHub API、Raw 与发布页基础握手延迟，不代表大体积发布附件的实际下载带宽。",
+                Token: "GITHUB-DIAG",
+                Groups:
+                [
+                    new NeonDiffGroup("各端点探测明细", lines)
+                ],
+                ConfirmLabel: "",
+                CancelLabel: "关闭",
+                FootNote: "可在工具箱 → GitHub 网络与代理中切换代理模式后重新诊断。",
+                PlainSummary: allOk
+                    ? $"已验证 {entries.Length} 个 GitHub 关键端点全部可达（当前模式：{modeName}）。"
+                    : $"共有 {entries.Count(e => !e.Success)} / {entries.Length} 个端点存在超时或连接失败；建议检查本机代理端口配置。",
+                ExpandTechnicalDetailsByDefault: true));
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("GitHub 网络诊断未完成：" + ex.Message, NeonTone.Cinnabar);
+        }
+        finally
+        {
+            busy = false;
+            RefreshNeonWorkbench(preserveViewport: true);
+        }
+    }
+
+    void NeonPreviewRestoreModBackup(ManagedMod mod)
+    {
+        if (neonWorkbenchView == null || busy || transactionWriting || modInventoryDirty || selectedInstallRoot == null) return;
+        string root = selectedInstallRoot;
+        bool running = GameEnvironment.Running(root);
+        try
+        {
+            var backups = GitHubModInstaller.Backups(root, mod);
+            if (backups.Length == 0)
+            {
+                neonWorkbenchView.ShowToast($"没有找到「{mod.Name}」的可用历史备份。", NeonTone.Amber);
+                return;
+            }
+            string latest = backups[0];
+            string relMod = Path.GetRelativePath(root, mod.Folder);
+
+            neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+                Title: $"恢复 MOD 上一次备份 · {mod.Name}",
+                Subtitle: $"{mod.Id} · 共发现 {backups.Length} 份本地备份",
+                GameRunning: running,
+                BlockedReason: running ? "检测到《杀戮尖塔 2》正在运行，请先退出游戏再恢复 MOD 备份。" : null,
+                AutoSnapshotNote: "恢复前会自动把当前版本另存为一份新备份，原有文件不会直接删除。",
+                BoundaryNote: "恢复后会清理该 MOD 的自动版本基线与来源缓存，下次检查更新会重新核对本地文件指纹。",
+                Token: $"MOD-RESTORE-{mod.Id}",
+                Groups:
+                [
+                    new NeonDiffGroup("恢复来源与受影响目录",
+                    [
+                        new NeonDiffLine("add", "恢复备份", Path.GetFileName(latest), latest),
+                        new NeonDiffLine("mod", "目标目录", relMod, "当前目录内容将先备份再替换")
+                    ])
+                ],
+                ConfirmLabel: running ? "" : "确认恢复上一备份",
+                CancelLabel: "取消",
+                FootNote: "确认前不会改动任何 MOD 文件。",
+                OnConfirmAsync: () => NeonConfirmRestoreModBackupAsync(root, mod, latest),
+                PlainSummary: $"将把「{mod.Name}」还原为最近一次更新前保留的备份；当前版本也会自动另存备份，可随时再切回。"));
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("读取 MOD 备份列表失败：" + ex.Message, NeonTone.Cinnabar);
+        }
+    }
+
+    async Task NeonConfirmRestoreModBackupAsync(string root, ManagedMod mod, string backupPath)
+    {
+        if (neonWorkbenchView == null || busy || transactionWriting) return;
+        busy = true;
+        transactionWriting = true;
+        RefreshNeonWorkbench(preserveViewport: true);
+        try
+        {
+            string previous = await Task.Run(() => GitHubModInstaller.Restore(root, mod, backupPath));
+            string baselineNote = "";
+            try
+            {
+                WorkshopSources().ClearBaseline(mod.Id);
+                WorkshopUpdates().Invalidate(mod.Id);
+                modSourceCheckWorkflow?.Invalidate(mod);
+            }
+            catch (Exception baselineError)
+            {
+                baselineNote = $"（版本基线清理未完成：{baselineError.Message}；下次检查会重新核验本地文件）";
+            }
+
+            installPreview = null;
+            lastInstallResult = null;
+            ClearSelection();
+            ClearCoop();
+            report = null;
+            states = [];
+            demo = false;
+            modInventory = await Task.Run(() => ModManager.Scan(root));
+            modInventoryDirty = false;
+            modInventoryCleanVersion = Math.Max(modInventoryCleanVersion, Volatile.Read(ref modChangeVersion));
+            InvalidateLifecycle($"已恢复「{mod.Name}」的上一备份，旧的补丁健康结论已失效，请重新扫描核验。");
+            RecordNeonActivity("install", $"恢复「{mod.Name}」至备份「{Path.GetFileName(backupPath)}」（旧版本已保留在：{Path.GetFileName(previous)}）。");
+            neonWorkbenchView.ShowToast($"已恢复「{mod.Name}」备份{baselineNote}");
+        }
+        catch (Exception ex)
+        {
+            neonWorkbenchView.ShowToast("恢复 MOD 备份未完成：" + ex.Message, NeonTone.Cinnabar);
+        }
+        finally
+        {
+            busy = false;
+            transactionWriting = false;
+            RefreshNeonWorkbench(preserveViewport: true);
         }
     }
 }

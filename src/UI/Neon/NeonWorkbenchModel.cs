@@ -129,6 +129,25 @@ internal sealed record NeonWorkbenchRow(
     int FileCount,
     long TotalBytes);
 
+internal sealed record NeonManagerUpdateState(
+    string CurrentVersion,
+    ManagerUpdateChannel Channel,
+    bool Busy,
+    bool CleanupBusy,
+    bool HasNewerRelease,
+    bool CanAutoInstall,
+    string? LatestVersion,
+    string? ReleaseNotes,
+    string? ReleaseUrl,
+    long LatestSizeBytes,
+    string Status,
+    string CleanupStatus,
+    string? DownloadedArchivePath);
+
+internal sealed record NeonGitHubNetworkState(
+    string Mode,
+    string ProxyUrl);
+
 internal sealed record NeonWorkbenchSnapshot(
     string? GameRoot,
     bool GameRunning,
@@ -159,7 +178,9 @@ internal sealed record NeonWorkbenchSnapshot(
     bool CheckingModUpdates,
     string LastUpdateCheckTimeLabel,
     NeonCoopSnapshotState Coop,
-    NeonRecoverySnapshotState Recovery);
+    NeonRecoverySnapshotState Recovery,
+    NeonManagerUpdateState? ManagerUpdate = null,
+    NeonGitHubNetworkState? GitHubNetwork = null);
 
 internal static class NeonWorkbenchBuilder
 {
@@ -222,7 +243,9 @@ internal static class NeonWorkbenchBuilder
         bool checkingModUpdates = false,
         string lastUpdateCheckTimeLabel = "尚未检查",
         NeonCoopSnapshotState? coopState = null,
-        NeonRecoverySnapshotState? recoveryState = null)
+        NeonRecoverySnapshotState? recoveryState = null,
+        NeonManagerUpdateState? managerUpdateState = null,
+        NeonGitHubNetworkState? githubNetworkState = null)
     {
         bool hasRoot = !string.IsNullOrWhiteSpace(gameRoot);
         bool hasInventory = hasRoot && inventory != null;
@@ -941,7 +964,9 @@ internal static class NeonWorkbenchBuilder
             CheckingModUpdates: checkingModUpdates,
             LastUpdateCheckTimeLabel: lastUpdateCheckTimeLabel,
             Coop: defaultCoop,
-            Recovery: defaultRecovery);
+            Recovery: defaultRecovery,
+            ManagerUpdate: managerUpdateState,
+            GitHubNetwork: githubNetworkState);
     }
 
     internal static NeonPatchBackupBatch? ReadLatestPatchBackupBatch(string? gameRoot)

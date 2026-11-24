@@ -86,7 +86,8 @@ public partial class MainWindow
   managerUpdateStatus=channel==ManagerUpdateChannel.Beta?
    "已切换到 Beta 测试版，尚未检查。":"已切换到稳定版，尚未检查。";
   if(managerUpdateButton!=null)managerUpdateButton.Content="检查更新";
-  ShowManagerUpdates();
+  if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:true);
+  else ShowManagerUpdates();
   _=CheckManagerUpdatesAsync(true);
  }
  // The updater's worker enforces an increasing three-part assembly version.
@@ -99,14 +100,45 @@ public partial class MainWindow
  async void CleanupOldManagerFiles()
  {
   if(!CanUpdateManager)return;
-  managerCleanupBusy=true;ShowManagerUpdates();
+  managerCleanupBusy=true;
+  bool openedNeonModal=false;
+  if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:true);else ShowManagerUpdates();
   try
   {
    var preview=await Task.Run(()=>ManagerUpdateCleanup.Preview(AppContext.BaseDirectory));
    if(preview.Items.Length==0)managerCleanupStatus="未发现可安全清理的历史更新文件。";
    else
    {
-    string size=(preview.Bytes/1024d/1024d).ToString("F1");
+    var size=(preview.Bytes/1024d/1024d).ToString("F1");
+    if(UiThemes.IsNeon&&neonWorkbenchView!=null)
+    {
+     managerCleanupBusy=false;
+     openedNeonModal=true;
+     neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
+      Title:"清理旧版本更新文件",
+      Subtitle:$"预计释放 {size} MiB · 包含 {preview.Jobs} 个历史任务与 {preview.Downloads} 个旧 ZIP",
+      GameRunning:false,
+      BlockedReason:null,
+      AutoSnapshotNote:"最近一次成功更新的回滚记录、个人设置、MOD 与游戏文件均会完整保留。",
+      BoundaryNote:"仅清理可确认归属的历史更新任务与旧安装包，清理后的历史更新任务不可恢复。",
+      Token:"MGR-CLEAN",
+      Groups:[new NeonDiffGroup("待清理项目概览",[new NeonDiffLine("del","清理",$"{preview.Jobs} 个历史更新任务 + {preview.Downloads} 个旧版 ZIP",$"{size} MiB")])],
+      ConfirmLabel:"确认清理旧版本文件",
+      Danger:true,
+      OnConfirmAsync:async()=>{
+       managerCleanupBusy=true;
+       RefreshNeonWorkbench(preserveViewport:true);
+       try{
+        var result=await Task.Run(()=>ManagerUpdateCleanup.Clean(AppContext.BaseDirectory,preview));
+        managerCleanupStatus=$"已清理 {result.Removed} 项，释放 {result.FreedBytes/1024d/1024d:F1} MiB。"+
+         (result.Errors.Length>0?" 部分文件未能清理："+string.Join("；",result.Errors.Take(2)):"");
+       }
+       catch(Exception ex){managerCleanupStatus="清理未完成："+ex.Message;}
+       finally{managerCleanupBusy=false;RefreshNeonWorkbench(preserveViewport:true);neonWorkbenchView.ShowToast(managerCleanupStatus);}
+      },
+      PlainSummary:$"预计可安全释放 {size} MiB（{preview.Jobs} 个历史任务、{preview.Downloads} 个旧 ZIP），最近一次回滚记录与个人设置保持保留。"));
+     return;
+    }
     var approve=MessageBox.Show(this,$"预计释放 {size} MiB，包含 {preview.Jobs} 个历史更新任务和 {preview.Downloads} 个旧版 ZIP。\n\n最近一次成功更新的回滚记录、个人设置、MOD 和游戏文件会保留。清理后的历史更新任务不可恢复。\n\n确认清理吗？",
      "确认清理旧版本文件",MessageBoxButton.YesNo,MessageBoxImage.Warning);
     if(approve==MessageBoxResult.Yes)
@@ -119,7 +151,7 @@ public partial class MainWindow
    }
   }
   catch(Exception ex){managerCleanupStatus="清理未执行："+ex.Message;}
-  finally{managerCleanupBusy=false;if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
+  finally{managerCleanupBusy=false;if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);if(!openedNeonModal&&!string.IsNullOrWhiteSpace(managerCleanupStatus))neonWorkbenchView.ShowToast(managerCleanupStatus);}else if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
  }
  internal async Task CleanupOnNormalLaunchAsync()
  {
@@ -141,25 +173,25 @@ public partial class MainWindow
  bool ConfirmManagerUpdate()=>MessageBox.Show(this,"将下载并校验新版，自动保存当前程序备份，然后关闭此窗口、替换程序并重新打开。\n\n设置、缓存、原快捷方式与游戏模组会保留。现在更新吗？","更新管理器",MessageBoxButton.YesNo,MessageBoxImage.Question)==MessageBoxResult.Yes;
  async void DownloadAndApplyManagerUpdate()=>await DownloadAndApplyManagerUpdateCoreAsync(false);
  async void DownloadAndApplyManagerUpdateViaApi()=>await DownloadAndApplyManagerUpdateCoreAsync(true);
- async Task DownloadAndApplyManagerUpdateCoreAsync(bool preferAssetApi)
+ internal async Task DownloadAndApplyManagerUpdateCoreAsync(bool preferAssetApi,bool skipConfirm=false)
  {
-  if(!CanUpdateManager||managerRelease==null||!CanInstallManagerRelease(managerRelease)||!ConfirmManagerUpdate())return;
+  if(!CanUpdateManager||managerRelease==null||!CanInstallManagerRelease(managerRelease)||(!skipConfirm&&!ConfirmManagerUpdate()))return;
   try{var release=managerRelease;string destination=BundleInstaller.Child(installer.DataRoot,"管理器下载/"+release.FileName);Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
    await DownloadManagerUpdateToAsync(release,destination,preferAssetApi);
    if(managerDownload!=null)await InstallDownloadedManagerAsync(true);
-  }catch(Exception e){managerUpdateStatus="无法准备更新下载："+e.Message;ShowManagerUpdates();}
+  }catch(Exception e){managerUpdateStatus="无法准备更新下载："+e.Message;if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);neonWorkbenchView.ShowToast(managerUpdateStatus,NeonTone.Cinnabar);}else ShowManagerUpdates();}
  }
  async Task InstallDownloadedManagerAsync(bool confirmed)
  {
   if(!CanUpdateManager||managerRelease==null||!CanInstallManagerRelease(managerRelease)||managerDownload==null||(!confirmed&&!ConfirmManagerUpdate()))return;
-  var release=managerRelease;var archive=managerDownload;busy=true;transactionWriting=true;managerUpdateBusy=true;managerUpdateStatus="正在核对程序文件并准备更新…";ShowManagerUpdates();
+  var release=managerRelease;var archive=managerDownload;busy=true;transactionWriting=true;managerUpdateBusy=true;managerUpdateStatus="正在核对程序文件并准备更新…";if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);neonWorkbenchView.ShowToast(managerUpdateStatus);}else ShowManagerUpdates();
   bool handoff=false;
   try{
    var ready=await ManagerAutoUpdate.PrepareAsync(release,archive,AppContext.BaseDirectory);
-   managerUpdateStatus="已准备完成，正在交接给更新助手…";ShowManagerUpdates();
+   managerUpdateStatus="已准备完成，正在交接给更新助手…";if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:true);else ShowManagerUpdates();
    await ManagerAutoUpdate.StartAndWaitReadyAsync(ready);handoff=true;
   }catch(Exception e){managerUpdateStatus="自动更新未开始："+e.Message;}
-  finally{busy=false;transactionWriting=false;managerUpdateBusy=false;if(!handoff&&currentVisit?.Key=="检查更新")ShowManagerUpdates();}
+  finally{busy=false;transactionWriting=false;managerUpdateBusy=false;if(!handoff){if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);neonWorkbenchView.ShowToast(managerUpdateStatus,NeonTone.Cinnabar);}else if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}}
   if(handoff)Application.Current.Shutdown();
  }
  async Task CheckManagerUpdatesAsync(bool showPage)
@@ -169,7 +201,8 @@ public partial class MainWindow
   managerUpdateBusy=true;managerUpdateChecked=true;managerRelease=null;managerDownload=null;
   managerUpdateStatus=channel==ManagerUpdateChannel.Beta?"正在检查 Beta 预发布…":"正在检查稳定版…";
   managerUpdateCancellation=new();
-  if(showPage)ShowManagerUpdates();
+  if(showPage&&!UiThemes.IsNeon)ShowManagerUpdates();
+  else if(UiThemes.IsNeon&&neonWorkbenchView!=null)RefreshNeonWorkbench(preserveViewport:true);
   try{
    managerRelease=await managerUpdates.CheckAsync(channel,managerUpdateCancellation.Token);
    int comparison=ManagerUpdates.CompareVersions(managerRelease.Version,ManagerUpdates.CurrentReleaseVersion);
@@ -181,7 +214,7 @@ public partial class MainWindow
    if(managerUpdateButton!=null)managerUpdateButton.Content=comparison>0?"↑  发现 v"+managerRelease.Version:"检查更新";
   }catch(OperationCanceledException){managerUpdateStatus="检查已取消或超时，未改动程序。可以重试或打开发布页。";}
   catch(Exception e){managerUpdateStatus="检查未完成："+e.Message;}
-  finally{managerUpdateBusy=false;managerUpdateCancellation.Dispose();managerUpdateCancellation=null;if(managerRelease==null&&managerUpdateButton!=null)managerUpdateButton.Content="检查更新";if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
+  finally{managerUpdateBusy=false;managerUpdateCancellation.Dispose();managerUpdateCancellation=null;if(managerRelease==null&&managerUpdateButton!=null)managerUpdateButton.Content="检查更新";if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);if(showPage)neonWorkbenchView.ShowToast(managerUpdateStatus);}else if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
  }
  async void DownloadManagerUpdate()
  {
@@ -191,7 +224,7 @@ public partial class MainWindow
  }
  async Task DownloadManagerUpdateToAsync(ManagerRelease release,string destination,bool preferAssetApi=false)
  {
-  if(managerUpdateBusy||managerCleanupBusy)return;managerUpdateBusy=true;managerDownload=null;managerUpdateCancellation=new();managerUpdateStatus=preferAssetApi?"正在通过 GitHub 官方附件 API 下载并校验…":"正在下载，完成后自动校验…";ShowManagerUpdates();
+  if(managerUpdateBusy||managerCleanupBusy)return;managerUpdateBusy=true;managerDownload=null;managerUpdateCancellation=new();managerUpdateStatus=preferAssetApi?"正在通过 GitHub 官方附件 API 下载并校验…":"正在下载，完成后自动校验…";if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);neonWorkbenchView.ShowToast(managerUpdateStatus);}else ShowManagerUpdates();
   try{
    var started=DateTimeOffset.UtcNow;
    await managerUpdates.DownloadAsync(release,destination,new Progress<long>(n=>{
@@ -204,6 +237,6 @@ public partial class MainWindow
    managerDownload=destination;managerUpdateStatus="下载完成且校验一致，可安装此更新并重启，也可保留 ZIP 稍后处理。";
   }catch(OperationCanceledException){managerUpdateStatus="下载已取消或超时，未改动当前程序。";}
   catch(Exception e){managerUpdateStatus="下载未完成："+e.Message;}
-  finally{managerUpdateBusy=false;managerUpdateCancellation.Dispose();managerUpdateCancellation=null;if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
+  finally{managerUpdateBusy=false;managerUpdateCancellation.Dispose();managerUpdateCancellation=null;if(UiThemes.IsNeon&&neonWorkbenchView!=null){RefreshNeonWorkbench(preserveViewport:true);neonWorkbenchView.ShowToast(managerUpdateStatus);}else if(currentVisit?.Key=="检查更新")ShowManagerUpdates();}
  }
 }

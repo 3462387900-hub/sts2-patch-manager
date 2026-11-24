@@ -1249,6 +1249,54 @@ public partial class MainWindow
               !view.IsBatchDockOpen,
             "原生 Neon 批量停用通过 ModToggleWorkflowService 真实移入停用保留区并自动收起批量栏");
 
+        // --- 14. Milestone 3 production drawer controls & native dialogs (Update / Network / Log Diagnosis) ---
+        view.OpenToolsDrawer();
+        await Task.Delay(300);
+        await Idle();
+        string drawerText = AllText(view.DrawerSheetHostControl);
+        Check(view.IsDrawerOpen &&
+              drawerText.Contains("管理器更新") &&
+              drawerText.Contains("稳定版") &&
+              drawerText.Contains("测试版 Beta") &&
+              drawerText.Contains("检查更新") &&
+              drawerText.Contains("清理旧版更新文件") &&
+              drawerText.Contains("GitHub 网络与代理") &&
+              drawerText.Contains("配置代理") &&
+              drawerText.Contains("诊断 GitHub 连接"),
+            "设置抽屉包含管理器更新（频道切换/检查/清理旧版）与 GitHub 网络代理及连接诊断入口");
+        await ShotAtScaleAsync("23-wpf-tools-drawer-100", 1.0, 1280, 850);
+
+        var cfgProxyBtn = Descendants<Button>(view.DrawerSheetHostControl)
+            .Single(b => (b.Content?.ToString() ?? "") == "配置代理");
+        Click(cfgProxyBtn);
+        await Task.Delay(260);
+        await Idle();
+        string netModalText = AllText(view.ModalBackdropControl);
+        Check(view.IsModalOpen &&
+              netModalText.Contains("跟随 Windows 系统代理") &&
+              netModalText.Contains("127.0.0.1"),
+            "点击“配置代理”后在原生 Neon 弹窗中展示系统代理/本机 HTTP 代理设置");
+        var cancelNetBtn = Descendants<Button>(view.ModalBackdropControl)
+            .Single(b => (b.Content?.ToString() ?? "") == "取消");
+        Click(cancelNetBtn);
+        await Task.Delay(260);
+        await Idle();
+        Check(!view.IsModalOpen, "关闭 GitHub 代理设置弹窗未改动宿主机代理配置");
+
+        string sampleLogPath = Path.Combine(NeonDataRoot, "sample-godot-diag.log");
+        File.WriteAllText(sampleLogPath, "INFO Booting SlayTheSpire2\nSystem.OverflowException: Arithmetic operation resulted in an overflow.\n   at NHealNumVfx.Render()\n");
+        await NeonDiagnoseLogFileAsync(sampleLogPath);
+        await Idle();
+        string diagModalText = AllText(view.ModalBackdropControl);
+        Check(view.IsModalOpen && diagModalText.Contains("超大回血飘字溢出"),
+            "godot.log 故障特征诊断改为通过原生 Neon 详情弹窗展示命中规则");
+        await ShotAtScaleAsync("24-wpf-log-diagnosis-modal-100", 1.0, 1280, 850);
+        var closeDiagBtn = Descendants<Button>(view.ModalBackdropControl)
+            .Single(b => (b.Content?.ToString() ?? "") == "关闭");
+        Click(closeDiagBtn);
+        await Task.Delay(260);
+        await Idle();
+
         CloseModWatch();
     }
 }

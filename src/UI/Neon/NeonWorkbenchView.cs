@@ -98,6 +98,13 @@ internal sealed partial class NeonWorkbenchView : Grid
     public event Action? RequestPreviewPatchBatchRollback;
     public event Action<string>? RequestOpenPath;
     public event Action? RequestDiagnoseLog;
+    public event Action<ManagerUpdateChannel>? RequestSelectManagerChannel;
+    public event Action? RequestCheckManagerUpdate;
+    public event Action? RequestOpenManagerUpdateModal;
+    public event Action? RequestCleanupOldManagerFiles;
+    public event Action? RequestOpenManagerReleasePage;
+    public event Action? RequestOpenGitHubNetworkModal;
+    public event Action? RequestDiagnoseGitHubNetwork;
     public event Action<string>? RequestSwitchTheme;
     public event Action? RequestSimulateExternalChange;
 
@@ -163,6 +170,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     readonly Border navPatchesPill, navAcquirePill;
     readonly TextBlock navPatchesCount, navAcquireCount;
     readonly Button envPillButton, gearButton, launchButton;
+    readonly Ellipse gearUpdateDot;
     readonly Ellipse envLampHalo, envLampCore;
     readonly TextBlock envPathLabel, launchLabel;
     readonly ContentControl launchPlayHost;
@@ -422,6 +430,27 @@ internal sealed partial class NeonWorkbenchView : Grid
         envPillButton.Click += (_, _) => OpenToolsDrawer();
         topbarRight.Children.Add(envPillButton);
 
+        gearUpdateDot = new Ellipse
+        {
+            Width = 7,
+            Height = 7,
+            Fill = NeonPalette.Amber,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 5, 5, 0),
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed
+        };
+        var gearContent = new Grid { Width = 32, Height = 32 };
+        var gearSvg = NeonWidgets.CreateGearIcon();
+        if (gearSvg is FrameworkElement gearEl)
+        {
+            gearEl.HorizontalAlignment = HorizontalAlignment.Center;
+            gearEl.VerticalAlignment = VerticalAlignment.Center;
+        }
+        gearContent.Children.Add(gearSvg);
+        gearContent.Children.Add(gearUpdateDot);
+
         gearButton = new Button
         {
             Width = 32,
@@ -432,8 +461,8 @@ internal sealed partial class NeonWorkbenchView : Grid
             BorderBrush = NeonPalette.BorderSubtle,
             BorderThickness = new Thickness(1),
             Cursor = Cursors.Hand,
-            ToolTip = "环境、日志诊断与设置",
-            Content = NeonWidgets.CreateGearIcon(),
+            ToolTip = "环境、日志诊断、代理与管理器设置",
+            Content = gearContent,
             Template = CreateRoundedButtonTemplate(6, NeonPalette.BgElevated, NeonPalette.BorderMedium)
         };
         AutomationProperties.SetName(gearButton, "环境与设置");
@@ -1646,6 +1675,10 @@ internal sealed partial class NeonWorkbenchView : Grid
         {
             ApplyLaunchButtonStyle(caution: false, label: "启动游戏");
         }
+
+        gearUpdateDot.Visibility = s.ManagerUpdate?.HasNewerRelease == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // Watcher / Stale Health Banner
         bool showStaleBanner = s.GameRoot != null && (s.ModInventoryDirty || s.LifecycleStale);

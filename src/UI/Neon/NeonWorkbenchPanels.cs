@@ -1714,7 +1714,131 @@ internal sealed partial class NeonWorkbenchView
         diagStack.Children.Add(diagBtns);
         AddSection("健康核验与日志特征诊断", diagStack);
 
-        // 3. Theme switcher (keeps legacy Workspace / Classic accessible as fallback)
+        // 3. Manager updates (Stable / Beta)
+        var mgr = s.ManagerUpdate;
+        var mgrStack = new StackPanel();
+        var mgrTop = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
+        string channelLabel = mgr?.Channel == ManagerUpdateChannel.Beta ? "测试版 Beta" : "稳定版";
+        var verBadge = NeonWidgets.CreateBadge($"当前 v{mgr?.CurrentVersion ?? ManagerUpdates.CurrentReleaseVersion}", NeonTone.Neutral);
+        verBadge.Margin = new Thickness(0, 0, 6, 4);
+        mgrTop.Children.Add(verBadge);
+        var chanBadge = NeonWidgets.CreateBadge(channelLabel, mgr?.Channel == ManagerUpdateChannel.Beta ? NeonTone.Amber : NeonTone.Sage);
+        chanBadge.Margin = new Thickness(0, 0, 6, 4);
+        mgrTop.Children.Add(chanBadge);
+        if (mgr is { HasNewerRelease: true, LatestVersion: not null })
+        {
+            var newBadge = NeonWidgets.CreateBadge($"发现 v{mgr.LatestVersion}", NeonTone.Amber);
+            newBadge.Margin = new Thickness(0, 0, 0, 4);
+            mgrTop.Children.Add(newBadge);
+        }
+        mgrStack.Children.Add(mgrTop);
+
+        string mgrStatusText = !string.IsNullOrWhiteSpace(mgr?.Status)
+            ? mgr.Status
+            : "支持在稳定版与测试版 Beta 之间切换检查管理器更新。";
+        mgrStack.Children.Add(NeonWidgets.Text(mgrStatusText, 11.5, NeonPalette.InkSecondary, wrap: true));
+
+        var chanBtns = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var stableBtn = NeonWidgets.CreateStyledButton(
+            this,
+            "稳定版",
+            mgr?.Channel != ManagerUpdateChannel.Beta ? "NeonPrimaryButton" : "NeonSecondaryButton",
+            () => RequestSelectManagerChannel?.Invoke(ManagerUpdateChannel.Stable),
+            "xs");
+        stableBtn.Margin = new Thickness(0, 0, 6, 4);
+        stableBtn.IsEnabled = mgr is not { Busy: true };
+        var betaBtn = NeonWidgets.CreateStyledButton(
+            this,
+            "测试版 Beta",
+            mgr?.Channel == ManagerUpdateChannel.Beta ? "NeonPrimaryButton" : "NeonSecondaryButton",
+            () => RequestSelectManagerChannel?.Invoke(ManagerUpdateChannel.Beta),
+            "xs");
+        betaBtn.Margin = new Thickness(0, 0, 6, 4);
+        betaBtn.IsEnabled = mgr is not { Busy: true };
+        chanBtns.Children.Add(stableBtn);
+        chanBtns.Children.Add(betaBtn);
+        mgrStack.Children.Add(chanBtns);
+
+        if (mgr is { HasNewerRelease: true })
+        {
+            var openUpdateModalBtn = NeonWidgets.CreateStyledButton(
+                this,
+                "查看更新内容并更新",
+                "NeonPrimaryButton",
+                () => { CloseToolsDrawer(); RequestOpenManagerUpdateModal?.Invoke(); },
+                "sm");
+            openUpdateModalBtn.Margin = new Thickness(0, 6, 0, 2);
+            mgrStack.Children.Add(openUpdateModalBtn);
+        }
+
+        var mgrActBtns = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var checkMgrBtn = NeonWidgets.CreateStyledButton(
+            this,
+            mgr is { Busy: true } ? "正在检查更新…" : "检查更新",
+            "NeonSecondaryButton",
+            () => RequestCheckManagerUpdate?.Invoke(),
+            "sm");
+        checkMgrBtn.Margin = new Thickness(0, 0, 6, 4);
+        checkMgrBtn.IsEnabled = mgr is not { Busy: true };
+        var releasePageBtn = NeonWidgets.CreateStyledButton(
+            this,
+            "打开发布页",
+            "NeonGhostButton",
+            () => RequestOpenManagerReleasePage?.Invoke(),
+            "sm");
+        releasePageBtn.Margin = new Thickness(0, 0, 6, 4);
+        var cleanupBtn = NeonWidgets.CreateStyledButton(
+            this,
+            mgr is { CleanupBusy: true } ? "清理中…" : "清理旧版更新文件",
+            "NeonGhostButton",
+            () => RequestCleanupOldManagerFiles?.Invoke(),
+            "sm");
+        cleanupBtn.Margin = new Thickness(0, 0, 0, 4);
+        cleanupBtn.IsEnabled = mgr is not { CleanupBusy: true } && mgr is not { Busy: true };
+        mgrActBtns.Children.Add(checkMgrBtn);
+        mgrActBtns.Children.Add(releasePageBtn);
+        mgrActBtns.Children.Add(cleanupBtn);
+        mgrStack.Children.Add(mgrActBtns);
+
+        if (!string.IsNullOrWhiteSpace(mgr?.CleanupStatus))
+        {
+            var cleanupNote = NeonWidgets.Text(mgr.CleanupStatus, 11, NeonPalette.InkMuted, wrap: true);
+            cleanupNote.Margin = new Thickness(0, 4, 0, 0);
+            mgrStack.Children.Add(cleanupNote);
+        }
+        AddSection("管理器更新（稳定版 / Beta）", mgrStack);
+
+        // 4. GitHub network & proxy
+        var net = s.GitHubNetwork;
+        var netStack = new StackPanel();
+        string netSummary = net?.Mode == "local"
+            ? $"当前模式：本机 HTTP 代理 · {net.ProxyUrl}"
+            : "当前模式：跟随 Windows 系统网络（默认）";
+        netStack.Children.Add(NeonWidgets.Text(netSummary, 12, NeonPalette.InkPrimary, FontWeights.SemiBold, wrap: true));
+        var netHint = NeonWidgets.Text("仅影响本管理器访问 GitHub 与发布页，不会修改 Windows 代理设置或保存 Token。", 11.5, NeonPalette.InkMuted, wrap: true);
+        netHint.Margin = new Thickness(0, 4, 0, 8);
+        netStack.Children.Add(netHint);
+        var netBtns = new WrapPanel();
+        var cfgProxyBtn = NeonWidgets.CreateStyledButton(
+            this,
+            "配置代理",
+            "NeonSecondaryButton",
+            () => { CloseToolsDrawer(); RequestOpenGitHubNetworkModal?.Invoke(); },
+            "sm");
+        cfgProxyBtn.Margin = new Thickness(0, 0, 7, 4);
+        var diagNetBtn = NeonWidgets.CreateStyledButton(
+            this,
+            "诊断 GitHub 连接",
+            "NeonGhostButton",
+            () => { CloseToolsDrawer(); RequestDiagnoseGitHubNetwork?.Invoke(); },
+            "sm");
+        diagNetBtn.Margin = new Thickness(0, 0, 0, 4);
+        netBtns.Children.Add(cfgProxyBtn);
+        netBtns.Children.Add(diagNetBtn);
+        netStack.Children.Add(netBtns);
+        AddSection("GitHub 网络与代理", netStack);
+
+        // 5. Theme switcher (keeps legacy Workspace / Classic accessible as fallback)
         var themeStack = new StackPanel();
         themeStack.Children.Add(NeonWidgets.Text("切换界面风格立即生效，不会修改任何游戏或 MOD 文件。", 11.5, NeonPalette.InkSecondary, wrap: true));
         var themeBtns = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
