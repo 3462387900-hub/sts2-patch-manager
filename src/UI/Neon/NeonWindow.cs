@@ -450,11 +450,11 @@ public partial class MainWindow
             return;
         }
 
-        if (wsId.HasValue && WorkshopUpdates().Cached(mod.Id)?.Status == "有更新")
+        if (wsId.HasValue && WorkshopUpdates().Cached(mod.Id) is { Status: "有更新" } workshopCheck)
         {
             await NeonStageAndPreviewModUpdateAsync(
                 root, mod,
-                new ModUpdateStagingRequest(ModUpdateStagingSource.Workshop, wsId.Value.ToString()),
+                NeonWorkshopUpdateRequest(wsId.Value, workshopCheck.RemoteManifestId),
                 null);
             return;
         }
@@ -462,17 +462,37 @@ public partial class MainWindow
         neonWorkbenchView.ShowToast("当前没有可预览的更新来源。", NeonTone.Amber);
     }
 
+    // Both Workshop entry points construct the identical, manifest-pinned request.
+    internal static ModUpdateStagingRequest NeonWorkshopUpdateRequest(ulong workshopId, string manifestId) =>
+        new(ModUpdateStagingSource.Workshop, workshopId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ExpectedWorkshopManifestId: manifestId);
+
+    internal IModUpdateStagingBackend? neonTestStagingBackend;
+
+    bool NeonRootMatches(string root) => string.Equals(root, selectedInstallRoot, StringComparison.OrdinalIgnoreCase);
+
     async Task NeonStageAndPreviewModUpdateAsync(
         string root,
         ManagedMod mod,
         ModUpdateStagingRequest request,
         string? releaseUrl)
     {
-        if (busy || transactionWriting || neonWorkbenchView == null) return;
+        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonRootMatches(root)) return;
+        if (await CheckGameRunningOffUiAsync(root))
+        {
+            neonWorkbenchView.ShowToast("请退出游戏后再更新。", NeonTone.Amber);
+            return;
+        }
+        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(root)) return;
+        if (neonFixtureDataRoot != null && neonTestStagingBackend == null)
+        {
+            neonWorkbenchView.ShowToast("隔离测试禁止使用真实下载后端。", NeonTone.Amber);
+            return;
+        }
         busy = true;
         using var backend = new InfrastructureModUpdateStagingBackend();
         var stagingSvc = new ModUpdateStagingWorkflowService(
-            backend,
+            neonTestStagingBackend ?? backend,
             Path.Combine(NeonDataRoot, "MOD更新暂存"));
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         preparationCancellation = cts;
@@ -512,7 +532,19 @@ public partial class MainWindow
         }
 
         var applySvc = NeonModUpdateApplyService();
-        var applyPreview = applySvc.CreatePreview(root, mod, staged);
+        ModUpdateApplyPreview applyPreview;
+        try
+        {
+            if (!NeonRootMatches(root) || modInventoryDirty)
+                throw new InvalidOperationException("暂存期间游戏目录或清单已变化，请重新预览。");
+            applyPreview = applySvc.CreatePreview(root, mod, staged);
+        }
+        catch (Exception ex)
+        {
+            if (staged.StagingDirectory is { } discarded) stagingSvc.Discard(discarded);
+            neonWorkbenchView.ShowToast("更新预览未完成：" + ex.Message, NeonTone.Amber);
+            return;
+        }
         var changeLines = staged.FileChanges.Take(25).Select(fc =>
         {
             string tag = fc.Kind == ModUpdateFileChangeKind.Added ? "add"
@@ -527,6 +559,11 @@ public partial class MainWindow
 
         bool stageReadyRunning = await CheckGameRunningOffUiAsync(root);
         string stagingDir = staged.StagingDirectory ?? "";
+        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(root))
+        {
+            if (stagingDir.Length > 0) stagingSvc.Discard(stagingDir);
+            return;
+        }
         neonWorkbenchView.OpenTransactionModal(new NeonTransactionConfig(
             Title: $"确认更新 MOD · {mod.Name}",
             Subtitle: $"v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} → v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}",
@@ -538,7 +575,17 @@ public partial class MainWindow
             Groups: [new NeonDiffGroup($"文件级差异预览（共 {staged.FileChanges.Count} 处变更）", changeLines)],
             ConfirmLabel: "确认备份并更新",
             CancelLabel: "取消",
-            OnConfirmAsync: () => NeonConfirmStagedModUpdateAsync(root, mod, applySvc, applyPreview, request),
+            OnConfirmAsync: async () =>
+            {
+                // A rejected stale confirmation never transfers staging ownership to the apply service.
+                if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(root))
+                {
+                    if (stagingDir.Length > 0) stagingSvc.Discard(stagingDir);
+                    neonWorkbenchView?.ShowToast("目录或清单已变化，请重新预览。", NeonTone.Amber);
+                    return;
+                }
+                await NeonConfirmStagedModUpdateAsync(root, mod, applySvc, applyPreview, request);
+            },
             PlainSummary: $"已下载并通过完整哈希与清单校验，将把「{mod.Name}」从 v{NeonVersionDiff.StripPrefix(staged.LocalVersion)} 更新至 v{NeonVersionDiff.StripPrefix(staged.StagedVersion ?? "新版")}（新增 {staged.AddedCount}、修改 {staged.ModifiedCount}、移除 {staged.DeletedCount} 个文件）。",
             OnCancel: () =>
             {
@@ -556,7 +603,7 @@ public partial class MainWindow
         ModUpdateApplyPreview applyPreview,
         ModUpdateStagingRequest request)
     {
-        if (busy || transactionWriting || neonWorkbenchView == null) return;
+        if (busy || transactionWriting || neonWorkbenchView == null || modInventoryDirty || !NeonRootMatches(root)) return;
         busy = true;
         transactionWriting = true;
         try

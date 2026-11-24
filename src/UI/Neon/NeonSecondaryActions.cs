@@ -707,6 +707,34 @@ public partial class MainWindow
             return;
         }
 
+        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(gameRoot)) return;
+        string? boundId = WorkshopSources().ModIdFor(workshopId);
+        if (boundId != null)
+        {
+            var matches = modInventory?.Mods.Where(m => m.Id.Equals(boundId, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+            if (matches.Length > 1)
+            {
+                neonWorkbenchView.ShowToast("本地存在重复 MOD ID，无法确定更新目标。", NeonTone.Amber);
+                return;
+            }
+            if (matches.Length == 1 && WorkshopUpdates().Cached(boundId) is { } cached &&
+                cached.WorkshopId == workshopId && ulong.TryParse(cached.RemoteManifestId, out var manifest) && manifest != 0)
+            {
+                if (cached.Status == "已是最新")
+                {
+                    neonWorkbenchView.SetWorkshopFeedback("已核验 Manifest 与本地基线一致，无需更新。", NeonTone.Sage);
+                    return;
+                }
+                await NeonStageAndPreviewModUpdateAsync(gameRoot, matches[0],
+                    NeonWorkshopUpdateRequest(workshopId, cached.RemoteManifestId), null);
+                return;
+            }
+        }
+        if (neonFixtureDataRoot != null)
+        {
+            neonWorkbenchView.ShowToast("隔离测试禁止使用真实 Workshop 下载。", NeonTone.Amber);
+            return;
+        }
         busy = true;
         WorkshopModPrepared? prepared = null;
         string? error = null;
@@ -746,6 +774,34 @@ public partial class MainWindow
             return;
         }
 
+        // Preparation can discover an installed target without a verified cached manifest.
+        // The old installer may identify it, but cannot perform the overwrite.
+        if (prepared.IsUpdate)
+        {
+            var matches = modInventory?.Mods.Where(m => m.Id.Equals(prepared.ModId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(m.Folder, prepared.ExistingFolder, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+            var request = NeonWorkshopUpdateRequest(workshopId, prepared.ManifestId);
+            var priorBinding = WorkshopSources().Get(prepared.ModId);
+            WorkshopModInstaller.Cleanup(prepared);
+            if (matches.Length != 1 || modInventoryDirty || !NeonRootMatches(gameRoot) ||
+                (priorBinding.HasValue && priorBinding.Value != workshopId))
+            {
+                neonWorkbenchView.ShowToast("目标 MOD 或已绑定来源发生变化，请先重新核验。", NeonTone.Amber);
+                return;
+            }
+            if (prepared.IsUnchanged)
+            {
+                neonWorkbenchView.SetWorkshopFeedback("本地文件已与创意工坊一致，无需覆盖。", NeonTone.Sage);
+                return;
+            }
+            await NeonStageAndPreviewModUpdateAsync(gameRoot, matches[0], request, null);
+            return;
+        }
+        if (!NeonRootMatches(gameRoot) || modInventoryDirty)
+        {
+            WorkshopModInstaller.Cleanup(prepared);
+            return;
+        }
         neonWorkbenchView.SetWorkshopFeedback($"已通过 Chunk 与文件 SHA-1 校验：{prepared.ModName} ({prepared.Version})", NeonTone.Sage);
         var ready = prepared;
         string relDest = Path.GetRelativePath(gameRoot, ready.DestinationDirectory);
@@ -771,12 +827,18 @@ public partial class MainWindow
             Token: ready.InitialInventoryToken,
             Groups: [new NeonDiffGroup("校验结果与写入范围", lines)],
             ConfirmLabel: ready.IsUnchanged ? "" : ready.IsUpdate ? "确认更新（先自动快照）" : "确认安装（先自动快照）",
-            OnConfirmAsync: ready.IsUnchanged ? null : () => NeonConfirmWorkshopInstallAsync(gameRoot, ready)));
+            OnConfirmAsync: ready.IsUnchanged ? null : () => NeonConfirmWorkshopInstallAsync(gameRoot, ready),
+            OnCancel: () => WorkshopModInstaller.Cleanup(ready)));
     }
 
     async Task NeonConfirmWorkshopInstallAsync(string gameRoot, WorkshopModPrepared prepared)
     {
-        if (busy || transactionWriting) return;
+        if (busy || transactionWriting || modInventoryDirty || !NeonRootMatches(gameRoot) || prepared.IsUpdate || prepared.IsUnchanged)
+        {
+            WorkshopModInstaller.Cleanup(prepared);
+            neonWorkbenchView?.ShowToast("只允许全新安装进入此入口；覆盖更新请重新预览。", NeonTone.Amber);
+            return;
+        }
         busy = true;
         transactionWriting = true;
         try
