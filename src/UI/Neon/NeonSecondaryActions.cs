@@ -77,14 +77,18 @@ public partial class MainWindow
             InvalidateNeonRecoveryCache();
     }
 
-    void InvalidateNeonRecoveryCache() => neonRecoveryCacheDirty = true;
+    void InvalidateNeonRecoveryCache()
+    {
+        neonRecoveryCacheDirty = true;
+        neonRecoveryRevision++;
+    }
 
-    (ModEnvironmentSnapshotEntry[] Snapshots, string? Warning, NeonPatchBackupBatch? Batch) LoadRecoveryCacheSync(string? root)
+    static (ModEnvironmentSnapshotEntry[] Snapshots, string? Warning, NeonPatchBackupBatch? Batch) LoadRecoveryCacheSync(string? root, string dataRoot)
     {
         if (root == null) return ([], null, null);
         ModEnvironmentSnapshotEntry[] entries = [];
         string? warning = null;
-        try { entries = NeonSnapshotWorkflow(root).List(); }
+        try { entries = new ModEnvironmentSnapshotWorkflowService(root, dataRoot).List(); }
         catch (Exception ex) { warning = ex.Message; }
         var batch = NeonWorkbenchBuilder.ReadLatestPatchBackupBatch(root);
         return (entries, warning, batch);
@@ -131,41 +135,6 @@ public partial class MainWindow
             StatusText: coopStatus);
     }
 
-    NeonRecoverySnapshotState BuildNeonRecoverySnapshotState()
-    {
-        if (selectedInstallRoot != null &&
-            (neonRecoveryCacheDirty || !string.Equals(neonRecoveryCacheRoot, selectedInstallRoot, StringComparison.OrdinalIgnoreCase)))
-        {
-            var loaded = LoadRecoveryCacheSync(selectedInstallRoot);
-            neonRecoveryCacheRoot = selectedInstallRoot;
-            neonCachedSnapshots = loaded.Snapshots;
-            neonCachedSnapshotsWarning = loaded.Warning;
-            neonCachedLatestPatchBatch = loaded.Batch;
-            neonRecoveryCacheDirty = false;
-        }
-        else if (selectedInstallRoot == null)
-        {
-            neonRecoveryCacheRoot = null;
-            neonCachedSnapshots = [];
-            neonCachedSnapshotsWarning = null;
-            neonCachedLatestPatchBatch = null;
-            neonRecoveryCacheDirty = false;
-        }
-
-        var disabledAll = (modInventory?.Mods ?? [])
-            .Where(m => !m.Enabled)
-            .OrderBy(m => ModPresentation.IsIndependentPatch(m) ? 1 : 0)
-            .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ToArray();
-
-        return new NeonRecoverySnapshotState(
-            Snapshots: neonCachedSnapshots,
-            SnapshotsWarning: neonCachedSnapshotsWarning,
-            LatestPatchBatch: neonCachedLatestPatchBatch,
-            DisabledAllMods: disabledAll,
-            ActivityLog: neonActivityLog.ToArray());
-    }
-
     void WireNeonSecondaryPageEvents(NeonWorkbenchView view)
     {
         // Patches page
@@ -180,7 +149,7 @@ public partial class MainWindow
                 neonCachedOrphanAutoStop = enabled;
                 RecordNeonActivity("patch", enabled ? "开启了目标 MOD 删除后自动安全停用孤立补丁。" : "关闭了孤立补丁自动停用。");
                 view.ShowToast(enabled ? "已开启：目标 MOD 全部删除后自动安全停用其孤立补丁" : "已关闭孤立补丁自动停用");
-                view.UpdateOrphanAutoStopOnly(enabled, BuildNeonRecoverySnapshotState());
+                RefreshNeonWorkbench(preserveViewport: true);
             }
             catch (Exception ex)
             {
@@ -916,7 +885,7 @@ public partial class MainWindow
                         else neonWorkbenchView?.ShowToast("暂存清理未完成：" + error.Message, NeonTone.Amber);
                     }
                 }
-                NeonFinishWrite();
+                await NeonFinishWriteAsync();
             }
         }
     }

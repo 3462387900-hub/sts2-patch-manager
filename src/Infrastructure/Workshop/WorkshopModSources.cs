@@ -102,6 +102,10 @@ internal sealed class WorkshopModSources
             ? id
             : null;
 
+    // UI snapshot projection copies bindings before dispatching work; no live dictionary crosses threads.
+    internal ulong[] SnapshotBoundWorkshopIds() => bindings.Values
+        .Select(value => ulong.Parse(value, CultureInfo.InvariantCulture)).ToArray();
+
     public string? ModIdFor(ulong workshopId)
     {
         string value = workshopId.ToString(CultureInfo.InvariantCulture);

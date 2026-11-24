@@ -144,11 +144,15 @@ public partial class MainWindow
 
     static string JoinWarning(string? first, string second) => first == null ? second : first + "；" + second;
 
-    void NeonFinishWrite()
+    async Task NeonFinishWriteAsync()
     {
         busy = false;
         transactionWriting = false;
-        try { RefreshNeonWorkbench(preserveViewport: true); }
+        try
+        {
+            if (!await RefreshNeonWorkbenchAsync(preserveViewport: true))
+                throw new IOException("最新界面快照未能提交");
+        }
         catch (Exception ex)
         {
             if (neonLastWriteReceipt is { State: NeonWriteState.Committed } receipt)

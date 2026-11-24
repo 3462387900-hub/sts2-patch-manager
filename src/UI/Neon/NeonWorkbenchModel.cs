@@ -184,6 +184,9 @@ internal sealed record NeonWorkbenchSnapshot(
     bool IsScanning = false,
     string? ScanStageText = null);
 
+internal sealed record NeonSourceProjection(string? Repository, ulong? WorkshopId,
+    GitHubModResult? GitHub, WorkshopModUpdateResult? Workshop, GitHubSourceDiscoveryResult? Discovery);
+
 internal static class NeonWorkbenchBuilder
 {
     internal static NeonModCategory ClassifyCategory(ManagedMod mod)
@@ -249,7 +252,10 @@ internal static class NeonWorkbenchBuilder
         NeonManagerUpdateState? managerUpdateState = null,
         NeonGitHubNetworkState? githubNetworkState = null,
         bool isScanning = false,
-        string? scanStageText = null)
+        string? scanStageText = null,
+        IReadOnlyDictionary<string, NeonSourceProjection>? sourceProjection = null,
+        IReadOnlySet<ulong>? boundWorkshopIds = null,
+        IReadOnlyDictionary<string, string?>? toggleBlockReasons = null)
     {
         bool hasRoot = !string.IsNullOrWhiteSpace(gameRoot);
         bool hasInventory = hasRoot && inventory != null;
@@ -501,16 +507,14 @@ internal static class NeonWorkbenchBuilder
 
         var allEdges = dependencyGraph?.Edges ?? [];
         var rows = new List<NeonWorkbenchRow>(normalMods.Length);
+        var edgesByManifest = allEdges.ToLookup(e => e.Dependent.Manifest, StringComparer.OrdinalIgnoreCase);
+        var edgesByDependency = allEdges.ToLookup(e => e.DependencyId, StringComparer.OrdinalIgnoreCase);
 
         foreach (var mod in normalMods)
         {
-            var ownEdges = allEdges
-                .Where(e => e.Dependent.Manifest.Equals(mod.Manifest, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
+            var ownEdges = edgesByManifest[mod.Manifest].ToArray();
             var activeOwnIssues = ownEdges.Where(e => e.IsActiveIssue).ToArray();
-            var inboundEdges = allEdges
-                .Where(e => e.DependencyId.Equals(mod.Id, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
+            var inboundEdges = edgesByDependency[mod.Id].ToArray();
             var inboundActiveBroken = inboundEdges.Where(e => e.IsActiveIssue).ToArray();
 
             var ownDisabledPrereq = activeOwnIssues.FirstOrDefault(e => e.Status == ModDependencyStatus.DisabledPrerequisite);
@@ -590,10 +594,22 @@ internal static class NeonWorkbenchBuilder
             ulong? wsId = null;
             GitHubModResult? ghRes = null;
             WorkshopModUpdateResult? wsRes = null;
-            try { repo = githubUpdates?.Repository(mod.Id); } catch { }
-            try { wsId = workshopSources?.Get(mod.Id); } catch { }
-            try { ghRes = githubUpdates?.Cached(mod.Id); } catch { }
-            try { wsRes = workshopUpdates?.Cached(mod.Id); } catch { }
+            NeonSourceProjection? source = null;
+            if (sourceProjection != null)
+            {
+                sourceProjection.TryGetValue(mod.Manifest, out source);
+                repo = source?.Repository;
+                wsId = source?.WorkshopId;
+                ghRes = source?.GitHub;
+                wsRes = source?.Workshop;
+            }
+            else
+            {
+                try { repo = githubUpdates?.Repository(mod.Id); } catch { }
+                try { wsId = workshopSources?.Get(mod.Id); } catch { }
+                try { ghRes = githubUpdates?.Cached(mod.Id); } catch { }
+                try { wsRes = workshopUpdates?.Cached(mod.Id); } catch { }
+            }
 
             if (ghRes != null && (ghRes.LocalVersion != mod.Version ||
                 !ghRes.Repository.Equals(repo, StringComparison.OrdinalIgnoreCase)))
@@ -605,7 +621,7 @@ internal static class NeonWorkbenchBuilder
             NeonCandidateSource? candidate = null;
             if (isUnbound)
             {
-                var discovered = githubDiscovery?.Cached(mod);
+                var discovered = sourceProjection != null ? source?.Discovery : githubDiscovery?.Cached(mod);
                 var topGh = discovered?.Candidates.FirstOrDefault();
                 if (topGh != null)
                 {
@@ -621,6 +637,8 @@ internal static class NeonWorkbenchBuilder
                 else
                 {
                     var coverIdx = WorkshopCoverIndex.Match(mod, workshopSources, duplicateIds);
+                    if (coverIdx != null && boundWorkshopIds?.Contains(coverIdx.WorkshopId) == true)
+                        coverIdx = null;
                     if (coverIdx != null)
                     {
                         candidate = new NeonCandidateSource(
@@ -663,8 +681,13 @@ internal static class NeonWorkbenchBuilder
                 blockReason = "MOD 文件发生变化，请刷新后再操作。";
             else if (hasRoot && inventory != null)
             {
-                try { blockReason = ModManager.BlockReason(gameRoot!, mod, inventory); }
-                catch (Exception ex) { blockReason = ex.Message; }
+                if (toggleBlockReasons != null && toggleBlockReasons.TryGetValue(mod.Manifest, out var cachedReason))
+                    blockReason = cachedReason;
+                else
+                {
+                    try { blockReason = ModManager.BlockReason(gameRoot!, mod, inventory); }
+                    catch (Exception ex) { blockReason = ex.Message; }
+                }
             }
             bool isLockedByDependents = mod.Enabled && !gameRunning && !modInventoryDirty && blockReason != null;
 

@@ -481,12 +481,12 @@ public partial class MainWindow
             var savedRepForReveal = report;
             modInventory = null;
             report = null;
-            RefreshNeonWorkbench(preserveViewport: false);
+            await RefreshNeonWorkbenchAsync(preserveViewport: false);
             await Idle();
 
             modInventory = savedInvForReveal;
             report = savedRepForReveal;
-            RefreshNeonWorkbench(preserveViewport: false);
+            await RefreshNeonWorkbenchAsync(preserveViewport: false);
             var (_, revealMaxOp) = await SampleOverAsync(() => view.LoadRevealPillControl.Opacity, 280);
             string revealText = string.Join(" ", Descendants<TextBlock>(view.LoadRevealPillControl).Select(t => t.Text));
             Check(view.IsLoadRevealVisible && revealText.Contains("已加载") && revealMaxOp >= 0.98,

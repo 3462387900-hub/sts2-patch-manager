@@ -200,7 +200,7 @@ public partial class MainWindow
             {
                 var plan = HandleLocalZipRecoveryReport(root, recovery, session.TransactionLogDirectory);
                 ApplyLocalZipInvalidationPlan(root, plan);
-                if (recovery.CompletedCount > 0) neonRecoveryCacheDirty = true;
+                if (recovery.CompletedCount > 0) InvalidateNeonRecoveryCache();
             }
             return recovery.HasPendingRecovery || (NeonRootMatches(root) && localZipRecoveryBlocked)
                 ? LocalZipUiResultPresenter.FormatRecoveryReport(recovery, session.TransactionLogDirectory)
@@ -214,7 +214,7 @@ public partial class MainWindow
             if (recovery.ChangedTargetOrCleanedTransaction && NeonRootMatches(root))
             {
                 modSourceCheckWorkflow?.InvalidateAll();
-                neonRecoveryCacheDirty = true;
+                InvalidateNeonRecoveryCache();
                 modInventoryDirty = true;
                 report = null; states = []; ClearCoop(); ClearSelection(); installPreview = null; modTogglePreview = null;
                 InvalidateLifecycle("在线 MOD 事务已恢复，旧的健康及来源结论已失效。");
@@ -895,7 +895,7 @@ public partial class MainWindow
             else
                 neonWorkbenchView?.ShowToast("事务结果已记录，后续界面处理未完成：" + ex.Message, NeonTone.Amber);
         }
-        finally { NeonFinishWrite(); }
+        finally { await NeonFinishWriteAsync(); }
     }
 
     async Task NeonCheckSingleModUpdateAsync(ManagedMod mod)
@@ -1001,73 +1001,8 @@ public partial class MainWindow
         }
     }
 
-    internal void RefreshNeonWorkbench(bool preserveViewport = true)
-    {
-        if (!UiThemes.IsNeon || neonWorkbenchView == null) return;
-
-        bool running = selectedInstallRoot != null &&
-            string.Equals(neonGameRunningRoot, selectedInstallRoot, StringComparison.OrdinalIgnoreCase) &&
-            neonGameRunningCached;
-        if (selectedInstallRoot != null)
-            _ = PollNeonGameRunningAsync(selectedInstallRoot, force: !string.Equals(neonGameRunningRoot, selectedInstallRoot, StringComparison.OrdinalIgnoreCase));
-        ModDependencyGraphReport? depGraph = null;
-        if (modInventory != null)
-        {
-            var diag = ModDependencyDiagnostics.Analyze(modInventory);
-            depGraph = new ModDependencyGraphReport(
-                diag.Edges.Select(e => new ModDependencyEdge(
-                    e.Dependent, e.DependencyId, e.DependencyName, e.Prerequisite,
-                    e.Status, e.Message, e.FromPatchRule, e.IsCycle,
-                    e.DisabledVersionFits, e.MinimumVersion, e.MaximumVersion)).ToArray(),
-                diag.Cycles.Select(c => new ModDependencyCycle(c.ModIds, c.Names)).ToArray(),
-                diag.Summaries.ToDictionary(
-                    kv => kv.Key,
-                    kv => new ModDependencySummary(kv.Value.DependencyCount, kv.Value.UnsatisfiedCount, kv.Value.ActiveIssueCount, kv.Value.CycleEdgeCount),
-                    StringComparer.OrdinalIgnoreCase),
-                diag.ActiveIssueCount);
-        }
-        GitHubModUpdates? gh = null;
-        WorkshopModSources? ws = null;
-        WorkshopModUpdates? wsUpd = null;
-        if (selectedInstallRoot != null)
-        {
-            try { gh = GitHubUpdates(); } catch { }
-            try { ws = WorkshopSources(); } catch { }
-            try { wsUpd = WorkshopUpdates(); } catch { }
-        }
-
-        var snapshot = NeonWorkbenchBuilder.Build(
-            gameRoot: selectedInstallRoot,
-            gameRunning: running,
-            inventory: modInventory,
-            dependencyGraph: depGraph,
-            patchScanReport: report,
-            lifecycleReport: HasValidLifecycleReport ? lifecycleReport : null,
-            modInventoryDirty: modInventoryDirty,
-            lifecycleStale: lifecycleStale,
-            lifecycleScanning: lifecycleScanning,
-            lifecycleStatus: lifecycleStatus,
-            githubUpdates: gh,
-            workshopSources: ws,
-            workshopUpdates: wsUpd,
-            githubDiscovery: githubDiscovery,
-            orphanAutoStopEnabled: neonCachedOrphanAutoStop ??= OrphanPatchAutoStop.Enabled(NeonDataRoot),
-            onlineRefreshing: onlineBusy,
-            onlineSourceStatus: onlineStatus,
-            onlineCatalogCount: onlineCatalog?.Patches.Count ?? Catalog.Bundled.Length,
-            checkingModUpdates: modUpdateCheckRunning,
-            lastUpdateCheckTimeLabel: neonLastUpdateCheckTimeLabel,
-            coopState: BuildNeonCoopSnapshotState(),
-            recoveryState: BuildNeonRecoverySnapshotState(),
-            managerUpdateState: BuildNeonManagerUpdateSnapshotState(),
-            githubNetworkState: BuildNeonGitHubNetworkSnapshotState(),
-            isScanning: neonScanning,
-            scanStageText: neonScanStageText);
-
-        neonWorkbenchView.ApplySnapshot(snapshot, preserveViewport);
-        neonWorkbenchView.SetRecoveryWarning(NeonRecoveryWarning(selectedInstallRoot));
-        NeonSchedulePendingRescan();
-    }
+    internal void RefreshNeonWorkbench(bool preserveViewport = true) =>
+        _ = RefreshNeonWorkbenchAsync(preserveViewport);
 
     /// <summary>
     /// Called immediately on the UI thread when InvalidateLifecycle or QueueModChange fires,
@@ -1284,11 +1219,13 @@ public partial class MainWindow
             epoch = lifecycleEpoch;
             var scanStamp = NeonCaptureScanStamp(root);
             // Phase 1: Fast local MOD inventory + patch scan + recovery cache preload so UI stays non-blocking.
+            string dataRoot = NeonDataRoot;
+            long recoveryRevision = neonRecoveryRevision;
             var scanned = await Task.Run(() =>
             {
                 var inv = ModManager.Scan(root);
                 var patchRep = Catalog.Scan(root, definitions, revision);
-                var recCache = LoadRecoveryCacheSync(root);
+                var recCache = LoadRecoveryCacheSync(root, dataRoot);
                 return (inv, patchRep, recCache);
             });
 
@@ -1298,7 +1235,7 @@ public partial class MainWindow
                 neonCachedSnapshots = scanned.recCache.Snapshots;
                 neonCachedSnapshotsWarning = scanned.recCache.Warning;
                 neonCachedLatestPatchBatch = scanned.recCache.Batch;
-                neonRecoveryCacheDirty = false;
+                neonRecoveryCacheDirty = recoveryRevision != neonRecoveryRevision;
                 report = scanned.patchRep;
                 scannedCatalog = definitions;
                 states = scanned.patchRep.Patches;
@@ -1384,7 +1321,7 @@ public partial class MainWindow
             neonScanStageText = null;
             lifecycleScanning = false;
             busy = false;
-            RefreshNeonWorkbench(preserveViewport: true);
+            await RefreshNeonWorkbenchAsync(preserveViewport: true);
         }
     }
 
@@ -1726,8 +1663,13 @@ public partial class MainWindow
         busy = false;
         transactionWriting = false;
 
-        // Build fresh dependency graph & trigger the smooth Jelly Toggle glide!
-        RefreshNeonWorkbench(preserveViewport: true);
+        // Wait for the latest-generation projection before deriving dependency receipts.
+        bool projectionReady = await RefreshNeonWorkbenchAsync(preserveViewport: true);
+        if (!projectionReady || !NeonRootMatches(root) || modInventoryDirty)
+        {
+            neonWorkbenchView.ShowToast("文件启停已完成，但后续界面刷新未完成，请手动刷新。", NeonTone.Amber);
+            return;
+        }
 
         // Moment 3: attach honest, persistent in-place confirmation receipts right where the player was looking
         var postSnap = neonWorkbenchView.CurrentSnapshot;
@@ -1933,22 +1875,6 @@ public partial class MainWindow
             Status: managerUpdateStatus,
             CleanupStatus: managerCleanupStatus,
             DownloadedArchivePath: managerDownload);
-    }
-
-    NeonGitHubNetworkState BuildNeonGitHubNetworkSnapshotState()
-    {
-        if (neonCachedGitHubNetwork != null)
-            return neonCachedGitHubNetwork;
-        try
-        {
-            var cfg = GitHubNetwork.Load(installer.DataRoot);
-            neonCachedGitHubNetwork = new NeonGitHubNetworkState(cfg.Mode, cfg.ProxyUrl);
-        }
-        catch
-        {
-            neonCachedGitHubNetwork = new NeonGitHubNetworkState(GitHubNetwork.Default.Mode, GitHubNetwork.Default.ProxyUrl);
-        }
-        return neonCachedGitHubNetwork;
     }
 
     async Task NeonChooseAndDiagnoseLogAsync()
@@ -2334,6 +2260,6 @@ public partial class MainWindow
             }
             else NeonPublishWriteReceipt(new(NeonWriteState.NotCommitted, "恢复 MOD 备份未完成：" + ex.Message));
         }
-        finally { NeonFinishWrite(); }
+        finally { await NeonFinishWriteAsync(); }
     }
 }

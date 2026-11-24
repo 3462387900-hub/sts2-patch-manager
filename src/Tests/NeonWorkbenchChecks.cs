@@ -323,7 +323,8 @@ public partial class MainWindow
         ChangeUiTheme(UiThemes.Neon);
         if (neonWorkbenchView != null)
             neonWorkbenchView.DemoUtilityControlsVisible = true;
-        RefreshNeonWorkbench(preserveViewport: false);
+        if (!await RefreshNeonWorkbenchAsync(preserveViewport: false))
+            throw new InvalidOperationException("隔离样本界面快照未能提交。");
         return root;
     }
 

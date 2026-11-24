@@ -1274,7 +1274,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             if (activeFilter == filterId) return;
             activeFilter = filterId;
             UpdateFilterPillVisuals();
-            RenderWorkbenchContent(preserveScroll: false, animateSettle: true);
+            RenderWorkbenchContent(preserveScroll: true, animateSettle: true);
         };
         filterPillControls[filterId] = (btn, label, count);
         return btn;
@@ -1354,6 +1354,11 @@ internal sealed partial class NeonWorkbenchView : Grid
         bool prevWasScanning = sameGameRoot && lastSnapshotWasScanning;
         if (!sameGameRoot)
         {
+            ResetNeonListChildren();
+            neonModPage = 1;
+            checkedModFolders.Clear();
+            if (selectedModId != null)
+                FinishInspectorCollapseImmediate(preserveScroll: false);
             lastTrackedGameRoot = snapshot.GameRoot;
             lastModEnabledById.Clear();
             pendingModFlipPrevState.Clear();
@@ -1420,7 +1425,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         selectedPatchIds.IntersectWith(selectablePatches);
 
         // If selected MOD was removed during a background scan, collapse inspector quietly
-        if (selectedModId != null && !snapshot.AllRows.Any(r => r.Mod.Id.Equals(selectedModId, StringComparison.OrdinalIgnoreCase)))
+        if (selectedModId != null && snapshot.HasInventory && !snapshot.AllRows.Any(r => r.Mod.Id.Equals(selectedModId, StringComparison.OrdinalIgnoreCase)))
             FinishInspectorCollapseImmediate(preserveScroll: preserveViewport, explicitSavedOffset: savedDeskOffset);
 
         UpdateChrome(snapshot);
@@ -1470,6 +1475,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         if (currentSnapshot == null || currentSnapshot.GameRunning == gameRunning) return;
         currentSnapshot = currentSnapshot with { GameRunning = gameRunning };
         UpdateChrome(currentSnapshot);
+        RenderWorkbenchContent(preserveScroll: true);
     }
 
     public void UpdateOrphanAutoStopOnly(bool enabled, NeonRecoverySnapshotState recoveryState)
@@ -1513,6 +1519,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         var replacement = BuildModRowElement(rowData);
         deskContentStack.Children.RemoveAt(idx);
         deskContentStack.Children.Insert(idx, replacement);
+        RememberNeonPageRow(rowData, replacement);
         return true;
     }
 
@@ -1757,6 +1764,7 @@ internal sealed partial class NeonWorkbenchView : Grid
 
     void ScrollModRowIntoView(string modId)
     {
+        EnsureNeonPageForMod(modId);
         foreach (FrameworkElement child in deskContentStack.Children)
         {
             if (child.Tag is string id && id.Equals(modId, StringComparison.OrdinalIgnoreCase))
@@ -2415,7 +2423,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         searchClearButton.Visibility = hasQuery ? Visibility.Visible : Visibility.Collapsed;
         searchKbdHint.Visibility = hasQuery ? Visibility.Collapsed : Visibility.Visible;
         depPage = 1;
-        RenderWorkbenchContent(preserveScroll: false);
+        RenderWorkbenchContent(preserveScroll: workbenchMode == "list");
     }
 
     public void SwitchTab(string nextTab)
@@ -2544,7 +2552,11 @@ internal sealed partial class NeonWorkbenchView : Grid
         bool cascadeReveal = false)
     {
         double targetOffset = explicitSavedOffset ?? (preserveScroll ? deskScrollViewer.VerticalOffset : 0);
-        deskContentStack.Children.Clear();
+        int scrollRequest = ++neonListScrollRequest;
+        if (currentSnapshot == null || currentSnapshot.GameRoot == null)
+            ResetNeonListChildren();
+        else if (!currentSnapshot.HasInventory || workbenchMode == "deps")
+            ResetNeonListChildren();
 
         if (currentSnapshot == null || currentSnapshot.GameRoot == null)
         {
@@ -2610,6 +2622,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             deskScrollViewer.ScrollToVerticalOffset(targetOffset);
             Dispatcher.BeginInvoke(new Action(() =>
             {
+                if (scrollRequest != neonListScrollRequest) return;
                 double clamped = Math.Min(targetOffset, deskScrollViewer.ScrollableHeight);
                 deskScrollViewer.ScrollToVerticalOffset(clamped);
             }), DispatcherPriority.Loaded);
@@ -2622,33 +2635,18 @@ internal sealed partial class NeonWorkbenchView : Grid
 
     void RenderModList(NeonWorkbenchRow[] filtered, bool cascadeReveal = false)
     {
-        visibleRowVisuals.Clear();
-        if (currentSnapshot!.AllRows.Length == 0)
+        if (currentSnapshot!.AllRows.Length == 0 || filtered.Length == 0)
         {
-            deskContentStack.Children.Add(BuildEmptyState(
-                "清单中暂无普通 MOD",
-                "可以前往「获取与更新」导入本地 MOD 压缩包。",
-                "前往获取与更新",
-                () => SwitchTab("acquire")));
+            ResetNeonListChildren();
+            deskContentStack.Children.Add(currentSnapshot.AllRows.Length == 0
+                ? BuildEmptyState("清单中暂无普通 MOD", "可以前往「获取与更新」导入本地 MOD 压缩包。",
+                    "前往获取与更新", () => SwitchTab("acquire"))
+                : BuildEmptyState("没有匹配的 MOD",
+                    $"试试更换关键词，或清除筛选条件查看全部 {currentSnapshot.AllRows.Length} 项。",
+                    "重置搜索与筛选", ResetSearchAndFilters));
             return;
         }
-        if (filtered.Length == 0)
-        {
-            deskContentStack.Children.Add(BuildEmptyState(
-                "没有匹配的 MOD",
-                $"试试更换关键词，或清除筛选条件查看全部 {currentSnapshot!.AllRows.Length} 项。",
-                "重置搜索与筛选",
-                ResetSearchAndFilters));
-            return;
-        }
-
-        for (int i = 0; i < filtered.Length; i++)
-        {
-            var el = BuildModRowElement(filtered[i]);
-            if (cascadeReveal)
-                NeonMotion.PlayCascadeReveal(this, el, i);
-            deskContentStack.Children.Add(el);
-        }
+        ReconcileNeonListPage(filtered, cascadeReveal);
     }
 
     bool IsModSelected(string modId) =>
@@ -2685,6 +2683,7 @@ internal sealed partial class NeonWorkbenchView : Grid
 
     Border BuildModRowElement(NeonWorkbenchRow row)
     {
+        neonRowBuildCount++;
         bool isSelected = IsModSelected(row.Mod.Id);
         bool isHighlighted = highlightedModId != null && row.Mod.Id.Equals(highlightedModId, StringComparison.OrdinalIgnoreCase);
         bool isChecked = checkedModFolders.Contains(row.Mod.Folder);
