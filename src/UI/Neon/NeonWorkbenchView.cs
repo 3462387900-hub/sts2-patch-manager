@@ -4195,11 +4195,11 @@ internal sealed partial class NeonWorkbenchView : Grid
 
     void UpdateToastRackPlacement()
     {
-        bool splitInspectorVisible = activeTab == "workbench" && selectedModId != null && !inspectorClosing &&
-            inspectorPane.Visibility == Visibility.Visible && !(ActualWidth > 0 && ActualWidth < 1120);
-        toastRack.Margin = splitInspectorVisible
-            ? new Thickness(0, 0, 424, 44)
-            : new Thickness(0, 0, 18, 44);
+        bool inspectorVisible = activeTab == "workbench" && selectedModId != null && !inspectorClosing &&
+            inspectorPane.Visibility == Visibility.Visible;
+        bool narrow = ActualWidth > 0 && ActualWidth < 1120;
+        double rightMargin = !inspectorVisible ? 18 : (narrow ? 416 : 424);
+        toastRack.Margin = new Thickness(0, 0, rightMargin, 44);
     }
 
     void UpdateResponsiveInspectorLayout()
