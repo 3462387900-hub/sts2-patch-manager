@@ -69,6 +69,14 @@ internal sealed partial class NeonWorkbenchView
                     RequestPreviewPatchInstall?.Invoke(selectedPatchIds.ToArray());
             });
         previewBtn.IsEnabled = selectedPatchIds.Count > 0 && s.GameRoot != null && !s.ModInventoryDirty;
+        if (!previewBtn.IsEnabled)
+        {
+            previewBtn.ToolTip = s.GameRoot == null
+                ? "请先选择游戏目录"
+                : s.ModInventoryDirty
+                    ? "检测到目录变化，请先重新扫描"
+                    : "先在下方勾选「待修复」或「需联动」补丁后再预览安装方案";
+        }
         AutomationProperties.SetName(previewBtn, previewBtn.Content?.ToString() ?? "预览安装方案");
         headActions.Children.Add(previewBtn);
 
@@ -96,8 +104,9 @@ internal sealed partial class NeonWorkbenchView
             isChecked: s.OrphanAutoStopEnabled,
             automationName: "目标 MOD 删除后自动停用孤立补丁",
             onToggled: nextVal => RequestToggleOrphanAutoStop?.Invoke(nextVal),
-            previousChecked: null,
+            previousChecked: lastOrphanAutoStopState,
             animHost: this);
+        lastOrphanAutoStopState = s.OrphanAutoStopEnabled;
         orphanCb.Margin = new Thickness(0, 0, 8, 0);
         var orphanLbl = NeonWidgets.Text("目标 MOD 删除后自动停用孤立补丁", 12, NeonPalette.InkPrimary, FontWeights.Medium);
         orphanLbl.VerticalAlignment = VerticalAlignment.Center;
@@ -118,44 +127,120 @@ internal sealed partial class NeonWorkbenchView
             return;
         }
 
-        // ---- Tier 1: Needs Action ----
-        var tier1Left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var tier1Lamp = NeonWidgets.CreateStaticLamp(actionTier.Length > 0 ? NeonTone.Amber : NeonTone.Sage);
-        tier1Lamp.Margin = new Thickness(0, 0, 8, 0);
-        tier1Left.Children.Add(tier1Lamp);
-        var tier1Title = NeonWidgets.Text("需要你处理", 13.5, NeonPalette.InkPrimary, FontWeights.SemiBold);
-        tier1Title.Margin = new Thickness(0, 0, 8, 0);
-        tier1Left.Children.Add(tier1Title);
-        tier1Left.Children.Add(NeonWidgets.CreateBadge(
-            $"{actionTier.Length} 项",
-            actionTier.Length > 0 ? NeonTone.Amber : NeonTone.Sage));
+        // ---- Compact Search & Status Filter Strip ----
+        EnsurePatchesSearchControl();
+        var filterBar = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        filterBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        filterBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        UIElement tier1Right = autoAddedReasons.Count > 0
-            ? NeonWidgets.CreateBadge($"已自动联动带入 {autoAddedReasons.Count} 项必需关联补丁", NeonTone.Indigo)
-            : NeonWidgets.Text("勾选待装修复后，必要关联补丁将自动绑定", 12, NeonPalette.InkMuted);
-
-        var tier1Body = new StackPanel();
-        if (actionTier.Length == 0)
+        var patchPills = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        foreach (var (fid, flabel) in new[]
         {
-            var calm = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16, 18, 16, 18) };
-            var okMark = NeonWidgets.Text("✓", 13, NeonPalette.Sage, FontWeights.Bold);
-            okMark.Margin = new Thickness(0, 0, 8, 0);
-            calm.Children.Add(okMark);
-            calm.Children.Add(NeonWidgets.Text("当前没有待安装、需联动或未核对的修复补丁。", 13, NeonPalette.Sage));
-            tier1Body.Children.Add(calm);
-        }
-        else
+            ("all", $"全部 ({allPatches.Length})"),
+            ("action", $"需处理 ({actionTier.Length})"),
+            ("retire", $"可退役 ({retireTier.Length})"),
+            ("ready", $"已就绪与不适用 ({quietTier.Length})")
+        })
         {
-            for (int i = 0; i < actionTier.Length; i++)
+            bool active = patchesStatusFilter == fid;
+            var pill = new Button
             {
-                tier1Body.Children.Add(BuildPatchActionRow(
-                    actionTier[i], s, autoAddedReasons, isLast: i == actionTier.Length - 1));
-            }
+                Content = flabel,
+                Height = 25,
+                Padding = new Thickness(9, 0, 9, 0),
+                Margin = new Thickness(0, 0, 6, 4),
+                FontFamily = NeonPalette.SansFont,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Background = active ? NeonPalette.InkPrimary : Brushes.Transparent,
+                Foreground = active ? NeonPalette.BgSurface : NeonPalette.InkSecondary,
+                BorderBrush = active ? NeonPalette.InkPrimary : NeonPalette.BorderSubtle,
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                Template = CreateRoundedButtonTemplate(12, active ? NeonPalette.InkPrimary : NeonPalette.BgWell, active ? NeonPalette.InkPrimary : NeonPalette.BorderMedium)
+            };
+            string targetFilter = fid;
+            pill.Click += (_, _) =>
+            {
+                if (patchesStatusFilter == targetFilter) return;
+                patchesStatusFilter = targetFilter;
+                if (targetFilter == "ready") patchesShowReady = true;
+                if (currentSnapshot != null) RenderSecondaryPage("patches", currentSnapshot, preserveScroll: false);
+            };
+            patchPills.Children.Add(pill);
         }
-        container.Children.Add(NeonWidgets.CreateSurfaceCard(tier1Left, tier1Right, tier1Body));
+        filterBar.Children.Add(patchPills);
+
+        patchesSearchHost!.Width = 260;
+        patchesSearchHost.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(patchesSearchHost, 1);
+        filterBar.Children.Add(patchesSearchHost);
+        container.Children.Add(filterBar);
+
+        static bool MatchesPatchQuery(NeonRelatedPatch p, string q)
+        {
+            if (string.IsNullOrWhiteSpace(q)) return true;
+            if (p.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.PatchId.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Summary.Contains(q, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return p.RelatedModIds?.Any(id => id.Contains(q, StringComparison.OrdinalIgnoreCase)) == true;
+        }
+        string pq = patchesFilterQuery.Trim();
+        var filteredAction = actionTier.Where(p => MatchesPatchQuery(p, pq)).ToArray();
+        var filteredRetire = retireTier.Where(p => MatchesPatchQuery(p, pq)).ToArray();
+        var filteredQuiet = quietTier.Where(p => MatchesPatchQuery(p, pq)).ToArray();
+        bool showAction = patchesStatusFilter is "all" or "action";
+        bool showRetire = patchesStatusFilter is "all" or "retire";
+        bool showQuiet = patchesStatusFilter is "all" or "ready";
+        bool effectiveShowReady = patchesShowReady || patchesStatusFilter == "ready" || pq.Length > 0;
+
+        // ---- Tier 1: Needs Action ----
+        if (showAction && (patchesStatusFilter == "action" || pq.Length == 0 || filteredAction.Length > 0))
+        {
+            var tier1Left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var tier1Lamp = NeonWidgets.CreateStaticLamp(filteredAction.Length > 0 ? NeonTone.Amber : NeonTone.Sage);
+            tier1Lamp.Margin = new Thickness(0, 0, 8, 0);
+            tier1Left.Children.Add(tier1Lamp);
+            var tier1Title = NeonWidgets.Text("需要你处理", 13.5, NeonPalette.InkPrimary, FontWeights.SemiBold);
+            tier1Title.Margin = new Thickness(0, 0, 8, 0);
+            tier1Left.Children.Add(tier1Title);
+            tier1Left.Children.Add(NeonWidgets.CreateBadge(
+                $"{filteredAction.Length} 项",
+                filteredAction.Length > 0 ? NeonTone.Amber : NeonTone.Sage));
+
+            int checkableCount = filteredAction.Count(p => p.ScanState?.Status is "待修复" or "需联动");
+            UIElement tier1Right = autoAddedReasons.Count > 0
+                ? NeonWidgets.CreateBadge($"已自动联动带入 {autoAddedReasons.Count} 项必需关联补丁", NeonTone.Indigo)
+                : checkableCount == 0 && filteredAction.Length > 0
+                    ? NeonWidgets.Text("当前均为需核对项，请先逐项查看判断依据", 12, NeonPalette.InkMuted)
+                    : NeonWidgets.Text("勾选待装修复后，必要关联补丁将自动绑定", 12, NeonPalette.InkMuted);
+
+            var tier1Body = new StackPanel();
+            if (filteredAction.Length == 0)
+            {
+                var calm = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16, 18, 16, 18) };
+                var okMark = NeonWidgets.Text("✓", 13, NeonPalette.Sage, FontWeights.Bold);
+                okMark.Margin = new Thickness(0, 0, 8, 0);
+                calm.Children.Add(okMark);
+                calm.Children.Add(NeonWidgets.Text(
+                    pq.Length > 0 ? "没有匹配当前搜索词的待处理补丁。" : "当前没有待安装、需联动或未核对的修复补丁。",
+                    13, NeonPalette.Sage));
+                tier1Body.Children.Add(calm);
+            }
+            else
+            {
+                for (int i = 0; i < filteredAction.Length; i++)
+                {
+                    tier1Body.Children.Add(BuildPatchActionRow(
+                        filteredAction[i], s, autoAddedReasons, isLast: i == filteredAction.Length - 1));
+                }
+            }
+            container.Children.Add(NeonWidgets.CreateSurfaceCard(tier1Left, tier1Right, tier1Body));
+        }
 
         // ---- Tier 2: Safe Retirement (ONLY when health is valid and SHA-256 matched!) ----
-        if (retireTier.Length > 0)
+        if (showRetire && filteredRetire.Length > 0)
         {
             var tier2Left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             var tier2Lamp = NeonWidgets.CreateStaticLamp(NeonTone.Sage);
@@ -164,78 +249,131 @@ internal sealed partial class NeonWorkbenchView
             var tier2Title = NeonWidgets.Text("可安全退役（上游已验证修复）", 13.5, NeonPalette.InkPrimary, FontWeights.SemiBold);
             tier2Title.Margin = new Thickness(0, 0, 8, 0);
             tier2Left.Children.Add(tier2Title);
-            tier2Left.Children.Add(NeonWidgets.CreateBadge($"{retireTier.Length} 项", NeonTone.Sage));
+            tier2Left.Children.Add(NeonWidgets.CreateBadge($"{filteredRetire.Length} 项", NeonTone.Sage));
 
             var tier2Right = NeonWidgets.Text("仅当本地原 MOD 文件精确匹配已审核 SHA-256 时才出现", 12, NeonPalette.InkMuted);
 
             var tier2Body = new StackPanel();
-            for (int i = 0; i < retireTier.Length; i++)
+            for (int i = 0; i < filteredRetire.Length; i++)
             {
-                tier2Body.Children.Add(BuildPatchRetireRow(retireTier[i], s, isLast: i == retireTier.Length - 1));
+                tier2Body.Children.Add(BuildPatchRetireRow(filteredRetire[i], s, isLast: i == filteredRetire.Length - 1));
             }
             container.Children.Add(NeonWidgets.CreateSurfaceCard(tier2Left, tier2Right, tier2Body));
         }
-
-        // ---- Tier 3: Quiet / Installed / Disabled / Not Applicable (Collapsible) ----
-        var tier3Card = new Border
+        else if (patchesStatusFilter == "retire" && filteredRetire.Length == 0)
         {
-            Background = NeonPalette.BgSurface,
-            BorderBrush = NeonPalette.BorderSubtle,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            ClipToBounds = true,
-            Margin = new Thickness(0, 0, 0, 14)
-        };
-        var tier3Stack = new StackPanel();
-
-        var trigGrid = new Grid();
-        trigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        trigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        string looseHint = looseFixes.Length > 0 ? $" · 含 {looseFixes.Length} 项散落根目录待整理" : "";
-        var trigLeft = NeonWidgets.Text($"已就绪、已停用与不适用（{quietTier.Length} 项）{looseHint}", 13, NeonPalette.InkSecondary, FontWeights.SemiBold);
-        trigLeft.VerticalAlignment = VerticalAlignment.Center;
-        trigGrid.Children.Add(trigLeft);
-        var trigRight = NeonWidgets.Text(patchesShowReady ? "收起 ▴" : "展开查看 ▾", 12, NeonPalette.InkSecondary, FontWeights.Medium);
-        trigRight.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(trigRight, 1);
-        trigGrid.Children.Add(trigRight);
-
-        var trigBorder = new Border
-        {
-            Background = NeonPalette.BgElevated,
-            BorderBrush = NeonPalette.BorderSubtle,
-            BorderThickness = patchesShowReady ? new Thickness(0, 0, 0, 1) : new Thickness(0),
-            Padding = new Thickness(16, 11, 16, 11),
-            Child = trigGrid
-        };
-        var trigBtn = new Button
-        {
-            Content = trigBorder,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Cursor = Cursors.Hand,
-            Template = NeonWidgets.CreateBareButtonTemplate()
-        };
-        AutomationProperties.SetName(trigBtn, patchesShowReady ? "收起已就绪与不适用补丁" : "展开查看已就绪与不适用补丁");
-        trigBtn.MouseEnter += (_, _) => { trigLeft.Foreground = NeonPalette.InkPrimary; trigRight.Foreground = NeonPalette.InkPrimary; };
-        trigBtn.MouseLeave += (_, _) => { trigLeft.Foreground = NeonPalette.InkSecondary; trigRight.Foreground = NeonPalette.InkSecondary; };
-        trigBtn.Click += (_, _) =>
-        {
-            patchesShowReady = !patchesShowReady;
-            if (currentSnapshot != null) RenderSecondaryPage("patches", currentSnapshot, preserveScroll: true);
-        };
-        tier3Stack.Children.Add(trigBtn);
-
-        if (patchesShowReady)
-        {
-            for (int i = 0; i < quietTier.Length; i++)
-                tier3Stack.Children.Add(BuildPatchQuietRow(quietTier[i], s, isLast: i == quietTier.Length - 1));
+            container.Children.Add(BuildEmptyState(
+                s.IsLifecycleHealthValid ? "当前没有可安全退役的补丁" : "尚未完成补丁健康核验",
+                s.IsLifecycleHealthValid ? "没有检测到精确匹配上游 SHA-256 的已修复原 MOD。" : "请先刷新扫描并核验本地指纹与上游证据库。",
+                "查看全部补丁",
+                () => { patchesStatusFilter = "all"; if (currentSnapshot != null) RenderSecondaryPage("patches", currentSnapshot, preserveScroll: false); }));
         }
 
-        tier3Card.Child = tier3Stack;
-        container.Children.Add(tier3Card);
+        // ---- Tier 3: Quiet / Installed / Disabled / Not Applicable (Collapsible) ----
+        if (showQuiet && (patchesStatusFilter == "ready" || pq.Length == 0 || filteredQuiet.Length > 0))
+        {
+            var tier3Card = new Border
+            {
+                Background = NeonPalette.BgSurface,
+                BorderBrush = NeonPalette.BorderSubtle,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                ClipToBounds = true,
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+            var tier3Stack = new StackPanel();
+
+            var trigGrid = new Grid();
+            trigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            trigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            string looseHint = looseFixes.Length > 0 ? $" · 含 {looseFixes.Length} 项散落根目录待整理" : "";
+            var trigLeft = NeonWidgets.Text($"已就绪、已停用与不适用（{filteredQuiet.Length} 项）{looseHint}", 13, NeonPalette.InkSecondary, FontWeights.SemiBold);
+            trigLeft.VerticalAlignment = VerticalAlignment.Center;
+            trigGrid.Children.Add(trigLeft);
+            var trigRight = NeonWidgets.Text(effectiveShowReady ? "收起 ▴" : "展开查看 ▾", 12, NeonPalette.InkSecondary, FontWeights.Medium);
+            trigRight.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(trigRight, 1);
+            trigGrid.Children.Add(trigRight);
+
+            var trigBorder = new Border
+            {
+                Background = NeonPalette.BgElevated,
+                BorderBrush = NeonPalette.BorderSubtle,
+                BorderThickness = effectiveShowReady ? new Thickness(0, 0, 0, 1) : new Thickness(0),
+                Padding = new Thickness(16, 11, 16, 11),
+                Child = trigGrid
+            };
+            var trigBtn = new Button
+            {
+                Content = trigBorder,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Cursor = Cursors.Hand,
+                Template = NeonWidgets.CreateBareButtonTemplate()
+            };
+            AutomationProperties.SetName(trigBtn, effectiveShowReady ? "收起已就绪与不适用补丁" : "展开查看已就绪与不适用补丁");
+            trigBtn.MouseEnter += (_, _) => { trigLeft.Foreground = NeonPalette.InkPrimary; trigRight.Foreground = NeonPalette.InkPrimary; };
+            trigBtn.MouseLeave += (_, _) => { trigLeft.Foreground = NeonPalette.InkSecondary; trigRight.Foreground = NeonPalette.InkSecondary; };
+            trigBtn.Click += (_, _) =>
+            {
+                patchesShowReady = !effectiveShowReady;
+                if (currentSnapshot != null) RenderSecondaryPage("patches", currentSnapshot, preserveScroll: true);
+            };
+            tier3Stack.Children.Add(trigBtn);
+
+            if (effectiveShowReady)
+            {
+                if (filteredQuiet.Length == 0)
+                {
+                    var calm = NeonWidgets.Text("没有匹配当前筛选条件的已就绪或不适用补丁。", 12.5, NeonPalette.InkMuted);
+                    calm.Margin = new Thickness(16, 16, 16, 16);
+                    tier3Stack.Children.Add(calm);
+                }
+                else
+                {
+                    for (int i = 0; i < filteredQuiet.Length; i++)
+                        tier3Stack.Children.Add(BuildPatchQuietRow(filteredQuiet[i], s, isLast: i == filteredQuiet.Length - 1));
+                }
+            }
+
+            tier3Card.Child = tier3Stack;
+            container.Children.Add(tier3Card);
+        }
+
+        if (pq.Length > 0 && filteredAction.Length == 0 && filteredRetire.Length == 0 && filteredQuiet.Length == 0)
+        {
+            container.Children.Add(BuildEmptyState(
+                "没有匹配的修复补丁",
+                $"未找到包含「{pq}」的补丁，可以清空关键词查看全部 {allPatches.Length} 项。",
+                "清空搜索",
+                () =>
+                {
+                    patchesFilterQuery = "";
+                    if (patchesSearchBox != null) patchesSearchBox.Text = "";
+                    patchesStatusFilter = "all";
+                    if (currentSnapshot != null) RenderSecondaryPage("patches", currentSnapshot, preserveScroll: false);
+                }));
+        }
+    }
+
+    void EnsurePatchesSearchControl()
+    {
+        if (patchesSearchHost != null && patchesSearchBox != null) return;
+        var created = NeonWidgets.CreateTextInput("搜索补丁名、ID 或关联 MOD…", height: 30);
+        patchesSearchHost = created.Host;
+        patchesSearchBox = created.Input;
+        patchesSearchBox.Text = patchesFilterQuery;
+        AutomationProperties.SetName(patchesSearchBox, "搜索修复补丁");
+        patchesSearchBox.TextChanged += (_, _) =>
+        {
+            string next = patchesSearchBox.Text;
+            if (string.Equals(patchesFilterQuery, next, StringComparison.Ordinal)) return;
+            patchesFilterQuery = next;
+            if (activeTab == "patches" && currentSnapshot != null)
+                RenderSecondaryPage("patches", currentSnapshot, preserveScroll: false);
+        };
     }
 
     (HashSet<string> Included, Dictionary<string, string> AutoAddedReasons) ComputePatchSelectionClosure(
@@ -361,15 +499,28 @@ internal sealed partial class NeonWorkbenchView
             !string.IsNullOrEmpty(p.ReviewedRequiredModId) &&
             !string.IsNullOrEmpty(p.ReviewedRequiredActualVersion))
         {
+            string reqModId = p.ReviewedRequiredModId!;
             var diffWrap = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
             var diffPill = NeonWidgets.CreateVersionDiffPill(
                 p.ReviewedRequiredActualVersion,
                 p.ReviewedRequiredVersion,
                 "≥",
-                prefix: $"依赖提示：{p.ReviewedRequiredModId}",
+                prefix: $"依赖提示：{reqModId}",
                 warn: false,
-                suffix: $"· 建议先在工作台更新 {p.ReviewedRequiredModId}");
-            diffWrap.Children.Add(diffPill);
+                suffix: $"· 建议先在工作台更新 {reqModId} →");
+            var diffBtn = new Button
+            {
+                Content = diffPill,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                Cursor = Cursors.Hand,
+                ToolTip = $"点击定位到 {reqModId} 并查看更新",
+                Template = NeonWidgets.CreateInteractiveBareButtonTemplate(pressScale: 0.985, hoverOpacity: 0.92)
+            };
+            AutomationProperties.SetName(diffBtn, $"前往工作台更新 {reqModId}");
+            diffBtn.Click += (_, _) => FocusMod(reqModId, openUpdatePreview: true);
+            diffWrap.Children.Add(diffBtn);
             info.Children.Add(diffWrap);
         }
 

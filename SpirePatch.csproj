@@ -3,10 +3,13 @@
     <OutputType>WinExe</OutputType><TargetFramework>net9.0-windows</TargetFramework><UseWPF>true</UseWPF>
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>SpirePatch</AssemblyName>
     <Version>0.14.3</Version><InformationalVersion>0.14.3</InformationalVersion><IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion><ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>assets\SpirePatch.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="data/workshop-source-index.json" LogicalName="SpirePatch.WorkshopSourceIndex.json" />
     <PackageReference Include="SharpCompress" Version="0.50.7" />
+    <Resource Include="assets\SpirePatch.ico" />
+    <Resource Include="assets\SpirePatch-256.png" />
   </ItemGroup>
   <ItemGroup>
     <!-- Keep the standalone console probe isolated from the WPF application's default compile glob. -->

@@ -354,6 +354,17 @@ public partial class MainWindow
         view.RequestDiagnoseGitHubNetwork += () => _ = NeonDiagnoseGitHubNetworkAsync();
         view.RequestSwitchTheme += ChangeUiTheme;
         view.RequestSimulateExternalChange += SimulateExternalChangeInFixture;
+        view.RequestOpenRecoveryLogFolder += () =>
+        {
+            string? targetDir = null;
+            if (selectedInstallRoot != null && neonRecoveryStates.TryGetValue(selectedInstallRoot, out var state))
+            {
+                targetDir = state.Values.FirstOrDefault(s => s.Blocked && Directory.Exists(s.LogDirectory))?.LogDirectory;
+            }
+            targetDir ??= Directory.Exists(NeonDataRoot) ? NeonDataRoot : null;
+            if (targetDir != null) OpenUrl(targetDir);
+            else view.ShowToast("暂未找到恢复日志目录。", NeonTone.Amber);
+        };
         WireNeonSecondaryPageEvents(view);
     }
 
@@ -1212,7 +1223,7 @@ public partial class MainWindow
                     : transactionWriting
                         ? "当前有文件改动正在执行，完成后可重新扫描。"
                         : "当前有其他检查任务正在进行，请稍候…";
-                neonWorkbenchView?.ShowToast(busyMsg, transactionWriting ? NeonTone.Amber : NeonTone.Neutral);
+                neonWorkbenchView?.ShowToast(busyMsg, transactionWriting ? NeonTone.Amber : NeonTone.Neutral, tag: neonScanning ? "scan-progress" : null);
             }
             return;
         }
@@ -1224,8 +1235,8 @@ public partial class MainWindow
         neonScanStageText = "正在扫描本地 MOD 目录与依赖清单…";
         if (includeLifecycle) lifecycleScanning = true;
         RefreshNeonWorkbench(preserveViewport: true);
-        if (userInitiated)
-            neonWorkbenchView?.ShowToast("正在扫描本地 MOD 清单…", NeonTone.Neutral);
+        if (userInitiated && modInventory != null)
+            neonWorkbenchView?.ShowToast("正在扫描本地 MOD 清单…", NeonTone.Neutral, tag: "scan-progress");
         try
         {
             if (neonTestScanDelayMs > 0)
@@ -1323,11 +1334,13 @@ public partial class MainWindow
                 });
                 if (!healthPublished) { NeonRejectStaleScan(); return; }
                 RecordNeonActivity("scan", $"完成补丁健康核验（{scanned.inv.Mods.Count(m => !ModPresentation.IsIndependentPatch(m))} 项普通 MOD · 变化 {hist.Changes.Length} 项）。");
+                neonWorkbenchView?.DismissToastsByTag("scan-progress");
                 neonWorkbenchView?.ShowToast("重新扫描与补丁健康核验已完成");
             }
             else
             {
                 RecordNeonActivity("scan", $"完成本地只读扫描（{scanned.inv.Mods.Count(m => !ModPresentation.IsIndependentPatch(m))} 项普通 MOD）。");
+                neonWorkbenchView?.DismissToastsByTag("scan-progress");
                 neonWorkbenchView?.ShowToast("只读扫描完成（未修改任何游戏文件）");
             }
         }
@@ -1335,10 +1348,12 @@ public partial class MainWindow
         {
             modInventoryDirty = true;
             InvalidateLifecycle("扫描未完成：" + ex.Message);
+            neonWorkbenchView?.DismissToastsByTag("scan-progress");
             neonWorkbenchView?.ShowToast("扫描未完成：" + ex.Message, NeonTone.Cinnabar);
         }
         finally
         {
+            neonWorkbenchView?.DismissToastsByTag("scan-progress");
             neonScanning = false;
             neonScanStageText = null;
             lifecycleScanning = false;
@@ -1946,13 +1961,16 @@ public partial class MainWindow
 
             var matchedLines = new List<NeonDiffLine>();
             var plainBullets = new List<string>();
+            bool matchedKnownPatch = false;
             if (text.Contains("Version mismatch: Act4FinalAscent"))
             {
+                matchedKnownPatch = true;
                 plainBullets.Add("明确匹配：第四幕文件校验不一致，对应「联机兼容校验更新」。仍需核对本机文件版本后再安装。");
                 matchedLines.Add(new NeonDiffLine("mod", "已知特征", "Version mismatch: Act4FinalAscent", "对应补丁：联机兼容校验更新"));
             }
             if (text.Contains("OverflowException") && text.Contains("NHealNumVfx"))
             {
+                matchedKnownPatch = true;
                 plainBullets.Add("匹配：超大回血飘字溢出，对应「超大回血数字溢出」补丁。");
                 matchedLines.Add(new NeonDiffLine("mod", "已知特征", "OverflowException + NHealNumVfx", "对应补丁：超大回血数字溢出"));
             }
@@ -1975,16 +1993,20 @@ public partial class MainWindow
                 BlockedReason: null,
                 AutoSnapshotNote: null,
                 BoundaryNote: "仅在本机匹配已知崩溃/报错特征字符串；不会读取存档或上传日志。",
-                Token: "LOG-DIAGNOSIS",
+                Token: "",
                 Groups:
                 [
                     new NeonDiffGroup("匹配到的日志特征", matchedLines)
                 ],
-                ConfirmLabel: "",
+                ConfirmLabel: matchedKnownPatch ? "前往补丁页查看" : "",
                 CancelLabel: "关闭",
                 FootNote: "诊断结果仅作参考；涉及游戏改动的操作仍在对应工坊页或主工作台确认。",
+                OnConfirmAsync: matchedKnownPatch
+                    ? () => { neonWorkbenchView.SwitchTab("patches"); return Task.CompletedTask; }
+                    : null,
                 PlainSummary: summary,
-                ExpandTechnicalDetailsByDefault: true));
+                ExpandTechnicalDetailsByDefault: true,
+                IsReadOnlyDiagnostic: true));
         }
         catch (Exception ex)
         {

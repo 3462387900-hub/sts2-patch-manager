@@ -14,7 +14,8 @@ internal sealed partial class NeonWorkbenchView
     readonly Dictionary<string, PageRow> neonPageRows = new(StringComparer.OrdinalIgnoreCase);
     Border? neonPagePager;
     TextBlock? neonPageLabel;
-    Button? neonPagePrevious, neonPageNext;
+    Button? neonPageFirst, neonPagePrevious, neonPageNext, neonPageLast;
+    int neonCurrentTotalPages = 1;
     sealed record PageRow(NeonWorkbenchRow Row, Border Element, bool Running,
         bool Highlighted, NeonInlineToggleStatus? InlineStatus);
 
@@ -28,6 +29,7 @@ internal sealed partial class NeonWorkbenchView
         deskContentStack.Children.Clear();
         visibleRowVisuals.Clear();
         neonPageRows.Clear();
+        neonTopPagerHost.Visibility = Visibility.Collapsed;
     }
 
     // Only visible inputs participate: inspector data is always obtained from the latest snapshot.
@@ -115,11 +117,24 @@ internal sealed partial class NeonWorkbenchView
         if (pages > 1)
         {
             EnsureNeonPagePager();
+            neonCurrentTotalPages = pages;
             neonPageLabel!.Text = $"第 {neonModPage} / {pages} 页（每页 {NeonModPageSize} 项）";
+            neonPageFirst!.Visibility = pages > 2 ? Visibility.Visible : Visibility.Collapsed;
+            neonPageLast!.Visibility = pages > 2 ? Visibility.Visible : Visibility.Collapsed;
+            neonPageFirst.IsEnabled = neonModPage > 1;
             neonPagePrevious!.IsEnabled = neonModPage > 1;
             neonPageNext!.IsEnabled = neonModPage < pages;
+            neonPageLast.IsEnabled = neonModPage < pages;
             desired.Add(neonPagePager!);
             listSummaryMeta.Text += $" · 第 {neonModPage}/{pages} 页";
+            neonTopPagerHost.Visibility = Visibility.Visible;
+            neonTopPagePrev.IsEnabled = neonModPage > 1;
+            neonTopPageNext.IsEnabled = neonModPage < pages;
+        }
+        else
+        {
+            neonCurrentTotalPages = 1;
+            neonTopPagerHost.Visibility = Visibility.Collapsed;
         }
 
         var keep = desired.ToHashSet();
@@ -142,15 +157,24 @@ internal sealed partial class NeonWorkbenchView
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         neonPageLabel = NeonWidgets.Text("", 12, NeonPalette.InkSecondary);
+        neonPageLabel.VerticalAlignment = VerticalAlignment.Center;
         grid.Children.Add(neonPageLabel);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        neonPageFirst = NeonWidgets.CreateStyledButton(this, "首页", "NeonSecondaryButton",
+            () => ChangeNeonModPage(1), "xs");
+        neonPageFirst.Margin = new Thickness(0, 0, 6, 0);
         neonPagePrevious = NeonWidgets.CreateStyledButton(this, "上一页", "NeonSecondaryButton",
             () => ChangeNeonModPage(neonModPage - 1), "xs");
         neonPagePrevious.Margin = new Thickness(0, 0, 6, 0);
         neonPageNext = NeonWidgets.CreateStyledButton(this, "下一页", "NeonSecondaryButton",
             () => ChangeNeonModPage(neonModPage + 1), "xs");
+        neonPageLast = NeonWidgets.CreateStyledButton(this, "末页", "NeonSecondaryButton",
+            () => ChangeNeonModPage(neonCurrentTotalPages), "xs");
+        neonPageLast.Margin = new Thickness(6, 0, 0, 0);
+        buttons.Children.Add(neonPageFirst);
         buttons.Children.Add(neonPagePrevious);
         buttons.Children.Add(neonPageNext);
+        buttons.Children.Add(neonPageLast);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
         neonPagePager = new Border { Background = NeonPalette.BgGround, BorderBrush = NeonPalette.BorderSubtle,

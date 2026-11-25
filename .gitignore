@@ -24,6 +24,8 @@
 !/.github/**
 !/releases/
 !/releases/**
+!/assets/
+!/assets/**
 **/数据/
 **/*.part
 **/startup-error.txt

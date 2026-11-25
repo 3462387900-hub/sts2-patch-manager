@@ -1229,6 +1229,7 @@ internal sealed partial class NeonWorkbenchView
             ClipToBounds = true,
             Child = layout
         };
+        KeyboardNavigation.SetTabNavigation(sheet, KeyboardNavigationMode.Cycle);
         var sheetShadow = new Border
         {
             Width = 580,
@@ -1342,32 +1343,41 @@ internal sealed partial class NeonWorkbenchView
             var techBody = new StackPanel();
 
             var pfBar = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-            var gameChip = NeonWidgets.CreateBadge(
-                config.GameRunning ? "✕ 游戏正在运行" : "✓ 游戏已退出",
-                config.GameRunning ? NeonTone.Cinnabar : NeonTone.Sage);
-            gameChip.Margin = new Thickness(0, 0, 6, 4);
-            pfBar.Children.Add(gameChip);
-
-            var checkChip = NeonWidgets.CreateBadge(
-                blocked ? "✕ 预检未通过" : "✓ 清单与文件指纹复核",
-                blocked ? NeonTone.Cinnabar : NeonTone.Sage);
-            checkChip.Margin = new Thickness(0, 0, 6, 4);
-            pfBar.Children.Add(checkChip);
-
-            if (!string.IsNullOrWhiteSpace(config.Token))
+            if (config.IsReadOnlyDiagnostic)
             {
-                string shortToken = config.Token.Length > 10 ? config.Token[..10] : config.Token;
-                var tokenChip = new Border
+                var roChip = NeonWidgets.CreateBadge("只读诊断 · 不改动本地文件", NeonTone.Neutral);
+                roChip.Margin = new Thickness(0, 0, 6, 4);
+                pfBar.Children.Add(roChip);
+            }
+            else
+            {
+                var gameChip = NeonWidgets.CreateBadge(
+                    config.GameRunning ? "✕ 游戏正在运行" : "✓ 游戏已退出",
+                    config.GameRunning ? NeonTone.Cinnabar : NeonTone.Sage);
+                gameChip.Margin = new Thickness(0, 0, 6, 4);
+                pfBar.Children.Add(gameChip);
+
+                var checkChip = NeonWidgets.CreateBadge(
+                    blocked ? "✕ 预检未通过" : "✓ 清单与文件指纹复核",
+                    blocked ? NeonTone.Cinnabar : NeonTone.Sage);
+                checkChip.Margin = new Thickness(0, 0, 6, 4);
+                pfBar.Children.Add(checkChip);
+
+                if (!string.IsNullOrWhiteSpace(config.Token))
                 {
-                    Background = NeonPalette.BgWell,
-                    BorderBrush = NeonPalette.BorderSubtle,
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(4),
-                    Padding = new Thickness(7, 2, 7, 2),
-                    Margin = new Thickness(0, 0, 0, 4),
-                    Child = NeonWidgets.Text("令牌 " + shortToken, 11, NeonPalette.InkSecondary, mono: true)
-                };
-                pfBar.Children.Add(tokenChip);
+                    string shortToken = config.Token.Length > 10 ? config.Token[..10] : config.Token;
+                    var tokenChip = new Border
+                    {
+                        Background = NeonPalette.BgWell,
+                        BorderBrush = NeonPalette.BorderSubtle,
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(7, 2, 7, 2),
+                        Margin = new Thickness(0, 0, 0, 4),
+                        Child = NeonWidgets.Text("令牌 " + shortToken, 11, NeonPalette.InkSecondary, mono: true)
+                    };
+                    pfBar.Children.Add(tokenChip);
+                }
             }
             techBody.Children.Add(pfBar);
 
@@ -1496,6 +1506,41 @@ internal sealed partial class NeonWorkbenchView
             sheetHost,
             retargetFromClose,
             () => myGen == modalAnimGeneration);
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!modalOpenLogical) return;
+            var customBox = config.CustomContent != null ? FindFirstFocusableTextBox(config.CustomContent) : null;
+            if (customBox != null && customBox.IsVisible && customBox.IsEnabled)
+            {
+                Keyboard.Focus(customBox);
+                customBox.SelectAll();
+                return;
+            }
+            var focusBtn = modalFootButtons.Children.OfType<Button>().LastOrDefault(b => b.IsEnabled && b.IsVisible)
+                ?? modalFootButtons.Children.OfType<Button>().FirstOrDefault(b => b.IsEnabled && b.IsVisible);
+            if (focusBtn != null) Keyboard.Focus(focusBtn);
+        }), System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    static TextBox? FindFirstFocusableTextBox(DependencyObject root)
+    {
+        if (root is TextBox tb && tb.Focusable) return tb;
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var found = FindFirstFocusableTextBox(VisualTreeHelper.GetChild(root, i));
+            if (found != null) return found;
+        }
+        if (root is Panel panel)
+        {
+            foreach (var child in panel.Children.OfType<DependencyObject>())
+            {
+                var found = FindFirstFocusableTextBox(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     internal async Task ConfirmTransactionModalAsync()
@@ -1616,6 +1661,7 @@ internal sealed partial class NeonWorkbenchView
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = layout
         };
+        KeyboardNavigation.SetTabNavigation(sheet, KeyboardNavigationMode.Cycle);
         var sheetShadow = new Border
         {
             Width = 440,

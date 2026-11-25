@@ -1025,6 +1025,8 @@ public partial class MainWindow
         Check(coopText.Contains("联机补丁核对") && coopText.Contains("核对边界声明") &&
               coopText.Contains("队友「阿哲」") && coopText.Contains("本机多出"),
             "联机页呈现真实边界声明、双机快照卡片与差异对照表（含可勾选与不可勾选行）");
+        Check(coopText.Contains(Path.GetFileName(fixture)),
+            "联机页本机目录使用中间省略并保留末尾游戏目录名");
 
         await ShotAtScaleAsync("17-wpf-coop-100", 1.0, 1280, 850);
         await ShotAtScaleAsync("18-wpf-coop-125", 1.25, 1280, 850);
@@ -1293,6 +1295,8 @@ public partial class MainWindow
         string diagModalText = AllText(view.ModalBackdropControl);
         Check(view.IsModalOpen && diagModalText.Contains("超大回血飘字溢出"),
             "godot.log 故障特征诊断改为通过原生 Neon 详情弹窗展示命中规则");
+        Check(!diagModalText.Contains("令牌") && diagModalText.Contains("只读诊断") && diagModalText.Contains("前往补丁页查看"),
+            "只读日志诊断弹窗隐藏写事务令牌并提供跳转补丁页按钮");
         await ShotAtScaleAsync("24-wpf-log-diagnosis-modal-100", 1.0, 1280, 850);
         var closeDiagBtn = Descendants<Button>(view.ModalBackdropControl)
             .Single(b => (b.Content?.ToString() ?? "") == "关闭");
@@ -1332,6 +1336,8 @@ public partial class MainWindow
               scanningDeskText.Contains("正在扫描…") &&
               hasProgressBar,
             "点击「立即扫描」后立刻渲染正在扫描标题、进度条与禁用态「正在扫描…」按钮");
+        Check(!view.LaunchButtonControl.IsEnabled && AllText(view.LaunchButtonControl).Contains("扫描中…"),
+            "扫描期间右上角主按钮显示禁用态「扫描中…」而非可启动状态");
         Check(scanningToastText.Contains("正在扫描当前目录"),
             "扫描进行中再次点击扫描给出明确 Toast 反馈而非静默无响应");
         await ShotAtScaleAsync("25-wpf-scanning-feedback-100", 1.0, 1280, 850);
@@ -1350,6 +1356,37 @@ public partial class MainWindow
               revealPillText.Contains("个模组"),
             "扫描完成后顶部弹出「✓ 已加载 X 个模组」过渡确认胶囊而非生硬跳出");
         await ShotAtScaleAsync("26-wpf-load-reveal-pill-100", 1.0, 1280, 850);
+
+        // --- 16. Window icon, overlay anti-collision & paging reset guards ---
+        Check(Icon != null, "主窗口已设置应用图标头像");
+
+        var probeCb = Descendants<CheckBox>(view.DeskContentControl).First();
+        probeCb.IsChecked = true;
+        probeCb.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, probeCb));
+        await Idle();
+        Check(view.IsBatchDockOpen && view.LoadRevealPillControl.Margin.Bottom > 50.0,
+            "批量操作栏浮出时自动抬高底部加载确认胶囊，避免二者重叠");
+        view.ClearCheckedMods();
+        await Idle();
+
+        view.SelectMod("BaseLib");
+        await Idle();
+        Check(view.IsInspectorOpen && view.ToastRackControl.Margin.Right > 300.0,
+            "右侧分栏详情展开时自动左移 Toast 队列，避免挡住底部操作按钮");
+        view.CloseInspector();
+        await Task.Delay(200);
+        await Idle();
+        Check(!view.IsInspectorOpen && view.ToastRackControl.Margin.Right < 40.0,
+            "关闭右侧详情面板后 Toast 队列边距恢复正常");
+
+        view.ChangeNeonModPage(2);
+        await Idle();
+        var issuePill = Descendants<Button>(view)
+            .First(b => (AutomationProperties.GetName(b) ?? "").StartsWith("需处理", StringComparison.Ordinal));
+        Click(issuePill);
+        await Idle();
+        Check(view.NeonCurrentModPage == 1,
+            "从第 2 页切换筛选条件时列表页码自动重置回第 1 页");
 
         CloseModWatch();
     }

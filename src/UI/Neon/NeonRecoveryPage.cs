@@ -231,6 +231,26 @@ internal sealed partial class NeonWorkbenchView
         headLeft.Children.Add(title);
         headLeft.Children.Add(NeonWidgets.CreateBadge($"{log.Length} 条", NeonTone.Neutral));
 
+        var headRight = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var scopeLbl = NeonWidgets.Text("仅记录本次启动", 11.5, NeonPalette.InkMuted);
+        scopeLbl.VerticalAlignment = VerticalAlignment.Center;
+        headRight.Children.Add(scopeLbl);
+        if (log.Length > 0)
+        {
+            var copyBtn = NeonWidgets.CreateStyledButton(this, "复制轨迹", "NeonGhostButton", () =>
+            {
+                try
+                {
+                    Clipboard.SetText(string.Join(Environment.NewLine, log.Select(e => $"[{e.TimeLabel}] {e.Text}")));
+                    ShowToast("已复制本次操作轨迹到剪贴板");
+                }
+                catch { }
+            }, "xs");
+            copyBtn.Margin = new Thickness(6, 0, 0, 0);
+            AutomationProperties.SetName(copyBtn, "复制本次操作轨迹");
+            headRight.Children.Add(copyBtn);
+        }
+
         var list = new StackPanel();
         if (log.Length == 0)
         {
@@ -272,8 +292,9 @@ internal sealed partial class NeonWorkbenchView
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = list
         };
+        NeonMotion.AttachSmoothWheelScroll(scroll, this);
 
-        return NeonWidgets.CreateSurfaceCard(headLeft, null, scroll);
+        return NeonWidgets.CreateSurfaceCard(headLeft, headRight, scroll);
     }
 
     Border BuildDisabledVaultCard(ManagedMod[] disabledMods)
@@ -337,7 +358,16 @@ internal sealed partial class NeonWorkbenchView
             }
         }
 
-        return NeonWidgets.CreateSurfaceCard(headLeft, null, body);
+        var scroll = new ScrollViewer
+        {
+            MaxHeight = 280,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = body
+        };
+        NeonMotion.AttachSmoothWheelScroll(scroll, this);
+
+        return NeonWidgets.CreateSurfaceCard(headLeft, null, scroll);
     }
 
     void OpenCreateSnapshotModal(NeonWorkbenchSnapshot s)
@@ -350,6 +380,14 @@ internal sealed partial class NeonWorkbenchView
         var (inputHost, inputBox, _) = NeonWidgets.CreateTextInput("例如：周末联机前手动留档", height: 34);
         inputBox.MaxLength = 80;
         inputBox.Text = $"手动留档 · {DateTime.Now:HH:mm}";
+        inputBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                e.Handled = true;
+                _ = ConfirmTransactionModalAsync();
+            }
+        };
         AutomationProperties.SetName(inputBox, "快照备注");
         stack.Children.Add(inputHost);
 

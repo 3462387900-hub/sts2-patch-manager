@@ -28,7 +28,8 @@ internal sealed record NeonTransactionConfig(
     UIElement? CustomContent = null,
     string? PlainSummary = null,
     bool ExpandTechnicalDetailsByDefault = false,
-    Action? OnCancel = null);
+    Action? OnCancel = null,
+    bool IsReadOnlyDiagnostic = false);
 
 internal enum NeonInlineTogglePhase
 {
@@ -87,6 +88,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     public event Action? RequestCancelUpdateCheck;
     public event Action<ulong>? RequestPreviewWorkshopInstall;
     public event Action? RequestChooseLocalZipImport;
+    public event Action<string>? RequestPreviewLocalZipPath;
     public event Action? RequestDiscoverGitHubCandidates;
     public event Action? RequestExportCoopManifest;
     public event Action? RequestImportCoopPeerFile;
@@ -107,6 +109,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     public event Action? RequestDiagnoseGitHubNetwork;
     public event Action<string>? RequestSwitchTheme;
     public event Action? RequestSimulateExternalChange;
+    public event Action? RequestOpenRecoveryLogFolder;
 
     // View state
     NeonWorkbenchSnapshot? currentSnapshot;
@@ -129,6 +132,15 @@ internal sealed partial class NeonWorkbenchView : Grid
     string? workshopInlineFeedbackText;
     NeonTone workshopInlineFeedbackTone = NeonTone.Sage;
     bool demoUtilityControlsVisible;
+    bool launchGateCollapsed;
+    int lastLaunchGateCols = -1;
+    string? lastCheckedModId;
+    TextBox? patchesSearchBox;
+    Grid? patchesSearchHost;
+    string patchesFilterQuery = "";
+    string patchesStatusFilter = "all";
+    string coopDiffFilter = "all";
+    bool? lastOrphanAutoStopState;
 
     // Cohesive motion generation tokens, jelly-toggle state history & lightweight row-selection map
     int tabAnimGeneration;
@@ -210,6 +222,8 @@ internal sealed partial class NeonWorkbenchView : Grid
     readonly WrapPanel filterPillsPanel;
     readonly Dictionary<string, (Button Btn, TextBlock Label, TextBlock Count)> filterPillControls = new(StringComparer.Ordinal);
     readonly TextBlock listSummaryMeta;
+    readonly StackPanel neonTopPagerHost;
+    readonly Button neonTopPagePrev, neonTopPageNext;
     readonly ScrollViewer deskScrollViewer;
     readonly StackPanel deskContentStack;
 
@@ -287,6 +301,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     internal StackPanel ToastRackControl => toastRack;
     internal Border LoadRevealPillControl => loadRevealPill;
     internal bool IsLoadRevealVisible => loadRevealPill.Visibility == Visibility.Visible;
+    internal Button LaunchButtonControl => launchButton;
     internal Border NavActiveIndicatorControl => navActiveIndicator;
     internal Border ModeSegThumbControl => modeSegThumb;
     internal bool IsInspectorOpen => selectedModId != null && inspectorPane.Visibility == Visibility.Visible && !inspectorClosing;
@@ -328,6 +343,10 @@ internal sealed partial class NeonWorkbenchView : Grid
         Resources.MergedDictionaries.Add(neonResources);
         if (neonResources["NeonScrollBar"] is Style sbStyle)
             Resources[typeof(ScrollBar)] = sbStyle;
+        if (neonResources["NeonContextMenu"] is Style cmStyle)
+            Resources[typeof(ContextMenu)] = cmStyle;
+        if (neonResources["NeonMenuItem"] is Style miStyle)
+            Resources[typeof(MenuItem)] = miStyle;
 
         Background = NeonPalette.BgGround;
         TextElement.SetFontFamily(this, NeonPalette.SansFont);
@@ -645,15 +664,14 @@ internal sealed partial class NeonWorkbenchView : Grid
 
         // Toolbar Row 1: Search Well + View Mode Switch + Sort Combo
         var toolbarRow1 = new Grid();
+        toolbarRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100, GridUnitType.Star), MaxWidth = 380, MinWidth = 180 });
         toolbarRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         toolbarRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var searchWell = new Grid
         {
             Height = 32,
-            Width = 380,
-            MinWidth = 200,
-            HorizontalAlignment = HorizontalAlignment.Left
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         searchBox = new TextBox
         {
@@ -799,12 +817,14 @@ internal sealed partial class NeonWorkbenchView : Grid
         sortCombo.SelectionChanged += (_, _) =>
         {
             sortBy = sortCombo.SelectedIndex switch { 1 => "name", 2 => "enabled", _ => "priority" };
+            bool pageChanged = neonModPage != 1;
+            neonModPage = 1;
             if (currentSnapshot != null)
-                RenderWorkbenchContent(preserveScroll: true, animateSettle: true);
+                RenderWorkbenchContent(preserveScroll: !pageChanged, animateSettle: true);
         };
         toolbarControls.Children.Add(sortCombo);
 
-        Grid.SetColumn(toolbarControls, 1);
+        Grid.SetColumn(toolbarControls, 2);
         toolbarRow1.Children.Add(toolbarControls);
         toolbarStack.Children.Add(toolbarRow1);
 
@@ -831,9 +851,41 @@ internal sealed partial class NeonWorkbenchView : Grid
 
         listSummaryMeta = NeonWidgets.Text("显示 0 / 0 项", 11.5, NeonPalette.InkMuted);
         listSummaryMeta.VerticalAlignment = VerticalAlignment.Center;
-        listSummaryMeta.Margin = new Thickness(10, 0, 0, 0);
-        Grid.SetColumn(listSummaryMeta, 1);
-        filterStrip.Children.Add(listSummaryMeta);
+
+        neonTopPagePrev = NeonWidgets.CreateStyledButton(this, "◀", "NeonGhostButton",
+            () => ChangeNeonModPage(neonModPage - 1), "xs");
+        neonTopPagePrev.Width = 22;
+        neonTopPagePrev.Padding = new Thickness(0);
+        neonTopPagePrev.Margin = new Thickness(6, 0, 2, 0);
+        neonTopPagePrev.ToolTip = "上一页";
+        AutomationProperties.SetName(neonTopPagePrev, "顶部上一页");
+
+        neonTopPageNext = NeonWidgets.CreateStyledButton(this, "▶", "NeonGhostButton",
+            () => ChangeNeonModPage(neonModPage + 1), "xs");
+        neonTopPageNext.Width = 22;
+        neonTopPageNext.Padding = new Thickness(0);
+        neonTopPageNext.ToolTip = "下一页";
+        AutomationProperties.SetName(neonTopPageNext, "顶部下一页");
+
+        neonTopPagerHost = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed
+        };
+        neonTopPagerHost.Children.Add(neonTopPagePrev);
+        neonTopPagerHost.Children.Add(neonTopPageNext);
+
+        var summaryRightHost = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0)
+        };
+        summaryRightHost.Children.Add(listSummaryMeta);
+        summaryRightHost.Children.Add(neonTopPagerHost);
+        Grid.SetColumn(summaryRightHost, 1);
+        filterStrip.Children.Add(summaryRightHost);
 
         toolbarStack.Children.Add(filterStrip);
         toolbarBorder.Child = toolbarStack;
@@ -1093,13 +1145,34 @@ internal sealed partial class NeonWorkbenchView : Grid
         neonRecoveryWarningPanel.BorderBrush = NeonPalette.Cinnabar;
         neonRecoveryWarningPanel.BorderThickness = new Thickness(0, 1, 0, 0);
         neonRecoveryWarningPanel.Padding = new Thickness(18, 8, 18, 8);
-        neonRecoveryWarningPanel.Child = new ScrollViewer
+        var recWarnGrid = new Grid();
+        recWarnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        recWarnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        recWarnGrid.Children.Add(new ScrollViewer
         {
             Content = neonRecoveryWarningText,
             MaxHeight = 155,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        });
+        var recWarnActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0)
         };
+        var recRetryBtn = NeonWidgets.CreateStyledButton(this, "重新检测", "NeonSecondaryButton",
+            () => RequestRescanAll?.Invoke(), "xs");
+        recRetryBtn.Margin = new Thickness(0, 0, 6, 0);
+        AutomationProperties.SetName(recRetryBtn, "重新检测事务恢复");
+        var recOpenLogBtn = NeonWidgets.CreateStyledButton(this, "打开日志目录", "NeonGhostButton",
+            () => RequestOpenRecoveryLogFolder?.Invoke(), "xs");
+        AutomationProperties.SetName(recOpenLogBtn, "打开事务恢复日志目录");
+        recWarnActions.Children.Add(recRetryBtn);
+        recWarnActions.Children.Add(recOpenLogBtn);
+        Grid.SetColumn(recWarnActions, 1);
+        recWarnGrid.Children.Add(recWarnActions);
+        neonRecoveryWarningPanel.Child = recWarnGrid;
         Grid.SetRow(neonRecoveryWarningPanel, 3);
         appShell.Children.Add(neonRecoveryWarningPanel);
 
@@ -1150,8 +1223,23 @@ internal sealed partial class NeonWorkbenchView : Grid
         Panel.SetZIndex(toastRack, 80);
         Children.Add(toastRack);
 
-        // Keyboard shortcuts & responsive inspector layout
+        // Keyboard shortcuts, global ZIP drop & responsive inspector layout
         PreviewKeyDown += OnPreviewKeyDown;
+        AllowDrop = true;
+        PreviewDragOver += (_, e) =>
+        {
+            if (IsModalOpen || drawerOpenLogical) return;
+            if (IsSingleZipDrop(e))
+            {
+                e.Effects = DragDropEffects.Copy;
+                e.Handled = true;
+            }
+        };
+        Drop += (_, e) =>
+        {
+            if (IsModalOpen || drawerOpenLogical) return;
+            HandleZipDropData(e);
+        };
         SizeChanged += (_, _) => UpdateResponsiveInspectorLayout();
         Loaded += (_, _) =>
         {
@@ -1273,8 +1361,9 @@ internal sealed partial class NeonWorkbenchView : Grid
         {
             if (activeFilter == filterId) return;
             activeFilter = filterId;
+            neonModPage = 1;
             UpdateFilterPillVisuals();
-            RenderWorkbenchContent(preserveScroll: true, animateSettle: true);
+            RenderWorkbenchContent(preserveScroll: false, animateSettle: true);
         };
         filterPillControls[filterId] = (btn, label, count);
         return btn;
@@ -1348,6 +1437,12 @@ internal sealed partial class NeonWorkbenchView : Grid
             ReferenceEquals(FocusManager.GetFocusedElement(workshopScope), workshopUrlBox);
         int workshopCaret = workshopUrlBox?.CaretIndex ?? 0;
 
+        bool patchesHadKeyboardFocus = patchesSearchBox?.IsKeyboardFocused == true;
+        var patchesScope = patchesSearchBox != null ? FocusManager.GetFocusScope(patchesSearchBox) : null;
+        bool patchesHadLogicalFocus = patchesSearchBox != null && patchesScope != null &&
+            ReferenceEquals(FocusManager.GetFocusedElement(patchesScope), patchesSearchBox);
+        int patchesCaret = patchesSearchBox?.CaretIndex ?? 0;
+
         bool sameGameRoot = lastTrackedGameRoot != null &&
             string.Equals(lastTrackedGameRoot, snapshot.GameRoot, StringComparison.OrdinalIgnoreCase);
         bool prevHadInventory = sameGameRoot && lastSnapshotHadInventory;
@@ -1357,6 +1452,8 @@ internal sealed partial class NeonWorkbenchView : Grid
             ResetNeonListChildren();
             neonModPage = 1;
             checkedModFolders.Clear();
+            lastCheckedModId = null;
+            lastOrphanAutoStopState = null;
             if (selectedModId != null)
                 FinishInspectorCollapseImmediate(preserveScroll: false);
             lastTrackedGameRoot = snapshot.GameRoot;
@@ -1415,6 +1512,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         else
         {
             coopCheckedIds.Clear();
+            coopDiffFilter = "all";
         }
 
         // Prune selected patch IDs that are no longer selectable
@@ -1467,6 +1565,14 @@ internal sealed partial class NeonWorkbenchView : Grid
             else if (workshopHadLogicalFocus && workshopScope != null && !ReferenceEquals(FocusManager.GetFocusedElement(workshopScope), workshopUrlBox))
                 FocusManager.SetFocusedElement(workshopScope, workshopUrlBox);
             workshopUrlBox.CaretIndex = Math.Min(workshopCaret, workshopUrlBox.Text.Length);
+        }
+        else if ((patchesHadKeyboardFocus || patchesHadLogicalFocus) && activeTab == "patches" && patchesSearchBox != null && !IsModalOpen && !drawerOpenLogical)
+        {
+            if (patchesHadKeyboardFocus && !patchesSearchBox.IsKeyboardFocused)
+                Keyboard.Focus(patchesSearchBox);
+            else if (patchesHadLogicalFocus && patchesScope != null && !ReferenceEquals(FocusManager.GetFocusedElement(patchesScope), patchesSearchBox))
+                FocusManager.SetFocusedElement(patchesScope, patchesSearchBox);
+            patchesSearchBox.CaretIndex = Math.Min(patchesCaret, patchesSearchBox.Text.Length);
         }
     }
 
@@ -1617,6 +1723,7 @@ internal sealed partial class NeonWorkbenchView : Grid
         else
             loadRevealMetaText.Text = " · 全部就绪";
 
+        loadRevealPill.Margin = new Thickness(0, 0, 0, batchDockOpenLogical ? 76 : 18);
         NeonMotion.ShowFloatingRevealPill(
             this,
             loadRevealPill,
@@ -1625,7 +1732,16 @@ internal sealed partial class NeonWorkbenchView : Grid
             ++loadRevealGeneration);
     }
 
-    public void ShowToast(string message, NeonTone tone = NeonTone.Sage)
+    internal void DismissToastsByTag(string tag)
+    {
+        for (int i = toastRack.Children.Count - 1; i >= 0; i--)
+        {
+            if (toastRack.Children[i] is FrameworkElement fe && Equals(fe.Tag, tag))
+                toastRack.Children.RemoveAt(i);
+        }
+    }
+
+    public void ShowToast(string message, NeonTone tone = NeonTone.Sage, string? tag = null)
     {
         var dot = new Ellipse
         {
@@ -1673,7 +1789,7 @@ internal sealed partial class NeonWorkbenchView : Grid
                 Opacity = 0.22
             }
         };
-        var toastHost = new Grid { Margin = new Thickness(0, 8, 0, 0), MaxWidth = 400, Cursor = Cursors.Hand };
+        var toastHost = new Grid { Margin = new Thickness(0, 8, 0, 0), MaxWidth = 400, Cursor = Cursors.Hand, Tag = tag };
         toastHost.Children.Add(toastShadow);
         toastHost.Children.Add(toastCard);
 
@@ -1864,26 +1980,42 @@ internal sealed partial class NeonWorkbenchView : Grid
         if (s.GameRoot == null)
         {
             ApplyLaunchButtonStyle(caution: false, label: "选择游戏目录");
+            launchButton.ToolTip = "选择包含 SlayTheSpire2.exe 的目录";
+        }
+        else if (s.IsScanning)
+        {
+            ApplyLaunchButtonStyle(caution: true, label: "扫描中…", disabled: true);
+            launchButton.ToolTip = s.ScanStageText ?? "正在扫描本地清单，请稍候…";
+        }
+        else if (!s.HasInventory)
+        {
+            ApplyLaunchButtonStyle(caution: true, label: "待扫描核验");
+            launchButton.ToolTip = "点击扫描本地 MOD 与依赖清单后再启动";
         }
         else if (s.GameRunning)
         {
             ApplyLaunchButtonStyle(caution: true, label: "游戏运行中");
+            launchButton.ToolTip = "同一目录的 SlayTheSpire2.exe 已在运行";
         }
         else if (s.HardBlockCount > 0)
         {
             ApplyLaunchButtonStyle(caution: true, label: $"仍有 {s.HardBlockCount} 项阻断");
+            launchButton.ToolTip = $"检测到 {s.HardBlockCount} 项依赖/版本阻断" +
+                (s.PendingPatchesCount > 0 ? $"；另有 {s.PendingPatchesCount} 项待核对补丁" : "") +
+                "。点击可查看阻断清单或直接启动。";
         }
         else
         {
             ApplyLaunchButtonStyle(caution: false, label: "启动游戏");
+            launchButton.ToolTip = "所有声明依赖已满足，点击启动《杀戮尖塔 2》";
         }
 
         gearUpdateDot.Visibility = s.ManagerUpdate?.HasNewerRelease == true
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-        // Watcher / Stale Health Banner
-        bool showStaleBanner = s.GameRoot != null && (s.ModInventoryDirty || s.LifecycleStale);
+        // Watcher / Stale Health Banner (do not duplicate when full-pane initial scanning view is active)
+        bool showStaleBanner = s.GameRoot != null && (s.ModInventoryDirty || s.LifecycleStale) && !(s.IsScanning && !s.HasInventory);
         watcherBanner.Visibility = showStaleBanner ? Visibility.Visible : Visibility.Collapsed;
         if (showStaleBanner)
         {
@@ -1931,9 +2063,12 @@ internal sealed partial class NeonWorkbenchView : Grid
         }
     }
 
-    void ApplyLaunchButtonStyle(bool caution, string label)
+    void ApplyLaunchButtonStyle(bool caution, string label, bool disabled = false)
     {
         launchLabel.Text = label;
+        launchButton.IsEnabled = !disabled;
+        launchButton.Cursor = disabled ? Cursors.Arrow : Cursors.Hand;
+        launchPlayHost.Visibility = disabled ? Visibility.Collapsed : Visibility.Visible;
         AutomationProperties.SetName(launchButton, label);
         if (caution)
         {
@@ -2058,11 +2193,18 @@ internal sealed partial class NeonWorkbenchView : Grid
         };
 
         string headerTitle = blocked
-            ? $"开局前建议处理 {s.Faults.Length} 项问题"
+            ? (s.HardBlockCount > 0 && s.Faults.Length > s.HardBlockCount
+                ? $"开局前建议处理 {s.HardBlockCount} 项阻断与 {s.Faults.Length - s.HardBlockCount} 项补丁提醒"
+                : $"开局前建议处理 {s.Faults.Length} 项问题")
             : $"依赖正常 · 另有 {s.Faults.Length} 项补丁待处理";
-        string headerSub = blocked
-            ? "点任一项直接定位因果链与修复入口，全部处理后此提示带将自动收起为就绪状态。"
-            : "基础依赖均已满足，建议开局前先核对下方修复补丁。";
+        string headerSub = launchGateCollapsed
+            ? "已收起详情 · 点右侧「展开详情」可定位阻断与修复入口。"
+            : blocked
+                ? "点任一项直接定位因果链与修复入口，全部处理后此提示带将自动收起为就绪状态。"
+                : "基础依赖均已满足，建议开局前先核对下方修复补丁。";
+
+        int cols = ComputeLaunchGateColumns(s.Faults.Length);
+        lastLaunchGateCols = cols;
 
         launchGateStack.Children.Add(BuildGateHeaderRow(
             blocked ? NeonTone.Cinnabar : NeonTone.Amber,
@@ -2072,35 +2214,49 @@ internal sealed partial class NeonWorkbenchView : Grid
             () => RequestRescanAndVerifyHealth?.Invoke(),
             padding: new Thickness(15, 11, 15, 11),
             actionDisabled: s.IsScanning,
-            pulseLamp: s.IsScanning));
+            pulseLamp: s.IsScanning,
+            onToggleCollapse: () =>
+            {
+                launchGateCollapsed = !launchGateCollapsed;
+                if (currentSnapshot != null) RenderLaunchGate(currentSnapshot, animateChips: false);
+            },
+            isCollapsed: launchGateCollapsed));
 
-        // Surgical Fault Chips (Uniform horizontal grid when <=3, WrapPanel if more)
-        Panel faultsHost;
-        if (s.Faults.Length <= 3)
+        if (launchGateCollapsed)
+            return;
+
+        // Surgical Fault Chips (responsive 1–3 column UniformGrid so text stays legible at 125% DPI)
+        var ug = new UniformGrid
         {
-            var ug = new UniformGrid { Rows = 1, Columns = s.Faults.Length, Margin = new Thickness(15, 0, 15, 12) };
-            faultsHost = ug;
-        }
-        else
-        {
-            faultsHost = new WrapPanel { Margin = new Thickness(15, 0, 15, 12) };
-        }
+            Columns = cols,
+            Rows = s.Faults.Length <= cols ? 1 : 0,
+            Margin = new Thickness(15, 0, 15, 12)
+        };
 
         for (int i = 0; i < s.Faults.Length; i++)
         {
             var chip = BuildFaultChip(s.Faults[i]);
-            if (faultsHost is UniformGrid)
-                chip.Margin = new Thickness(i == 0 ? 0 : 4, 0, i == s.Faults.Length - 1 ? 0 : 4, 0);
-            else
-            {
-                chip.MinWidth = 260;
-                chip.Margin = new Thickness(0, 0, 8, 8);
-            }
+            int col = i % cols;
+            int row = i / cols;
+            bool hasMoreRows = (i / cols) < ((s.Faults.Length - 1) / cols);
+            chip.Margin = new Thickness(
+                col == 0 ? 0 : 4,
+                row == 0 ? 0 : 0,
+                col == cols - 1 ? 0 : 4,
+                hasMoreRows ? 8 : 0);
             if (animateChips)
                 NeonMotion.PlayCascadeReveal(this, chip, i, maxAnimated: 4);
-            faultsHost.Children.Add(chip);
+            ug.Children.Add(chip);
         }
-        launchGateStack.Children.Add(faultsHost);
+        launchGateStack.Children.Add(ug);
+    }
+
+    int ComputeLaunchGateColumns(int count)
+    {
+        if (count <= 1) return 1;
+        if (ActualWidth > 0 && ActualWidth < 920) return 1;
+        if (ActualWidth > 0 && ActualWidth < 1180) return Math.Min(2, count);
+        return Math.Min(3, count);
     }
 
     Grid BuildGateHeaderRow(
@@ -2113,7 +2269,9 @@ internal sealed partial class NeonWorkbenchView : Grid
         string? rightNote = null,
         bool primaryAction = false,
         bool actionDisabled = false,
-        bool pulseLamp = false)
+        bool pulseLamp = false,
+        Action? onToggleCollapse = null,
+        bool isCollapsed = false)
     {
         var grid = new Grid { Margin = padding };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -2151,6 +2309,29 @@ internal sealed partial class NeonWorkbenchView : Grid
             noteTb.VerticalAlignment = VerticalAlignment.Center;
             noteTb.Margin = new Thickness(0, 0, 8, 0);
             right.Children.Add(noteTb);
+        }
+
+        if (onToggleCollapse != null)
+        {
+            var toggleBtn = new Button
+            {
+                Content = isCollapsed ? "展开详情 ▾" : "收起 ▴",
+                Height = 24,
+                Padding = new Thickness(8, 0, 8, 0),
+                Margin = new Thickness(0, 0, 4, 0),
+                FontFamily = NeonPalette.SansFont,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                Background = Brushes.Transparent,
+                Foreground = NeonPalette.InkSecondary,
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                Template = CreateRoundedButtonTemplate(6, NeonPalette.BgWell, Brushes.Transparent)
+            };
+            AutomationProperties.SetName(toggleBtn, isCollapsed ? "展开开局提示详情" : "收起开局提示详情");
+            toggleBtn.Click += (_, _) => onToggleCollapse();
+            right.Children.Add(toggleBtn);
         }
 
         var btn = new Button
@@ -2223,7 +2404,9 @@ internal sealed partial class NeonWorkbenchView : Grid
                 FontSize = 12.5,
                 Foreground = NeonPalette.InkPrimary,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                TextWrapping = TextWrapping.NoWrap,
+                TextWrapping = TextWrapping.Wrap,
+                MaxHeight = 36,
+                LineHeight = 17.5,
                 ToolTip = fault.Description
             };
             descTb.Inlines.Add(new Run(fault.VersionDiff.PrereqId + " ") { FontWeight = FontWeights.SemiBold });
@@ -2240,7 +2423,9 @@ internal sealed partial class NeonWorkbenchView : Grid
         }
         else
         {
-            var desc = NeonWidgets.Text(fault.Description, 12.5, NeonPalette.InkPrimary, ellipsis: true);
+            var desc = NeonWidgets.Text(fault.Description, 12.5, NeonPalette.InkPrimary, wrap: true, ellipsis: true);
+            desc.MaxHeight = 36;
+            desc.LineHeight = 17.5;
             desc.ToolTip = fault.Description;
             bodyStack.Children.Add(desc);
         }
@@ -2268,6 +2453,8 @@ internal sealed partial class NeonWorkbenchView : Grid
             Padding = new Thickness(0),
             Cursor = Cursors.Hand,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Stretch,
             Template = NeonWidgets.CreateInteractiveBareButtonTemplate(pressScale: 0.985, hoverOpacity: 1.0)
         };
         AutomationProperties.SetName(btn, $"{fault.Kicker}：{fault.Description}，{fault.CtaLabel}");
@@ -2424,8 +2611,10 @@ internal sealed partial class NeonWorkbenchView : Grid
         searchPlaceholder.Visibility = hasQuery ? Visibility.Collapsed : Visibility.Visible;
         searchClearButton.Visibility = hasQuery ? Visibility.Visible : Visibility.Collapsed;
         searchKbdHint.Visibility = hasQuery ? Visibility.Collapsed : Visibility.Visible;
+        bool pageChanged = neonModPage != 1;
+        neonModPage = 1;
         depPage = 1;
-        RenderWorkbenchContent(preserveScroll: workbenchMode == "list");
+        RenderWorkbenchContent(preserveScroll: workbenchMode == "list" && !pageChanged);
     }
 
     public void SwitchTab(string nextTab)
@@ -2442,6 +2631,8 @@ internal sealed partial class NeonWorkbenchView : Grid
         NeonMotion.ClearAnimations(secondaryTabHost);
 
         int myTabGen = ++tabAnimGeneration;
+        if (activeTab == "patches" && nextTab != "patches")
+            lastOrphanAutoStopState = null;
         activeTab = nextTab;
         UpdateNavTabStyles(animateIndicator: true);
         if (nextTab == "workbench")
@@ -2458,6 +2649,7 @@ internal sealed partial class NeonWorkbenchView : Grid
                 RenderSecondaryPage(nextTab, currentSnapshot, preserveScroll: true);
             NeonMotion.FadeInTabContent(this, secondaryTabHost, () => myTabGen == tabAnimGeneration);
         }
+        UpdateToastRackPlacement();
     }
 
     internal void SetWorkshopFeedback(string? text, NeonTone tone = NeonTone.Sage)
@@ -2505,9 +2697,11 @@ internal sealed partial class NeonWorkbenchView : Grid
         if (!ReferenceEquals(secondaryTabHost.Content, sv))
             secondaryTabHost.Content = sv;
 
-        // Detach persistent Workshop input cleanly before rebuilding Acquire visual tree
+        // Detach persistent inputs cleanly before rebuilding secondary page visual trees
         if (tabId == "acquire" && workshopInputHost?.Parent is Panel prevParent)
             prevParent.Children.Remove(workshopInputHost);
+        if (tabId == "patches" && patchesSearchHost?.Parent is Panel prevPatchParent)
+            prevPatchParent.Children.Remove(patchesSearchHost);
 
         container.Children.Clear();
         switch (tabId)
@@ -2700,8 +2894,10 @@ internal sealed partial class NeonWorkbenchView : Grid
             BorderBrush = NeonPalette.BorderSubtle,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Cursor = Cursors.Hand,
-            SnapsToDevicePixels = true
+            SnapsToDevicePixels = true,
+            ContextMenu = new ContextMenu()
         };
+        outer.ContextMenuOpening += (_, _) => PopulateModRowContextMenu(outer.ContextMenu!, row);
         AutomationProperties.SetName(outer, $"{row.Mod.Name} ({row.Mod.Id}) v{row.Mod.Version}");
 
         var rowGrid = new Grid();
@@ -2735,13 +2931,39 @@ internal sealed partial class NeonWorkbenchView : Grid
         check.Click += (_, e) =>
         {
             e.Handled = true;
-            if (check.IsChecked == true) checkedModFolders.Add(row.Mod.Folder);
-            else checkedModFolders.Remove(row.Mod.Folder);
-            if (currentSnapshot != null)
+            bool targetChecked = check.IsChecked == true;
+            var visible = currentSnapshot != null
+                ? NeonWorkbenchBuilder.FilterAndSort(currentSnapshot.AllRows, activeFilter, searchBox.Text, sortBy)
+                : Array.Empty<NeonWorkbenchRow>();
+
+            bool handledRange = false;
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && lastCheckedModId != null && visible.Length > 0)
             {
-                var visible = NeonWorkbenchBuilder.FilterAndSort(currentSnapshot.AllRows, activeFilter, searchBox.Text, sortBy);
-                UpdateBatchDock(visible);
+                int anchorIdx = Array.FindIndex(visible, r => r.Mod.Id.Equals(lastCheckedModId, StringComparison.OrdinalIgnoreCase));
+                int curIdx = Array.FindIndex(visible, r => r.Mod.Id.Equals(row.Mod.Id, StringComparison.OrdinalIgnoreCase));
+                if (anchorIdx >= 0 && curIdx >= 0)
+                {
+                    int start = Math.Min(anchorIdx, curIdx);
+                    int end = Math.Max(anchorIdx, curIdx);
+                    for (int i = start; i <= end; i++)
+                    {
+                        var targetRow = visible[i];
+                        if (targetChecked) checkedModFolders.Add(targetRow.Mod.Folder);
+                        else checkedModFolders.Remove(targetRow.Mod.Folder);
+                        if (visibleRowVisuals.TryGetValue(targetRow.Mod.Id, out var vis))
+                            vis.Check.IsChecked = targetChecked;
+                    }
+                    handledRange = true;
+                }
             }
+            if (!handledRange)
+            {
+                if (targetChecked) checkedModFolders.Add(row.Mod.Folder);
+                else checkedModFolders.Remove(row.Mod.Folder);
+            }
+            lastCheckedModId = row.Mod.Id;
+            if (currentSnapshot != null)
+                UpdateBatchDock(visible);
         };
         contentGrid.Children.Add(check);
 
@@ -3645,6 +3867,7 @@ internal sealed partial class NeonWorkbenchView : Grid
 
         if (!searchBox.IsKeyboardFocused && !IsModalOpen && !drawerOpenLogical)
             TryRestoreFocus(returnTarget);
+        UpdateToastRackPlacement();
     }
 
     static void TryRestoreFocus(IInputElement? target)
@@ -3672,6 +3895,7 @@ internal sealed partial class NeonWorkbenchView : Grid
                 deskScrollViewer.ScrollToVerticalOffset(Math.Min(savedDeskOffset, deskScrollViewer.ScrollableHeight));
             }), DispatcherPriority.Loaded);
         }
+        UpdateToastRackPlacement();
     }
 
     void ClearSearch()
@@ -3683,6 +3907,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     void ResetSearchAndFilters()
     {
         activeFilter = "all";
+        neonModPage = 1;
         if (searchBox.Text.Length > 0) searchBox.Text = "";
         UpdateFilterPillVisuals();
         RenderWorkbenchContent(preserveScroll: false, animateSettle: true);
@@ -3704,6 +3929,7 @@ internal sealed partial class NeonWorkbenchView : Grid
     internal void ClearCheckedMods()
     {
         checkedModFolders.Clear();
+        lastCheckedModId = null;
         foreach (var (_, vis) in visibleRowVisuals)
             vis.Check.IsChecked = false;
         if (currentSnapshot != null)
@@ -3721,10 +3947,16 @@ internal sealed partial class NeonWorkbenchView : Grid
         {
             var visibleSet = visible.Select(r => r.Mod.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int hidden = checkedModFolders.Count(f => !visibleSet.Contains(f));
+            int onOtherPages = visible.Length > NeonModPageSize
+                ? visible.Count(r => checkedModFolders.Contains(r.Mod.Folder) && !neonPageRows.ContainsKey(r.Mod.Manifest))
+                : 0;
             batchCountText.Text = $"已选 {totalChecked} 项";
-            if (hidden > 0)
+            var parts = new List<string>();
+            if (hidden > 0) parts.Add($"{hidden} 项当前被筛选隐藏");
+            if (onOtherPages > 0) parts.Add($"{onOtherPages} 项位于其他页");
+            if (parts.Count > 0)
             {
-                batchHiddenWarnText.Text = $"（含 {hidden} 项当前被筛选隐藏的已选项）";
+                batchHiddenWarnText.Text = $"（含 {string.Join(" · ", parts)}）";
                 batchHiddenWarnText.Visibility = Visibility.Visible;
             }
             else
@@ -3746,6 +3978,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             batchDockClosing = false;
             batchDock.IsHitTestVisible = true;
             batchDock.Visibility = Visibility.Visible;
+            loadRevealPill.Margin = new Thickness(0, 0, 0, 76);
             NeonMotion.ShowBatchDock(this, batchDock, retarget, () => myGen == batchDockAnimGeneration);
             NeonMotion.OffsetToastRack(this, toastRack, NeonMotion.ToastBatchLiftY);
         }
@@ -3756,6 +3989,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             batchDockOpenLogical = false;
             batchDockClosing = true;
             batchDock.IsHitTestVisible = false;
+            loadRevealPill.Margin = new Thickness(0, 0, 0, 18);
             NeonMotion.OffsetToastRack(this, toastRack, 0.0);
             NeonMotion.HideBatchDock(
                 this,
@@ -3775,6 +4009,13 @@ internal sealed partial class NeonWorkbenchView : Grid
         if (currentSnapshot == null || currentSnapshot.GameRoot == null)
         {
             RequestChooseGameRoot?.Invoke();
+            return;
+        }
+        if (currentSnapshot.IsScanning)
+            return;
+        if (!currentSnapshot.HasInventory)
+        {
+            RequestRescanAll?.Invoke();
             return;
         }
         if (currentSnapshot.GameRunning)
@@ -3810,6 +4051,45 @@ internal sealed partial class NeonWorkbenchView : Grid
         RequestLaunchGame?.Invoke();
     }
 
+    void PopulateModRowContextMenu(ContextMenu menu, NeonWorkbenchRow row)
+    {
+        menu.Items.Clear();
+
+        MenuItem MakeItem(string header, Action onClick, bool enabled = true)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = enabled };
+            if (enabled) item.Click += (_, _) => onClick();
+            return item;
+        }
+
+        menu.Items.Add(MakeItem("查看因果详情", () => SelectMod(row.Mod.Id)));
+
+        bool gameRunning = currentSnapshot?.GameRunning == true;
+        bool canToggle = !gameRunning && !row.IsLockedByDependents && row.ToggleBlockReason == null;
+        string toggleHeader = row.Mod.Enabled ? "停用并保留" : "恢复启用";
+        if (gameRunning) toggleHeader += "（需先退出游戏）";
+        else if (row.IsLockedByDependents) toggleHeader += "（下游模组正在使用）";
+        else if (row.ToggleBlockReason != null) toggleHeader += "（当前不可切换）";
+        menu.Items.Add(MakeItem(toggleHeader, () => RequestDirectToggleMod?.Invoke(row.Mod, selectedModId), canToggle));
+
+        menu.Items.Add(new Separator());
+        if (row.HasUpdate)
+            menu.Items.Add(MakeItem("预览更新", () => RequestPreviewUpdateMod?.Invoke(row.Mod)));
+        else if (!row.IsUnbound)
+            menu.Items.Add(MakeItem("检查更新", () => RequestCheckModUpdate?.Invoke(row.Mod)));
+
+        menu.Items.Add(MakeItem("打开所在目录", () => RequestOpenModFolder?.Invoke(row.Mod)));
+        menu.Items.Add(MakeItem("复制 MOD ID", () =>
+        {
+            try
+            {
+                Clipboard.SetText(row.Mod.Id);
+                ShowToast($"已复制 MOD ID：{row.Mod.Id}");
+            }
+            catch { }
+        }));
+    }
+
     void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
@@ -3829,19 +4109,110 @@ internal sealed partial class NeonWorkbenchView : Grid
                 CloseInspector();
                 e.Handled = true;
             }
+            return;
         }
-        else if (e.Key == Key.Oem2 && Keyboard.Modifiers == ModifierKeys.None && activeTab == "workbench" && !IsModalOpen)
+
+        if (IsModalOpen || drawerOpenLogical)
+            return;
+
+        if (e.Key == Key.F5 || (e.Key == Key.R && Keyboard.Modifiers == ModifierKeys.Control))
+        {
+            RequestRescanAndVerifyHealth?.Invoke();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            TextBox? targetBox = activeTab switch
+            {
+                "workbench" => searchBox,
+                "patches" => patchesSearchBox,
+                "acquire" => workshopUrlBox,
+                _ => null
+            };
+            if (targetBox != null && targetBox.IsVisible && targetBox.IsEnabled)
+            {
+                targetBox.Focus();
+                targetBox.SelectAll();
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            string? targetTab = e.Key switch
+            {
+                Key.D1 or Key.NumPad1 => "workbench",
+                Key.D2 or Key.NumPad2 => "patches",
+                Key.D3 or Key.NumPad3 => "acquire",
+                Key.D4 or Key.NumPad4 => "coop",
+                Key.D5 or Key.NumPad5 => "recovery",
+                _ => null
+            };
+            if (targetTab != null)
+            {
+                SwitchTab(targetTab);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (e.Key == Key.Oem2 && Keyboard.Modifiers == ModifierKeys.None && activeTab == "workbench")
         {
             if (Keyboard.FocusedElement is not TextBoxBase)
             {
                 searchBox.Focus();
                 e.Handled = true;
             }
+            return;
         }
+
+        if ((e.Key == Key.Up || e.Key == Key.Down) &&
+            Keyboard.Modifiers == ModifierKeys.None &&
+            activeTab == "workbench" &&
+            workbenchMode == "list" &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            !sortCombo.IsDropDownOpen &&
+            currentSnapshot is { HasInventory: true })
+        {
+            var filtered = NeonWorkbenchBuilder.FilterAndSort(currentSnapshot.AllRows, activeFilter, searchBox.Text, sortBy);
+            if (filtered.Length == 0) return;
+            int cur = selectedModId == null ? -1 : Array.FindIndex(filtered, r => r.Mod.Id.Equals(selectedModId, StringComparison.OrdinalIgnoreCase));
+            int next = cur < 0
+                ? (e.Key == Key.Down ? 0 : filtered.Length - 1)
+                : Math.Clamp(cur + (e.Key == Key.Down ? 1 : -1), 0, filtered.Length - 1);
+            string nextId = filtered[next].Mod.Id;
+            if (!string.Equals(selectedModId, nextId, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectMod(nextId);
+                Dispatcher.BeginInvoke(new Action(() => ScrollModRowIntoView(nextId)), DispatcherPriority.Loaded);
+            }
+            e.Handled = true;
+        }
+    }
+
+    void UpdateToastRackPlacement()
+    {
+        bool splitInspectorVisible = activeTab == "workbench" && selectedModId != null && !inspectorClosing &&
+            inspectorPane.Visibility == Visibility.Visible && !(ActualWidth > 0 && ActualWidth < 1120);
+        toastRack.Margin = splitInspectorVisible
+            ? new Thickness(0, 0, 424, 44)
+            : new Thickness(0, 0, 18, 44);
     }
 
     void UpdateResponsiveInspectorLayout()
     {
+        if (currentSnapshot != null &&
+            currentSnapshot.GateMode is NeonGateMode.Blocked or NeonGateMode.Advisory &&
+            !launchGateCollapsed)
+        {
+            int targetCols = ComputeLaunchGateColumns(currentSnapshot.Faults.Length);
+            if (targetCols != lastLaunchGateCols)
+                RenderLaunchGate(currentSnapshot, animateChips: false);
+        }
+
         if (selectedModId == null)
         {
             if (inspectorClosing) return;
@@ -3849,6 +4220,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             inspectorScrim.Visibility = Visibility.Collapsed;
             splitGapCol.Width = new GridLength(0);
             splitInspectorCol.Width = new GridLength(0);
+            UpdateToastRackPlacement();
             return;
         }
 
@@ -3887,6 +4259,7 @@ internal sealed partial class NeonWorkbenchView : Grid
             splitGapCol.Width = new GridLength(14);
             splitInspectorCol.Width = new GridLength(392);
         }
+        UpdateToastRackPlacement();
     }
 
     Border BuildEmptyState(string title, string sub, string? ctaLabel, Action? onCta, bool actionDisabled = false, bool showProgress = false)

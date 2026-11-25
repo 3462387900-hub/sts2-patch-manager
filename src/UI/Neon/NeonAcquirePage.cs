@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -251,6 +252,7 @@ internal sealed partial class NeonWorkbenchView
     {
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
@@ -267,9 +269,50 @@ internal sealed partial class NeonWorkbenchView
         var desc = NeonWidgets.Text(
             "导入前校验压缩包哈希、路径穿越、保留文件名、可执行脚本与必需 DLL/PCK，且不会覆盖现有目录。",
             12.5, NeonPalette.InkSecondary, wrap: true);
-        desc.Margin = new Thickness(0, 0, 0, 12);
+        desc.Margin = new Thickness(0, 0, 0, 10);
         Grid.SetRow(desc, 1);
         grid.Children.Add(desc);
+
+        var dropLabel = NeonWidgets.Text("将单个 MOD 的 .zip 压缩包拖放到此处，或点击下方按钮选择", 12, NeonPalette.InkMuted, wrap: true);
+        dropLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        dropLabel.TextAlignment = TextAlignment.Center;
+        var dropZone = new Border
+        {
+            AllowDrop = true,
+            Background = NeonPalette.BgGround,
+            BorderBrush = NeonPalette.BorderMedium,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 12, 12, 12),
+            Margin = new Thickness(0, 0, 0, 10),
+            Child = dropLabel
+        };
+        dropZone.PreviewDragOver += (_, e) =>
+        {
+            if (IsSingleZipDrop(e))
+            {
+                dropZone.Background = NeonPalette.SageBg;
+                dropZone.BorderBrush = NeonPalette.SageBorder;
+                dropLabel.Foreground = NeonPalette.Sage;
+                e.Effects = DragDropEffects.Copy;
+                e.Handled = true;
+            }
+        };
+        dropZone.DragLeave += (_, _) =>
+        {
+            dropZone.Background = NeonPalette.BgGround;
+            dropZone.BorderBrush = NeonPalette.BorderMedium;
+            dropLabel.Foreground = NeonPalette.InkMuted;
+        };
+        dropZone.Drop += (_, e) =>
+        {
+            dropZone.Background = NeonPalette.BgGround;
+            dropZone.BorderBrush = NeonPalette.BorderMedium;
+            dropLabel.Foreground = NeonPalette.InkMuted;
+            HandleZipDropData(e);
+        };
+        Grid.SetRow(dropZone, 2);
+        grid.Children.Add(dropZone);
 
         var btnRow = new WrapPanel();
         var importBtn = NeonWidgets.CreateStyledButton(this, "选择本地 ZIP 并预览导入", "NeonSecondaryButton",
@@ -277,7 +320,7 @@ internal sealed partial class NeonWorkbenchView
         importBtn.IsEnabled = s.GameRoot != null && !s.ModInventoryDirty;
         AutomationProperties.SetName(importBtn, "选择本地 ZIP 并预览导入");
         btnRow.Children.Add(importBtn);
-        Grid.SetRow(btnRow, 2);
+        Grid.SetRow(btnRow, 3);
         grid.Children.Add(btnRow);
 
         return new Border
@@ -504,5 +547,33 @@ internal sealed partial class NeonWorkbenchView
                     RequestQuickBindWorkshop?.Invoke(row.Mod, cand.WorkshopId.Value);
                 return Task.CompletedTask;
             }));
+    }
+
+    static bool IsSingleZipDrop(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return false;
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files || files.Length != 1) return false;
+        if (!string.Equals(Path.GetExtension(files[0]), ".zip", StringComparison.OrdinalIgnoreCase)) return false;
+        return File.Exists(files[0]);
+    }
+
+    void HandleZipDropData(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop) ||
+            e.Data.GetData(DataFormats.FileDrop) is not string[] files || files.Length == 0)
+            return;
+
+        e.Handled = true;
+        if (files.Length != 1 || !string.Equals(Path.GetExtension(files[0]), ".zip", StringComparison.OrdinalIgnoreCase) || !File.Exists(files[0]))
+        {
+            ShowToast("请拖入单个 .zip 格式的 MOD 压缩包。", NeonTone.Amber);
+            return;
+        }
+        if (currentSnapshot?.GameRoot == null || currentSnapshot.ModInventoryDirty)
+        {
+            ShowToast("请先选择游戏目录并刷新清单后再导入 ZIP。", NeonTone.Amber);
+            return;
+        }
+        RequestPreviewLocalZipPath?.Invoke(files[0]);
     }
 }

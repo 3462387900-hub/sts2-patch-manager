@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
 namespace SpirePatch;
@@ -110,11 +111,46 @@ public static class NeonWidgets
         return element;
     }
 
+    static readonly BitmapImage? BrandAvatarSource = LoadBrandAvatarSource();
+
+    static BitmapImage? LoadBrandAvatarSource()
+    {
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = new Uri("pack://application:,,,/assets/SpirePatch-256.png", UriKind.Absolute);
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
-    /// Brand 26x26 vector diamond emblem matching index.html lines 15-19.
+    /// Brand 26x26 emblem: uses the embedded SpirePatch avatar when available,
+    /// falling back cleanly to the vector diamond emblem.
     /// </summary>
     public static UIElement CreateBrandMark()
     {
+        if (BrandAvatarSource != null)
+        {
+            var img = new Image
+            {
+                Width = 26,
+                Height = 26,
+                Source = BrandAvatarSource,
+                Stretch = Stretch.Uniform,
+                SnapsToDevicePixels = false,
+                UseLayoutRounding = false
+            };
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            return img;
+        }
         var canvas = new Canvas
         {
             Width = 28,

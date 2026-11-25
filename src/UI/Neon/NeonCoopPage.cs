@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace SpirePatch;
@@ -85,7 +86,9 @@ internal sealed partial class NeonWorkbenchView
         // Local card
         var localStack = new StackPanel();
         localStack.Children.Add(NeonWidgets.Text("本机状态（只读实时扫描）", 11.5, NeonPalette.InkMuted));
-        var localTitle = NeonWidgets.Text(s.GameRoot ?? "尚未选择游戏目录", 13.5, NeonPalette.InkPrimary, FontWeights.SemiBold, mono: s.GameRoot != null, ellipsis: true);
+        var localTitle = NeonWidgets.Text(
+            s.GameRoot != null ? NeonWorkbenchBuilder.ShortenGamePath(s.GameRoot) : "尚未选择游戏目录",
+            13.5, NeonPalette.InkPrimary, FontWeights.SemiBold, mono: s.GameRoot != null, ellipsis: true);
         localTitle.Margin = new Thickness(0, 4, 0, 4);
         localTitle.ToolTip = s.GameRoot;
         localStack.Children.Add(localTitle);
@@ -258,10 +261,71 @@ internal sealed partial class NeonWorkbenchView
         }
         else
         {
-            // Table Header
-            body.Children.Add(BuildCoopTableHeader());
-            for (int i = 0; i < rows.Length; i++)
-                body.Children.Add(BuildCoopTableRow(rows[i], checkedValid.Contains(rows[i].Id, StringComparer.OrdinalIgnoreCase), isLast: i == rows.Length - 1));
+            int manualCount = rows.Length - selectableRows.Length;
+            var filterStrip = new Border
+            {
+                Background = NeonPalette.BgGround,
+                BorderBrush = NeonPalette.BorderSubtle,
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(12, 8, 12, 8)
+            };
+            var filterPills = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+            foreach (var (fid, flabel) in new[]
+            {
+                ("all", $"全部差异 ({rows.Length})"),
+                ("auto", $"可自动处理 ({selectableRows.Length})"),
+                ("manual", $"需人工核对 ({manualCount})")
+            })
+            {
+                bool active = coopDiffFilter == fid;
+                var pill = new Button
+                {
+                    Content = flabel,
+                    Height = 24,
+                    Padding = new Thickness(9, 0, 9, 0),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    FontFamily = NeonPalette.SansFont,
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.Medium,
+                    Background = active ? NeonPalette.InkPrimary : Brushes.Transparent,
+                    Foreground = active ? NeonPalette.BgSurface : NeonPalette.InkSecondary,
+                    BorderBrush = active ? NeonPalette.InkPrimary : NeonPalette.BorderSubtle,
+                    BorderThickness = new Thickness(1),
+                    Cursor = Cursors.Hand,
+                    Template = CreateRoundedButtonTemplate(12, active ? NeonPalette.InkPrimary : NeonPalette.BgWell, active ? NeonPalette.InkPrimary : NeonPalette.BorderMedium)
+                };
+                string target = fid;
+                pill.Click += (_, _) =>
+                {
+                    if (coopDiffFilter == target) return;
+                    coopDiffFilter = target;
+                    if (currentSnapshot != null) RenderSecondaryPage("coop", currentSnapshot, preserveScroll: false);
+                };
+                filterPills.Children.Add(pill);
+            }
+            filterStrip.Child = filterPills;
+            body.Children.Add(filterStrip);
+
+            var displayRows = coopDiffFilter switch
+            {
+                "auto" => rows.Where(r => r.Selectable).ToArray(),
+                "manual" => rows.Where(r => !r.Selectable).ToArray(),
+                _ => rows
+            };
+
+            if (displayRows.Length == 0)
+            {
+                var emptyFiltered = NeonWidgets.Text("当前筛选条件下没有差异条目。", 12.5, NeonPalette.InkMuted);
+                emptyFiltered.Margin = new Thickness(16, 20, 16, 20);
+                body.Children.Add(emptyFiltered);
+            }
+            else
+            {
+                // Table Header
+                body.Children.Add(BuildCoopTableHeader());
+                for (int i = 0; i < displayRows.Length; i++)
+                    body.Children.Add(BuildCoopTableRow(displayRows[i], checkedValid.Contains(displayRows[i].Id, StringComparer.OrdinalIgnoreCase), isLast: i == displayRows.Length - 1));
+            }
         }
 
         container.Children.Add(NeonWidgets.CreateSurfaceCard(headLeft, headRight, body));
@@ -383,11 +447,24 @@ internal sealed partial class NeonWorkbenchView
         Grid.SetColumn(diagStack, 4);
         g.Children.Add(diagStack);
 
-        // Col 5: Reason & boundary detail
-        var detailTb = NeonWidgets.Text(row.Detail, 12, NeonPalette.InkSecondary, wrap: true);
-        detailTb.Margin = new Thickness(6, 0, 6, 0);
-        Grid.SetColumn(detailTb, 5);
-        g.Children.Add(detailTb);
+        // Col 5: Reason & boundary detail + optional evidence modal link
+        var detailStack = new StackPanel { Margin = new Thickness(6, 0, 6, 0) };
+        detailStack.Children.Add(NeonWidgets.Text(row.Detail, 12, NeonPalette.InkSecondary, wrap: true));
+        if (!row.Selectable && currentSnapshot != null)
+        {
+            var matchedPatch = currentSnapshot.AllCatalogPatches
+                .FirstOrDefault(p => p.PatchId.Equals(row.Id, StringComparison.OrdinalIgnoreCase));
+            if (matchedPatch != null)
+            {
+                var evBtn = NeonWidgets.CreateStyledButton(this, "查看判断依据", "NeonGhostButton",
+                    () => OpenPatchEvidenceModal(matchedPatch, currentSnapshot), "xs");
+                evBtn.HorizontalAlignment = HorizontalAlignment.Left;
+                evBtn.Margin = new Thickness(-8, 4, 0, 0);
+                detailStack.Children.Add(evBtn);
+            }
+        }
+        Grid.SetColumn(detailStack, 5);
+        g.Children.Add(detailStack);
 
         Brush rowBg = row.Selectable ? NeonPalette.BgSurface : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F6F4EF"));
         return new Border

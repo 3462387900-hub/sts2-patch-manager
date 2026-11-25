@@ -26,6 +26,7 @@ public partial class MainWindow : Window
    uiTheme=onlineStartup?UiThemes.Load(installer.DataRoot):UiThemes.Workspace;
    UiThemes.Active=uiTheme;
   Title="尖塔修补站 · "+ManagerUpdates.CurrentVersion;Width=1280;Height=850;MinWidth=1020;MinHeight=720;
+  try{Icon=BitmapFrame.Create(new Uri("pack://application:,,,/assets/SpirePatch.ico",UriKind.Absolute));}catch{}
   Closing+=(_,e)=>
   {
    if(transactionWriting)

@@ -170,6 +170,7 @@ public partial class MainWindow
         };
         view.RequestPreviewWorkshopInstall += wsId => _ = NeonPreviewWorkshopInstallAsync(wsId);
         view.RequestChooseLocalZipImport += NeonChooseLocalZipImport;
+        view.RequestPreviewLocalZipPath += path => _ = NeonPreviewLocalZipImportAsync(path);
         view.RequestDiscoverGitHubCandidates += () => _ = NeonDiscoverGitHubCandidatesAsync();
 
         // Co-op page

@@ -377,6 +377,8 @@
   <!-- Sleek translucent ScrollBar matching styles.css -->
   <Style x:Key="NeonScrollBar" TargetType="ScrollBar">
     <Setter Property="Width" Value="8"/>
+    <Setter Property="MinWidth" Value="8"/>
+    <Setter Property="MinHeight" Value="8"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Template">
       <Setter.Value>
@@ -393,7 +395,7 @@
                 <Thumb.Template>
                   <ControlTemplate TargetType="Thumb">
                     <Border x:Name="ThumbPill" Background="{x:Static local:NeonPalette.ScrollThumb}"
-                            CornerRadius="4" Margin="2,2"
+                            CornerRadius="3" Margin="1.5,2"
                             SnapsToDevicePixels="False" UseLayoutRounding="False"/>
                     <ControlTemplate.Triggers>
                       <Trigger Property="IsMouseOver" Value="True">
@@ -408,6 +410,59 @@
               <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
             </Track.IncreaseRepeatButton>
           </Track>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Warm Mineral Atelier ContextMenu & MenuItem -->
+  <Style x:Key="NeonMenuItem" TargetType="MenuItem">
+    <Setter Property="FontFamily" Value="{x:Static local:NeonPalette.SansFont}"/>
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="4"
+                  Padding="{TemplateBinding Padding}" Margin="2,1">
+            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{x:Static local:NeonPalette.BgHover}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkMuted}"/>
+              <Setter Property="Cursor" Value="Arrow"/>
+              <Setter Property="Opacity" Value="0.65"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="NeonContextMenu" TargetType="ContextMenu">
+    <Setter Property="Background" Value="{x:Static local:NeonPalette.BgElevated}"/>
+    <Setter Property="BorderBrush" Value="{x:Static local:NeonPalette.BorderMedium}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Foreground" Value="{x:Static local:NeonPalette.InkPrimary}"/>
+    <Setter Property="ItemContainerStyle" Value="{StaticResource NeonMenuItem}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ContextMenu">
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="8" Padding="3" MinWidth="172">
+            <Border.Effect>
+              <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.14" Color="#1B201D"/>
+            </Border.Effect>
+            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+          </Border>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
