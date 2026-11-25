@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -542,7 +543,7 @@ internal static class LocalModZipApplyWorkflowChecks
             File.ReadAllText(failureGithub).Contains("fixture.apply", StringComparison.Ordinal),
             "a later source-binding persistence failure reports partial success and preserves the failed binding");
 
-        // Replace the target parent with a symlink after initial verification, during preparation.
+        // Replace the target parent with a reparse point after initial verification, during preparation.
         string rootLink = Fixture(parent);
         string linkParent = Path.Combine(rootLink, "mods");
         string realParent = Path.Combine(parent, "real-mods");
@@ -550,6 +551,7 @@ internal static class LocalModZipApplyWorkflowChecks
         var linkPreview = await previewService.PreviewAsync(rootLink, CreateZip(parent));
         var linkService = new LocalModZipApplyWorkflowService(previewService, data);
         bool linkCreated = false;
+        Exception? reparseError = null;
         try
         {
             var linkResult = await linkService.ApplyAsync(linkPreview.Preview!, (_, _) =>
@@ -559,18 +561,63 @@ internal static class LocalModZipApplyWorkflowChecks
                 {
                     if (progress.Stage == "Prepared" && !linkCreated)
                     {
-                        Directory.Delete(linkParent);
-                        Directory.CreateSymbolicLink(linkParent, realParent);
-                        linkCreated = true;
+                        try
+                        {
+                            Directory.Delete(linkParent);
+                            CreateDirectoryReparsePoint(linkParent, realParent);
+                            linkCreated = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            reparseError = ex;
+                        }
                     }
                 });
-            check(linkCreated && !linkResult.Success &&
+            check(reparseError is null && linkCreated && !linkResult.Success &&
                 !Directory.Exists(Path.Combine(realParent, linkPreview.Preview!.Package.DestinationFolderName)),
-                "a mods parent changed to a reparse point during preparation is rejected without writing through the link");
+                reparseError is null
+                    ? "a mods parent changed to a reparse point during preparation is rejected without writing through the link"
+                    : "reparse-point test setup failed: " + reparseError.Message);
         }
-        catch (UnauthorizedAccessException)
+        finally
         {
-            check(false, "Windows isolated runner must support symbolic-link reparse-point verification");
+            if (Directory.Exists(linkParent) && (File.GetAttributes(linkParent) & FileAttributes.ReparsePoint) != 0)
+                Directory.Delete(linkParent, recursive: false);
+        }
+    }
+
+    static void CreateDirectoryReparsePoint(string linkPath, string targetPath)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, targetPath);
+            return;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Fall back to an NTFS Directory Junction on standard Windows accounts without symlink privilege.
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/S /C \"mklink /J \"{linkPath}\" \"{targetPath}\"\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        using Process process = Process.Start(startInfo)
+            ?? throw new IOException("无法启动 cmd.exe 以创建目录联接。");
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0 ||
+            !Directory.Exists(linkPath) ||
+            (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+        {
+            throw new IOException(
+                $"mklink /J failed (exit {process.ExitCode}): {(string.IsNullOrWhiteSpace(stderr) ? stdout : stderr).Trim()}");
         }
     }
 }

@@ -257,12 +257,13 @@ public partial class MainWindow
         await NeonRecoverTransactionsAsync(root);
         if (!await NeonScanAndPublishAsync(root))
             throw new InvalidOperationException("隔离样本初始扫描失效。");
+        var inventory = modInventory ?? throw new InvalidOperationException("隔离样本初始扫描未生成 MOD 清单。");
         foreach (string id in new[] { "BaseLib", "CznCore", "Sts2ModTranslator", "intentgraph2", "EndlessMod" })
         {
-            var m = modInventory.Mods.Single(x => x.Id == id);
+            var m = inventory.Mods.Single(x => x.Id == id);
             await githubModUpdates.CheckAsync(m, force: true);
         }
-        var hexMod = modInventory.Mods.Single(x => x.Id == "HextechRunes");
+        var hexMod = inventory.Mods.Single(x => x.Id == "HextechRunes");
         workshopModSources.RecordBaseline("HextechRunes", 3748937859, "6601928374651120001", hexMod.Version, ModManager.FileSnapshot(hexMod.Folder));
         await workshopModUpdates.CheckAsync(hexMod, 3748937859, workshopModSources, force: true);
 
@@ -280,7 +281,7 @@ public partial class MainWindow
         var scan = Catalog.Scan(root, fixtureCatalog, Catalog.Revision);
         var history = ModHistory.CompareAndStore(root, dataRoot);
         var evaluated = PatchLifecycle.Evaluate(root, history, neonOverrideLifecycleEvidence,
-            "已加载 1 条已审核上游修复证据记录。", scan, modInventory);
+            "已加载 1 条已审核上游修复证据记录。", scan, inventory);
 
         // Create one real initial MOD environment snapshot for Recovery page
         var initialSnap = ModEnvironmentSnapshots.Create(root, dataRoot, "初始隔离环境自动保护");

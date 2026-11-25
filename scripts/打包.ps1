@@ -19,7 +19,7 @@ dotnet publish (Join-Path $sourceRoot 'SpirePatch.csproj') -c Release -r win-x64
 if ($LASTEXITCODE -ne 0) { throw '发布构建失败。' }
 $testRoot = Join-Path $runRoot '验证记录'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
-foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','online-self-test','github-mod-install-self-test','github-mod-discovery-self-test','github-network-self-test', 'supply-station-self-test', 'supply-station-manifest-self-test','supply-station-content-self-test','workshop-mod-install-self-test','workshop-mod-update-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test','patch-organizer-self-test','patch-lifecycle-self-test','workspace-integration-self-test','manager-update-cleanup-self-test','workshop-zip-self-test')) {
+foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','online-self-test','github-mod-install-self-test','github-mod-discovery-self-test','github-network-self-test', 'supply-station-self-test', 'supply-station-manifest-self-test','supply-station-content-self-test','workshop-mod-install-self-test','workshop-mod-update-self-test','update-self-test','auto-update-self-test','coop-self-test','coop-actions-self-test','catalog-v3-self-test','patch-organizer-self-test','patch-lifecycle-self-test','workspace-integration-self-test','manager-update-cleanup-self-test','workshop-zip-self-test','neon-p1-self-test','neon-p2-self-test','neon-perf-self-test')) {
     $result = Join-Path $testRoot ($mode + '.txt')
     $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--' + $mode, ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $result)) {
@@ -28,6 +28,7 @@ foreach ($mode in @('safety-self-test','self-test','recommendation-self-test','o
         if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
         throw ('验证失败：' + $mode)
     }
+    Write-Output ('PASS --' + $mode)
 }
 # Verify the real WPF navigation and row actions against isolated mock game folders.
 $uiFixtures = Join-Path $testRoot 'ui-fixtures'
@@ -41,6 +42,31 @@ if ($uiProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $uiProof)) {
     if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
     throw 'WPF 界面回归验证失败。'
 }
+Write-Output 'PASS --capture-workspace'
+$neonWbFixtures = Join-Path $testRoot 'neon-workbench-fixtures'
+$neonWbOutput = Join-Path $testRoot 'neon-workbench-capture'
+New-Item -ItemType Directory -Path $neonWbFixtures, $neonWbOutput -Force | Out-Null
+$neonWbProcess = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--capture-neon-workbench', ('"' + $neonWbFixtures + '"'), ('"' + $neonWbOutput + '"')) -WindowStyle Hidden -Wait -PassThru
+$neonWbProof = Join-Path $neonWbOutput '工作台验证报告.txt'
+if ($neonWbProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $neonWbProof)) {
+    if (Test-Path -LiteralPath $neonWbProof) { Get-Content -LiteralPath $neonWbProof | Write-Output }
+    $errorFile = Join-Path $appFolder 'startup-error.txt'
+    if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
+    throw 'Neon 工作台界面回归验证失败。'
+}
+Write-Output 'PASS --capture-neon-workbench'
+$neonMoFixtures = Join-Path $testRoot 'neon-motion-fixtures'
+$neonMoOutput = Join-Path $testRoot 'neon-motion-capture'
+New-Item -ItemType Directory -Path $neonMoFixtures, $neonMoOutput -Force | Out-Null
+$neonMoProcess = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--capture-neon-motion', ('"' + $neonMoFixtures + '"'), ('"' + $neonMoOutput + '"')) -WindowStyle Hidden -Wait -PassThru
+$neonMoProof = Join-Path $neonMoOutput '动效验收报告.txt'
+if ($neonMoProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $neonMoProof)) {
+    if (Test-Path -LiteralPath $neonMoProof) { Get-Content -LiteralPath $neonMoProof | Write-Output }
+    $errorFile = Join-Path $appFolder 'startup-error.txt'
+    if (Test-Path -LiteralPath $errorFile) { Get-Content -LiteralPath $errorFile | Write-Output }
+    throw 'Neon 动效回归验证失败。'
+}
+Write-Output 'PASS --capture-neon-motion'
 if ($BuildOnly) { Write-Output ('构建与检查完成，未生成发布包：' + $runRoot); return }
 $integrationResult = Join-Path $testRoot 'integration-check.txt'
 $process = Start-Process -FilePath (Join-Path $appFolder 'SpirePatch.exe') -ArgumentList @('--integration-check', ('"' + [IO.Path]::GetFullPath($Bundle) + '"'), ('"' + [IO.Path]::GetFullPath($Fixture) + '"'), ('"' + $integrationResult + '"')) -WindowStyle Hidden -Wait -PassThru

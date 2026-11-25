@@ -184,7 +184,6 @@ public partial class MainWindow
  string? workshopSourceRoot;
  WorkshopModUpdates? workshopModUpdates;
  string? workshopUpdatesRoot;
- bool updateCenterAutoCheckQueued;
  WorkshopModUpdates WorkshopUpdates()
  {
   if(selectedInstallRoot==null)throw new InvalidOperationException("请先选择游戏目录。");
